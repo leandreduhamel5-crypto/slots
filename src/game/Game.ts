@@ -17,7 +17,7 @@ import { ReelBoard } from './ReelBoard';
 import type { SymbolTextures } from './textures';
 
 const BOARD_Y = 152;
-const WORLD_TOP = -112;
+const WORLD_TOP = -140;
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
 const MASCOT_X = 230;
 const WORLD_W = BOARD_W + 200;
@@ -114,7 +114,7 @@ export class Game {
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
     this.logo = new Logo(eyeFromCodex(codexCanvas, codexCanvas.width));
-    this.logo.position.set(BOARD_W / 2, 0);
+    this.logo.position.set(BOARD_W / 2, -18);
     this.logo.homeX = BOARD_W / 2;
     this.banner = new FeatureBanner(tex);
     this.banner.position.set(BOARD_W / 2, 6);
@@ -256,7 +256,8 @@ export class Game {
     const worldW = portrait ? BOARD_W + 70 : WORLD_W;
     const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
     this.teaser.visible = portrait && !this.inFeature;
-    this.logo.scale.set(portrait ? 1.25 : 1);
+    this.logo.scale.set(portrait ? 1.12 : 1);
+    this.logo.y = portrait ? -44 : -18;
     this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
