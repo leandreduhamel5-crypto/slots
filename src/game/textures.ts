@@ -1,6 +1,11 @@
 import { Texture } from 'pixi.js';
 import { SYMBOLS, Sym } from '../math/config';
 import { PREMIUM_SVGS, VEINS_SVG } from './art/symbols';
+import { glowMap, paintChain, paintDepthShade, paintFrame, paintReelPanel, paintWinFrame } from './art/painters';
+import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP, reelX } from './layout';
+
+export const FRAME_PAD = 34;
+export const FRAME_BLEED = 60;
 
 export const TEX_SIZE = 320;
 
@@ -11,6 +16,13 @@ export interface SymbolTextures {
   /** data URLs for DOM usage (paytable) */
   images: string[];
   expanded: Map<Sym, Texture>;
+  /** additive glow maps that make each symbol light up on wins */
+  glowMaps: Texture[];
+  frame: Texture;
+  reelPanels: Texture[];
+  shade: Texture;
+  winFrame: Texture;
+  chain: Texture;
   veins: Texture;
   glow: Texture;
   spore: Texture;
@@ -245,6 +257,14 @@ export async function buildSymbolTextures(): Promise<SymbolTextures> {
     blur: canvases.map((c) => Texture.from(motionBlur(c))),
     images: canvases.map((c) => c.toDataURL('image/png')),
     expanded,
+    glowMaps: canvases.map((c) => Texture.from(glowMap(c))),
+    frame: Texture.from(
+      paintFrame({ boardW: BOARD_W, boardH: BOARD_H, pad: FRAME_PAD, bleed: FRAME_BLEED, reelX, cellW: CELL_W, reels: 5 }),
+    ),
+    reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintReelPanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
+    shade: Texture.from(paintDepthShade(BOARD_H)),
+    winFrame: Texture.from(paintWinFrame(CELL_W, CELL_H)),
+    chain: Texture.from(paintChain(900)),
     veins: Texture.from(vc),
     glow: Texture.from(radial(256, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
     spore: Texture.from(radial(64, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),

@@ -171,8 +171,16 @@ interface Spore {
   life: number;
 }
 
+const WINDOWS = [250, 640, 1280, 1670];
+
 export class Background extends Container {
+  private sceneC = new Container();
   private scene: Sprite;
+  private windowGlows: Sprite[] = [];
+  private lightning: Sprite;
+  private chains: Sprite[] = [];
+  private nextFlash = 6;
+  onLightning: (() => void) | null = null;
   private redWash: Sprite;
   private fogA: TilingSprite;
   private fogB: TilingSprite;
@@ -182,10 +190,36 @@ export class Background extends Container {
   private t = 0;
   private feature = 0;
 
-  constructor(private sporeTex: Texture) {
+  constructor(
+    private sporeTex: Texture,
+    chainTex: Texture,
+    glowTex: Texture,
+  ) {
     super();
     this.scene = new Sprite(Texture.from(paintScene()));
     this.scene.anchor.set(0.5);
+    this.sceneC.addChild(this.scene);
+    for (const wx of WINDOWS) {
+      const g = new Sprite(glowTex);
+      g.anchor.set(0.5);
+      g.position.set(wx - W / 2, 440 - H / 2);
+      g.width = 420;
+      g.height = 900;
+      g.tint = COLORS.infection;
+      g.blendMode = 'add';
+      g.alpha = 0.25;
+      this.windowGlows.push(g);
+      this.sceneC.addChild(g);
+    }
+    this.lightning = new Sprite(glowTex);
+    this.lightning.anchor.set(0.5);
+    this.lightning.width = W * 1.6;
+    this.lightning.height = H * 1.4;
+    this.lightning.position.set(0, -H * 0.3);
+    this.lightning.tint = 0xffc2c8;
+    this.lightning.blendMode = 'add';
+    this.lightning.alpha = 0;
+    this.sceneC.addChild(this.lightning);
     this.redWash = new Sprite(sporeTex);
     this.redWash.anchor.set(0.5);
     this.redWash.tint = COLORS.infection;
@@ -199,7 +233,27 @@ export class Background extends Container {
     this.fogA.alpha = 0.16;
     this.fogB.alpha = 0.14;
     this.fogB.tileScale.set(1.6);
-    this.addChild(this.scene, this.redWash, this.fogA, this.sporeLayer, this.fogB, this.pulse);
+    const chainLayer = new Container();
+    for (const [x, len, alpha] of [
+      [70, 760, 0.95],
+      [150, 520, 0.7],
+      [W - 70, 820, 0.95],
+      [W - 170, 460, 0.65],
+    ]) {
+      const c = new Sprite(chainTex);
+      c.anchor.set(0.5, 0);
+      c.position.set(x - W / 2, -H / 2 - 20);
+      c.height = len;
+      c.scale.x = c.scale.y;
+      c.alpha = alpha;
+      c.tint = 0x9aa3b5;
+      this.chains.push(c);
+      chainLayer.addChild(c);
+    }
+    const front = new Container();
+    front.addChild(chainLayer);
+    this.chainFront = front;
+    this.addChild(this.sceneC, this.redWash, this.fogA, this.sporeLayer, this.fogB, front, this.pulse);
 
     for (let i = 0; i < 80; i++) this.spores.push(this.spawn(true));
   }
@@ -219,12 +273,16 @@ export class Background extends Container {
   private w = W;
   private h = H;
 
+  private chainFront: Container;
+
   resize(w: number, h: number): void {
     this.w = w;
     this.h = h;
     const scale = Math.max(w / W, h / H);
-    this.scene.scale.set(scale);
-    this.scene.position.set(w / 2, h / 2);
+    this.sceneC.scale.set(scale);
+    this.sceneC.position.set(w / 2, h / 2);
+    this.chainFront.scale.set(scale);
+    this.chainFront.position.set(w / 2, h / 2);
     this.redWash.position.set(w / 2, h * 0.45);
     this.redWash.width = w * 1.1;
     this.redWash.height = h * 1.1;
@@ -236,6 +294,18 @@ export class Background extends Container {
 
   setFeature(on: boolean): void {
     gsap.to(this, { feature: on ? 1 : 0, duration: 1.2 });
+  }
+
+  /** Distant lightning behind the windows: two quick flickers. */
+  flash(): void {
+    gsap.killTweensOf(this.lightning);
+    gsap
+      .timeline()
+      .to(this.lightning, { alpha: 0.5, duration: 0.05 })
+      .to(this.lightning, { alpha: 0.1, duration: 0.08 })
+      .to(this.lightning, { alpha: 0.7, duration: 0.04 })
+      .to(this.lightning, { alpha: 0, duration: 0.9, ease: 'power2.out' });
+    this.onLightning?.();
   }
 
   /** Big red heartbeat flash. */
@@ -255,6 +325,16 @@ export class Background extends Container {
     const beat = Math.pow(Math.max(0, Math.sin(this.t * (2.6 + this.feature * 1.6))), 12);
     this.redWash.alpha = 0.08 + this.feature * 0.16 + beat * (0.05 + this.feature * 0.1);
     this.fogB.alpha = 0.12 + this.feature * 0.12;
+    for (let i = 0; i < this.windowGlows.length; i++) {
+      const flicker = 0.5 + 0.5 * Math.sin(this.t * (7 + i * 1.3) + i * 2) * Math.sin(this.t * (2.3 + i) + i);
+      this.windowGlows[i].alpha = 0.16 + this.feature * 0.2 + flicker * 0.1 + beat * 0.08;
+    }
+    this.chains.forEach((c, i) => (c.rotation = Math.sin(this.t * (0.6 + i * 0.13) + i) * 0.015));
+    this.nextFlash -= dt;
+    if (this.nextFlash <= 0) {
+      this.nextFlash = 9 + Math.random() * 14;
+      this.flash();
+    }
     const speed = 1 + this.feature * 1.5;
     for (let i = 0; i < this.spores.length; i++) {
       const p = this.spores[i];

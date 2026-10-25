@@ -2,7 +2,7 @@ import { Container, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
 
-function paintLogo(eye: HTMLCanvasElement): HTMLCanvasElement {
+export function paintLogo(eye: HTMLCanvasElement): HTMLCanvasElement {
   const w = 1100;
   const h = 250;
   const c = document.createElement('canvas');

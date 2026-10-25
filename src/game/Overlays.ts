@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Text, type TextStyleOptions } from 'pixi.js';
+import { Container, FillGradient, Graphics, Sprite, Text, type TextStyleOptions } from 'pixi.js';
 import gsap from 'gsap';
 import { SYMBOLS, Sym } from '../math/config';
 import { PREMIUM_EXPANDERS } from '../math/engine';
@@ -9,11 +9,21 @@ import type { SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
 export const WIN_TIERS = [
-  { x: 15, name: 'CONTAMINATION' },
-  { x: 40, name: 'ÉPIDÉMIE' },
-  { x: 100, name: 'PANDÉMIE' },
-  { x: 500, name: 'EXTINCTION' },
+  { x: 15, name: 'CONTAMINATION', colors: ['#fffaf0', '#e9dfc9', '#8a7650'], glow: 0xff2a3d },
+  { x: 40, name: 'ÉPIDÉMIE', colors: ['#fff0c0', '#ffa04a', '#8b2a00'], glow: 0xff7a3a },
+  { x: 100, name: 'PANDÉMIE', colors: ['#ffd0d6', '#ff2a3d', '#5a0010'], glow: 0xff2a3d },
+  { x: 500, name: 'EXTINCTION', colors: ['#fbefff', '#d79bff', '#7a2aa8'], glow: 0xc06bff },
 ];
+
+function gradient(colors: string[]): FillGradient {
+  return new FillGradient({
+    type: 'linear',
+    start: { x: 0, y: 0 },
+    end: { x: 0, y: 1 },
+    colorStops: colors.map((color, i) => ({ offset: i / (colors.length - 1), color })),
+    textureSpace: 'local',
+  });
+}
 
 export function winTier(win: number, bet: number): number {
   let t = -1;
@@ -23,7 +33,7 @@ export function winTier(win: number, bet: number): number {
   return t;
 }
 
-const title = (size: number, fill: string | number = COLORS.bone): TextStyleOptions => ({
+const title = (size: number, fill: string | number | FillGradient = gradient(['#fffaf0', '#e9dfc9', '#8a7650'])): TextStyleOptions => ({
   fontFamily: 'Cinzel, serif',
   fontWeight: '900',
   fontSize: size,
@@ -102,7 +112,7 @@ export class Overlays extends Container {
     this.skipRequested = false;
     this.visible = true;
     this.drawDim(0);
-    gsap.to(this.dim, { alpha: 0.8, duration: 0.3 });
+    gsap.to(this.dim, { alpha: 0.86, duration: 0.3 });
   }
 
   private async close(): Promise<void> {
@@ -141,6 +151,36 @@ export class Overlays extends Container {
     return g;
   }
 
+  /** Slowly turning ritual circle, echoing the one engraved on the Codex. */
+  private runeRing(radius: number, color: number): Graphics {
+    const g = new Graphics();
+    g.circle(0, 0, radius).stroke({ width: 3, color, alpha: 0.55 });
+    g.circle(0, 0, radius - 22).stroke({ width: 1.5, color, alpha: 0.4 });
+    g.circle(0, 0, radius + 14).stroke({ width: 1, color, alpha: 0.25 });
+    for (let i = 0; i < 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      const len = i % 6 === 0 ? 20 : i % 2 ? 8 : 12;
+      g.moveTo(Math.cos(a) * radius, Math.sin(a) * radius)
+        .lineTo(Math.cos(a) * (radius - len), Math.sin(a) * (radius - len))
+        .stroke({ width: i % 6 === 0 ? 3 : 1.5, color, alpha: 0.6 });
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      g.circle(Math.cos(a) * (radius - 11), Math.sin(a) * (radius - 11), 5).fill({ color, alpha: 0.8 });
+    }
+    g.blendMode = 'add';
+    gsap.to(g, { rotation: Math.PI * 2, duration: 30, repeat: -1, ease: 'none' });
+    return g;
+  }
+
+  private ringBurst(color: number): void {
+    const g = new Graphics().circle(0, 0, 100).stroke({ width: 10, color, alpha: 1 });
+    g.blendMode = 'add';
+    this.content.addChildAt(g, 0);
+    gsap.fromTo(g.scale, { x: 0.3, y: 0.3 }, { x: 7, y: 7, duration: 0.9, ease: 'power2.out' });
+    gsap.fromTo(g, { alpha: 1 }, { alpha: 0, duration: 0.9, ease: 'power1.in', onComplete: () => g.destroy() });
+  }
+
   private glowDisc(size: number, color: number, alpha = 0.8): Sprite {
     const s = new Sprite(this.tex.glow);
     s.anchor.set(0.5);
@@ -158,7 +198,15 @@ export class Overlays extends Container {
     this.open();
     const rays = this.rays(COLORS.infection);
     const disc = this.glowDisc(1100, COLORS.infection, 0.55);
-    const heading = new Text({ text: WIN_TIERS[0].name, style: title(118) });
+    const ring = this.runeRing(330, COLORS.infection);
+    const eye = new Sprite(this.tex.glowMaps[Sym.CODEX]);
+    eye.anchor.set(0.5);
+    eye.width = eye.height = 760;
+    eye.alpha = 0.35;
+    eye.blendMode = 'add';
+    gsap.to(eye, { alpha: 0.6, duration: 0.45, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.tierFx = { rays, ring, disc };
+    const heading = new Text({ text: WIN_TIERS[0].name, style: title(118, gradient(WIN_TIERS[0].colors)) });
     heading.anchor.set(0.5);
     heading.y = -110;
     const amount = new Text({ text: fmt(0), style: amountStyle(150) });
@@ -171,7 +219,8 @@ export class Overlays extends Container {
     sub.anchor.set(0.5);
     sub.y = 260;
     sub.alpha = 0.7;
-    this.content.addChild(rays, disc, heading, amount, sub);
+    this.content.addChild(rays, disc, eye, ring, heading, amount, sub);
+    this.ringBurst(COLORS.infection);
     gsap.fromTo(heading.scale, { x: 0, y: 0 }, { x: 1, y: 1, duration: 0.6, ease: 'back.out(2)' });
     gsap.to(disc.scale, { x: disc.scale.x * 1.12, y: disc.scale.y * 1.12, duration: 0.5, yoyo: true, repeat: -1 });
     this.audio.stinger(0);
@@ -217,8 +266,19 @@ export class Overlays extends Container {
     await this.close();
   }
 
+  private tierFx: { rays: Graphics; ring: Graphics; disc: Sprite } | null = null;
+
   private upgrade(heading: Text, tier: number): void {
-    heading.text = WIN_TIERS[tier].name;
+    const t = WIN_TIERS[tier];
+    heading.text = t.name;
+    heading.style.fill = gradient(t.colors);
+    heading.style.dropShadow = { color: t.glow, blur: 30, distance: 0, alpha: 1, angle: 0 };
+    if (this.tierFx) {
+      this.tierFx.rays.tint = t.glow;
+      this.tierFx.ring.tint = t.glow;
+      this.tierFx.disc.tint = t.glow;
+    }
+    this.ringBurst(t.glow);
     gsap.fromTo(heading.scale, { x: 1.6, y: 1.6 }, { x: 1, y: 1, duration: 0.5, ease: 'back.out(2)' });
     this.audio.stinger(tier);
     this.fx.shockwave();
@@ -279,7 +339,8 @@ export class Overlays extends Container {
     const head = new Text({ text: `${spins} TOURS GRATUITS`, style: title(92) });
     head.anchor.set(0.5);
     head.y = -330;
-    this.content.addChild(rays, this.glowDisc(900, COLORS.infection, 0.6), book, head);
+    this.content.addChild(rays, this.glowDisc(900, COLORS.infection, 0.6), this.runeRing(300, COLORS.infection), book, head);
+    this.ringBurst(COLORS.infection);
     gsap.from(book.scale, { x: 0, y: 0, duration: 0.8, ease: 'back.out(1.6)' });
     gsap.from(head, { alpha: 0, y: -380, duration: 0.6, delay: 0.3 });
     gsap.to(book, { rotation: 0.04, duration: 0.12, yoyo: true, repeat: 7, ease: 'sine.inOut' });

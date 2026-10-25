@@ -248,6 +248,15 @@ export class Audio {
     this.tone(at + 0.45, 41, 'sine', 0.6, 0.8);
   }
 
+  /** Distant rolling thunder. */
+  thunder(): void {
+    if (!this.ctx) return;
+    const at = this.t + 0.25;
+    this.noiseBurst(at, 2.8, 'lowpass', 900, 60, 0.3);
+    this.noiseBurst(at + 0.15, 1.6, 'lowpass', 400, 50, 0.25);
+    this.tone(at, 32, 'sine', 0.35, 2.2, 0.05, this.music);
+  }
+
   /** Dissonant cluster + sub boom for big moments. */
   stinger(level: number): void {
     if (!this.ctx) return;

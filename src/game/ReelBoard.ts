@@ -1,11 +1,11 @@
-import { BlurFilter, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import { GlowFilter } from 'pixi-filters';
+import { Container, Graphics, Sprite, Text } from 'pixi.js';
 import gsap from 'gsap';
 import { LINES, REELS, ROWS, Sym } from '../math/config';
 import type { Expansion, Grid, LineWin, ScatterWin } from '../math/engine';
+import { Particles } from './Particles';
 import { Reel } from './Reel';
-import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, LINE_COLORS, cellCenter, reelX } from './layout';
-import type { SymbolTextures } from './textures';
+import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, LINE_COLORS, REEL_GAP, cellCenter, reelX } from './layout';
+import { FRAME_BLEED, FRAME_PAD, type SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
 export interface SpinPlan {
@@ -16,16 +16,32 @@ export interface SpinPlan {
   onReelStop?: (reel: number) => void;
 }
 
+type Cell = [number, number];
+
+/** A glow map sprite glued to a reel symbol so it follows its animations. */
+interface GlowPair {
+  src: Sprite;
+  reel: Reel;
+  glow: Sprite;
+}
+
 export class ReelBoard extends Container {
   readonly reels: Reel[] = [];
+  private panels = new Container();
   private reelLayer = new Container();
   private dimLayer = new Graphics();
-  private anticipationLayer = new Container();
   private expandLayer = new Container();
+  private frameLayer = new Container();
+  private infectionGlow: Sprite;
+  private anticipationLayer = new Container();
+  private glowLayer = new Container();
+  private winFrameLayer = new Container();
   private lineLayer = new Container();
+  private sparks: Particles;
   private labelLayer = new Container();
   private cycleTl: gsap.core.Timeline | null = null;
-  private anticipationGlows: Sprite[] = [];
+  private anticipationFx: { glow: Sprite; veins: Sprite; mask: Graphics }[] = [];
+  private glows: GlowPair[] = [];
   private hurried = false;
 
   constructor(
@@ -33,11 +49,16 @@ export class ReelBoard extends Container {
     strips: Sym[][],
   ) {
     super();
-    this.buildFrame();
+    this.sparks = new Particles(tex.spore);
+
+    for (let r = 0; r < REELS; r++) {
+      const p = new Sprite(tex.reelPanels[r]);
+      p.position.set(reelX(r) - REEL_GAP / 2, 0);
+      this.panels.addChild(p);
+    }
 
     const mask = new Graphics().rect(-6, 0, BOARD_W + 12, BOARD_H).fill(0xffffff);
     this.reelLayer.mask = mask;
-    this.addChild(mask, this.reelLayer);
 
     for (let r = 0; r < REELS; r++) {
       const initial: Sym[] = [];
@@ -50,69 +71,78 @@ export class ReelBoard extends Container {
       const glow = new Sprite(tex.glow);
       glow.anchor.set(0.5);
       glow.tint = COLORS.infection;
-      glow.width = CELL_W * 1.6;
-      glow.height = BOARD_H * 1.25;
+      glow.width = CELL_W * 1.7;
+      glow.height = BOARD_H * 1.3;
       glow.position.set(reelX(r) + CELL_W / 2, BOARD_H / 2);
       glow.alpha = 0;
       glow.blendMode = 'add';
-      this.anticipationGlows.push(glow);
-      this.anticipationLayer.addChild(glow);
+      const veins = new Sprite(tex.veins);
+      veins.position.set(reelX(r), 0);
+      veins.width = CELL_W;
+      veins.height = BOARD_H;
+      veins.blendMode = 'add';
+      veins.alpha = 0;
+      const vm = new Graphics().rect(reelX(r), 0, CELL_W, BOARD_H).fill(0xffffff);
+      vm.pivot.y = BOARD_H;
+      vm.y = BOARD_H;
+      vm.scale.y = 0;
+      veins.mask = vm;
+      this.anticipationFx.push({ glow, veins, mask: vm });
+      this.anticipationLayer.addChild(glow, vm, veins);
     }
 
-    this.addChild(this.dimLayer, this.anticipationLayer, this.expandLayer, this.lineLayer, this.labelLayer);
-  }
+    const shade = new Sprite(tex.shade);
+    shade.width = BOARD_W + 12;
+    shade.height = BOARD_H;
+    shade.x = -6;
 
-  private buildFrame(): void {
-    const pad = 22;
-    const frame = new Container();
-    const back = new Graphics()
-      .roundRect(-pad, -pad, BOARD_W + pad * 2, BOARD_H + pad * 2, 18)
-      .fill({ color: 0x050608, alpha: 0.82 });
-    const outer = new Sprite(frameTexture(pad));
-    outer.position.set(-pad - FRAME_BLEED, -pad - FRAME_BLEED);
+    const frame = new Sprite(tex.frame);
+    frame.position.set(-FRAME_PAD - FRAME_BLEED, -FRAME_PAD - FRAME_BLEED);
+    this.infectionGlow = new Sprite(tex.glow);
+    this.infectionGlow.anchor.set(0.5);
+    this.infectionGlow.position.set(BOARD_W / 2, BOARD_H / 2);
+    this.infectionGlow.width = BOARD_W * 1.5;
+    this.infectionGlow.height = BOARD_H * 1.8;
+    this.infectionGlow.tint = COLORS.infection;
+    this.infectionGlow.blendMode = 'add';
+    this.infectionGlow.alpha = 0;
+    this.frameLayer.addChild(this.infectionGlow, frame);
 
-    const seps = new Graphics();
-    for (let r = 1; r < REELS; r++) {
-      const x = reelX(r) - REEL_SEP_OFFSET;
-      seps.moveTo(x, 6).lineTo(x, BOARD_H - 6).stroke({ width: 2, color: 0x1c2027, alpha: 1 });
-    }
-    // rivets
-    const rivets = new Graphics();
-    const pts = [
-      [-pad + 14, -pad + 14],
-      [BOARD_W + pad - 14, -pad + 14],
-      [-pad + 14, BOARD_H + pad - 14],
-      [BOARD_W + pad - 14, BOARD_H + pad - 14],
-    ];
-    for (const [x, y] of pts) rivets.circle(x, y, 5).fill(COLORS.gold).circle(x - 1.5, y - 1.5, 1.8).fill(0xf6e3b5);
-
-    // inner columns shading
-    const cols = new Graphics();
-    for (let r = 0; r < REELS; r++) cols.rect(reelX(r), 0, CELL_W, BOARD_H).fill({ color: 0x10131a, alpha: 0.75 });
-
-    // vein corners that pulse
-    const veinL = new Sprite(this.tex.veins);
-    veinL.anchor.set(0.5);
-    veinL.height = BOARD_H + 120;
-    veinL.width = 110;
-    veinL.position.set(-pad - 10, BOARD_H / 2);
-    const veinR = new Sprite(this.tex.veins);
-    veinR.anchor.set(0.5);
-    veinR.height = BOARD_H + 120;
-    veinR.width = 110;
-    veinR.scale.x *= -1;
-    veinR.position.set(BOARD_W + pad + 10, BOARD_H / 2);
-    for (const v of [veinL, veinR]) {
-      v.alpha = 0.35;
-      gsap.to(v, { alpha: 0.7, duration: 0.55, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    }
-
-    frame.addChild(veinL, veinR, back, cols, seps, outer, rivets);
-    this.addChild(frame);
+    this.addChild(
+      this.panels,
+      mask,
+      this.reelLayer,
+      this.dimLayer,
+      this.expandLayer,
+      shade,
+      this.frameLayer,
+      this.anticipationLayer,
+      this.glowLayer,
+      this.winFrameLayer,
+      this.lineLayer,
+      this.sparks,
+      this.labelLayer,
+    );
   }
 
   update(dtMs: number): void {
     for (const r of this.reels) r.update(dtMs);
+    this.sparks.update(dtMs);
+    for (const g of this.glows) {
+      g.glow.position.set(g.reel.x + g.src.x, g.src.y);
+      g.glow.scale.copyFrom(g.src.scale);
+      g.glow.rotation = g.src.rotation;
+    }
+  }
+
+  /** Free spins: the whole board breathes red. */
+  setFeature(on: boolean): void {
+    gsap.killTweensOf(this.infectionGlow);
+    if (on) {
+      this.infectionGlow.alpha = 0.18;
+      gsap.to(this.infectionGlow, { alpha: 0.42, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    } else gsap.to(this.infectionGlow, { alpha: 0, duration: 0.6 });
+    for (const p of this.panels.children as Sprite[]) gsap.to(p, { tint: on ? 0xffb0b8 : 0xffffff, duration: 0.8 });
   }
 
   /** Spins all reels and lands them on `plan.grid`. */
@@ -136,11 +166,11 @@ export class ReelBoard extends Container {
         (async () => {
           if (isAnt) {
             await this.sleep(at - anticipation + 120);
-            if (!this.hurried) this.setAnticipation(i, true);
+            if (!this.hurried) this.setAnticipation(i, true, anticipation / 1000);
             await this.sleep(anticipation - 120);
           } else await this.sleep(at);
           await reel.stop(plan.grid[i]);
-          this.setAnticipation(i, false);
+          this.setAnticipation(i, false, 0);
           plan.onReelStop?.(i);
         })(),
       );
@@ -162,17 +192,28 @@ export class ReelBoard extends Container {
     });
   }
 
-  private setAnticipation(reel: number, on: boolean): void {
-    const g = this.anticipationGlows[reel];
-    gsap.killTweensOf(g);
+  private setAnticipation(reel: number, on: boolean, dur: number): void {
+    const { glow, veins, mask } = this.anticipationFx[reel];
+    gsap.killTweensOf([glow, glow.scale, veins, mask.scale]);
     if (on) {
-      g.alpha = 0;
-      gsap.to(g, { alpha: 0.75, duration: 0.25 });
-      gsap.to(g.scale, { x: g.scale.x * 1.08, duration: 0.3, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+      glow.alpha = 0;
+      gsap.to(glow, { alpha: 0.8, duration: 0.25 });
+      gsap.to(glow.scale, { x: glow.scale.x * 1.1, duration: 0.25, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+      veins.alpha = 1;
+      mask.scale.y = 0;
+      gsap.to(mask.scale, { y: 1, duration: dur, ease: 'power1.in' });
+      gsap.to(veins, { alpha: 0.4, duration: 0.12, yoyo: true, repeat: -1, ease: 'steps(2)' });
       this.reels[reel].speedScale = 1.25;
+      const c = cellCenter(reel, 2);
+      const emit = () => {
+        if (glow.alpha <= 0.05) return;
+        this.sparks.burst(c.x + (Math.random() - 0.5) * CELL_W, BOARD_H, 4, 0.5);
+        gsap.delayedCall(0.08, emit);
+      };
+      gsap.delayedCall(0.1, emit);
     } else {
-      gsap.killTweensOf(g.scale);
-      gsap.to(g, { alpha: 0, duration: 0.3 });
+      gsap.to(glow, { alpha: 0, duration: 0.3 });
+      gsap.to(veins, { alpha: 0, duration: 0.25 });
       this.reels[reel].speedScale = 1;
     }
   }
@@ -181,104 +222,240 @@ export class ReelBoard extends Container {
     return this.reels[reel].cellAt(row);
   }
 
+  private symbolAt(reel: number, row: number): Sym {
+    return this.reels[reel].symbols[row + 1];
+  }
+
   /** Pop animation on a freshly landed symbol (codex / special). */
   popCell(reel: number, row: number, color = COLORS.infection): void {
     const s = this.cell(reel, row);
     const base = s.scale.x;
-    gsap.fromTo(s.scale, { x: base * 1.25, y: base * 1.25 }, { x: base, y: base, duration: 0.45, ease: 'back.out(2.5)' });
+    gsap.fromTo(s.scale, { x: base * 1.3, y: base * 1.3 }, { x: base, y: base, duration: 0.5, ease: 'back.out(2.5)' });
     const flash = new Sprite(this.tex.glow);
     flash.anchor.set(0.5);
     flash.tint = color;
     flash.blendMode = 'add';
     const c = cellCenter(reel, row);
     flash.position.set(c.x, c.y);
-    flash.width = flash.height = CELL_W * 1.8;
+    flash.width = flash.height = CELL_W * 2;
     this.labelLayer.addChild(flash);
-    gsap.fromTo(flash, { alpha: 0.95 }, { alpha: 0, duration: 0.6, onComplete: () => flash.destroy() });
+    gsap.fromTo(flash, { alpha: 1 }, { alpha: 0, duration: 0.7, onComplete: () => flash.destroy() });
+    const g = this.attachGlow(reel, row);
+    gsap.fromTo(g, { alpha: 1 }, { alpha: 0, duration: 0.9, onComplete: () => this.detachGlow(g) });
+    this.sparks.burst(c.x, c.y, 18, 0.55);
+  }
+
+  private attachGlow(reel: number, row: number): Sprite {
+    const src = this.cell(reel, row);
+    const glow = new Sprite(this.tex.glowMaps[this.symbolAt(reel, row)]);
+    glow.anchor.set(0.5);
+    glow.blendMode = 'add';
+    this.glowLayer.addChild(glow);
+    this.glows.push({ src, reel: this.reels[reel], glow });
+    this.update(0);
+    return glow;
+  }
+
+  private detachGlow(glow: Sprite): void {
+    this.glows = this.glows.filter((g) => g.glow !== glow);
+    gsap.killTweensOf(glow);
+    glow.destroy();
   }
 
   clearWins(): void {
     this.cycleTl?.kill();
     this.cycleTl = null;
     this.dimLayer.clear();
-    this.lineLayer.removeChildren().forEach((c) => c.destroy());
-    this.labelLayer.removeChildren().forEach((c) => c.destroy());
-    this.expandLayer.removeChildren().forEach((c) => c.destroy());
+    for (const g of [...this.glows]) this.detachGlow(g.glow);
+    for (const layer of [this.lineLayer, this.labelLayer, this.expandLayer, this.winFrameLayer]) {
+      for (const c of layer.removeChildren()) {
+        gsap.killTweensOf(c);
+        c.destroy();
+      }
+    }
     for (const reel of this.reels) {
       for (const c of reel.cells) {
         gsap.killTweensOf(c.scale);
         gsap.killTweensOf(c);
         c.alpha = 1;
-        c.filters = [];
+        c.rotation = 0;
+        c.skew.set(0, 0);
       }
       reel.cells.forEach((_, i) => reel.setSymbol(i, reel.symbols[i]));
+      reel.cells.forEach((c) => (c.x = CELL_W / 2));
     }
   }
 
-  private drawLine(line: number, alpha = 1): Container {
+  /** Clears the transient win decorations but keeps the reels as they are. */
+  private clearHighlights(): void {
+    this.dimLayer.clear();
+    for (const g of [...this.glows]) this.detachGlow(g.glow);
+    for (const layer of [this.lineLayer, this.labelLayer, this.winFrameLayer]) {
+      for (const c of layer.removeChildren()) {
+        gsap.killTweensOf(c);
+        c.destroy();
+      }
+    }
+  }
+
+  private linePoints(line: number): { x: number; y: number }[] {
+    const pts = LINES[line].map((row, r) => cellCenter(r, row));
+    return [{ x: -16, y: pts[0].y }, ...pts, { x: BOARD_W + 16, y: pts[pts.length - 1].y }];
+  }
+
+  /** Draws a payline progressively, like infection racing through the cells. */
+  private traceLine(line: number, alpha = 1, duration = 0.4): Graphics {
     const g = new Graphics();
-    const rows = LINES[line];
-    const color = LINE_COLORS[line];
-    const pts = rows.map((row, r) => cellCenter(r, row));
-    const path = (gr: Graphics) => {
-      gr.moveTo(-14, pts[0].y);
-      for (const p of pts) gr.lineTo(p.x, p.y);
-      gr.lineTo(BOARD_W + 14, pts[pts.length - 1].y);
-    };
-    path(g);
-    g.stroke({ width: 14, color, alpha: 0.25, join: 'round', cap: 'round' });
-    path(g);
-    g.stroke({ width: 5, color, alpha: 0.95, join: 'round', cap: 'round' });
-    path(g);
-    g.stroke({ width: 1.5, color: 0xffffff, alpha: 0.8, join: 'round', cap: 'round' });
     g.alpha = alpha;
-    g.filters = [new BlurFilter({ strength: 0.6 })];
+    const color = LINE_COLORS[line];
+    const pts = this.linePoints(line);
+    const segs: number[] = [];
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      segs.push(d);
+      total += d;
+    }
+    const draw = (t: number) => {
+      if (g.destroyed) return;
+      g.clear();
+      let left = total * t;
+      const path: { x: number; y: number }[] = [pts[0]];
+      for (let i = 1; i < pts.length && left > 0; i++) {
+        const k = Math.min(1, left / segs[i - 1]);
+        path.push({ x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k });
+        left -= segs[i - 1];
+      }
+      const stroke = (width: number, c: number, a: number) => {
+        g.moveTo(path[0].x, path[0].y);
+        for (const p of path) g.lineTo(p.x, p.y);
+        g.stroke({ width, color: c, alpha: a, join: 'round', cap: 'round' });
+      };
+      stroke(22, color, 0.12);
+      stroke(12, color, 0.25);
+      stroke(5, color, 0.95);
+      stroke(1.6, 0xffffff, 0.9);
+      const head = path[path.length - 1];
+      if (t < 1) g.circle(head.x, head.y, 9).fill({ color: 0xffffff, alpha: 0.9 }).circle(head.x, head.y, 18).fill({ color, alpha: 0.35 });
+    };
+    const o = { t: 0 };
+    draw(0);
+    gsap.to(o, { t: 1, duration, ease: 'power1.inOut', onUpdate: () => draw(o.t) });
     return g;
   }
 
-  private dimExcept(cells: [number, number][]): void {
+  private dimExcept(cells: Cell[]): void {
     const keep = new Set(cells.map(([r, row]) => `${r}:${row}`));
     this.dimLayer.clear();
     for (let r = 0; r < REELS; r++) {
       for (let row = 0; row < ROWS; row++) {
-        if (!keep.has(`${r}:${row}`)) this.dimLayer.rect(reelX(r), row * CELL_H, CELL_W, CELL_H).fill({ color: 0x000000, alpha: 0.62 });
+        if (!keep.has(`${r}:${row}`)) this.dimLayer.rect(reelX(r), row * CELL_H, CELL_W, CELL_H).fill({ color: 0x000000, alpha: 0.66 });
       }
     }
   }
 
-  private animateCells(cells: [number, number][], strong: boolean): void {
-    for (const [r, row] of cells) {
-      const s = this.cell(r, row);
-      gsap.killTweensOf(s.scale);
-      const base = s.scale.x;
-      gsap.to(s.scale, {
-        x: base * (strong ? 1.14 : 1.08),
-        y: base * (strong ? 1.14 : 1.08),
-        duration: 0.32,
-        yoyo: true,
-        repeat: 3,
-        ease: 'sine.inOut',
-      });
-      s.filters = [new GlowFilter({ distance: 14, outerStrength: strong ? 3 : 1.8, color: COLORS.infection, quality: 0.25 })];
+  private winFrame(reel: number, row: number, delay: number): void {
+    const f = new Sprite(this.tex.winFrame);
+    f.anchor.set(0.5);
+    const c = cellCenter(reel, row);
+    f.position.set(c.x, c.y);
+    this.winFrameLayer.addChild(f);
+    gsap.fromTo(f.scale, { x: 1.35, y: 1.35 }, { x: 1, y: 1, duration: 0.35, delay, ease: 'back.out(2)' });
+    gsap.fromTo(f, { alpha: 0 }, { alpha: 1, duration: 0.2, delay });
+    gsap.to(f, { alpha: 0.55, duration: 0.45, delay: delay + 0.4, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+  }
+
+  /** Signature win animation per symbol. */
+  private animateSymbol(reel: number, row: number, strong: boolean, delay: number): void {
+    const s = this.cell(reel, row);
+    const sym = this.symbolAt(reel, row);
+    gsap.killTweensOf(s.scale);
+    gsap.killTweensOf(s);
+    const b = s.scale.x;
+    const amp = strong ? 1 : 0.6;
+    const tl = gsap.timeline({ delay, repeat: 1 });
+    switch (sym) {
+      case Sym.HEART:
+        // double heartbeat
+        for (let i = 0; i < 2; i++) {
+          tl.to(s.scale, { x: b * (1 + 0.16 * amp), y: b * (1 + 0.2 * amp), duration: 0.09, ease: 'power2.out' })
+            .to(s.scale, { x: b, y: b, duration: 0.14, ease: 'power2.in' })
+            .to(s.scale, { x: b * (1 + 0.1 * amp), y: b * (1 + 0.12 * amp), duration: 0.08 })
+            .to(s.scale, { x: b, y: b, duration: 0.3, ease: 'power2.in' });
+        }
+        break;
+      case Sym.ZERO:
+        tl.to(s.scale, { x: b * (1 + 0.14 * amp), y: b * (1 + 0.14 * amp), duration: 0.25, ease: 'power2.out' });
+        for (let i = 0; i < 8; i++) tl.to(s, { x: CELL_W / 2 + (Math.random() - 0.5) * 12 * amp, rotation: (Math.random() - 0.5) * 0.08 * amp, duration: 0.04 });
+        tl.to(s, { x: CELL_W / 2, rotation: 0, duration: 0.1 }).to(s.scale, { x: b, y: b, duration: 0.35, ease: 'back.out(2)' });
+        break;
+      case Sym.MASK:
+        tl.to(s.scale, { x: b * (1 + 0.12 * amp), y: b * (1 + 0.12 * amp), duration: 0.3, ease: 'power2.out' })
+          .to(s, { rotation: 0.08 * amp, duration: 0.18, ease: 'sine.inOut' })
+          .to(s, { rotation: -0.08 * amp, duration: 0.3, ease: 'sine.inOut' })
+          .to(s, { rotation: 0, duration: 0.2 })
+          .to(s.scale, { x: b, y: b, duration: 0.3 });
+        break;
+      case Sym.SERUM:
+        tl.to(s.scale, { x: b * (1 + 0.12 * amp), y: b * (1 + 0.12 * amp), duration: 0.25 })
+          .to(s, { rotation: 0.14 * amp, duration: 0.15, ease: 'sine.inOut' })
+          .to(s, { rotation: -0.12 * amp, duration: 0.2, ease: 'sine.inOut' })
+          .to(s, { rotation: 0.06 * amp, duration: 0.18, ease: 'sine.inOut' })
+          .to(s, { rotation: 0, duration: 0.2 })
+          .to(s.scale, { x: b, y: b, duration: 0.3 });
+        break;
+      case Sym.CODEX:
+        tl.to(s.scale, { x: b * (1 + 0.2 * amp), y: b * (1 + 0.2 * amp), duration: 0.3, ease: 'back.out(3)' })
+          .to(s, { rotation: 0.05, duration: 0.05, yoyo: true, repeat: 5 })
+          .to(s.scale, { x: b, y: b, duration: 0.4, ease: 'power2.inOut' });
+        break;
+      default:
+        tl.to(s.scale, { x: b * (1 + 0.12 * amp), y: b * (1 + 0.12 * amp), duration: 0.28, ease: 'back.out(2)' })
+          .to(s.scale, { x: b * (1 + 0.04 * amp), y: b * (1 + 0.04 * amp), duration: 0.3, ease: 'sine.inOut' })
+          .to(s.scale, { x: b, y: b, duration: 0.3 });
     }
+    const g = this.attachGlow(reel, row);
+    g.alpha = 0;
+    gsap.to(g, { alpha: strong ? 1 : 0.7, duration: 0.25, delay });
+    gsap.to(g, { alpha: 0.25, duration: 0.5, delay: delay + 0.3, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+  }
+
+  private highlightCells(cells: Cell[], strong: boolean, stagger: number): void {
+    const seen = new Set<string>();
+    const uniq = cells.filter(([r, row]) => {
+      const k = `${r}:${row}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    uniq.forEach(([r, row]) => {
+      const delay = r * stagger;
+      this.winFrame(r, row, delay);
+      this.animateSymbol(r, row, strong, delay);
+      if (strong) {
+        const c = cellCenter(r, row);
+        gsap.delayedCall(delay, () => this.sparks.burst(c.x, c.y, 10, 0.45));
+      }
+    });
   }
 
   private addLabel(text: string, x: number, y: number, color = 0xffffff, scale = 1): Text {
     const t = new Text({
       text,
       style: {
-        fontFamily: 'Cinzel, serif',
-        fontWeight: '900',
-        fontSize: 40,
+        fontFamily: 'Rajdhani, sans-serif',
+        fontWeight: '700',
+        fontSize: 46,
         fill: color,
-        stroke: { color: 0x000000, width: 7 },
-        dropShadow: { color: COLORS.infection, blur: 12, distance: 0, alpha: 1 },
+        stroke: { color: 0x14000a, width: 8, join: 'round' },
+        dropShadow: { color: COLORS.infection, blur: 14, distance: 0, alpha: 1 },
       },
     });
     t.anchor.set(0.5);
     t.position.set(x, y);
     this.labelLayer.addChild(t);
-    gsap.fromTo(t.scale, { x: 0.3 * scale, y: 0.3 * scale }, { x: scale, y: scale, duration: 0.35, ease: 'back.out(2)' });
+    gsap.fromTo(t.scale, { x: 0.3 * scale, y: 0.3 * scale }, { x: scale, y: scale, duration: 0.4, ease: 'back.out(2.5)' });
+    gsap.from(t, { y: y + 18, duration: 0.4, ease: 'power2.out' });
     return t;
   }
 
@@ -288,18 +465,23 @@ export class ReelBoard extends Container {
    */
   async presentWins(lineWins: LineWin[], scatter: ScatterWin | null, celebrate: boolean, onLine?: (i: number) => void): Promise<void> {
     if (!lineWins.length && !scatter) return;
-    const all: [number, number][] = [...lineWins.flatMap((w) => w.cells), ...(scatter?.cells ?? [])];
+    const all: Cell[] = [...lineWins.flatMap((w) => w.cells), ...(scatter?.cells ?? [])];
     this.dimExcept(all);
-    this.animateCells(all, celebrate);
-    for (const w of lineWins) this.lineLayer.addChild(this.drawLine(w.line, 0.9));
+    this.highlightCells(all, celebrate, 0.06);
+    lineWins.forEach((w, i) => {
+      const g = this.traceLine(w.line, 0.85, 0.45);
+      g.alpha = 0;
+      this.lineLayer.addChild(g);
+      gsap.to(g, { alpha: 0.85, duration: 0.01, delay: i * 0.08 });
+    });
     if (scatter) {
       const mid = scatter.cells[Math.floor(scatter.cells.length / 2)];
       const c = cellCenter(mid[0], mid[1]);
-      this.addLabel(`${fmt(scatter.win)}`, c.x, c.y + CELL_H * 0.38, 0xffd27a);
+      this.addLabel(fmt(scatter.win), c.x, c.y + CELL_H * 0.36, 0xffd27a);
     }
-    await wait(celebrate ? 1300 : 900);
+    await wait(celebrate ? 1400 : 950);
 
-    const items: { cells: [number, number][]; line?: number; win: number }[] = [
+    const items: { cells: Cell[]; line?: number; win: number }[] = [
       ...lineWins.map((w) => ({ cells: w.cells, line: w.line, win: w.win })),
       ...(scatter ? [{ cells: scatter.cells, win: scatter.win }] : []),
     ];
@@ -307,28 +489,32 @@ export class ReelBoard extends Container {
     const tl = gsap.timeline({ repeat: -1 });
     items.forEach((it, i) => {
       tl.add(() => {
-        this.lineLayer.removeChildren().forEach((c) => c.destroy());
-        this.labelLayer.removeChildren().forEach((c) => c.destroy());
+        this.clearHighlights();
         this.dimExcept(it.cells);
-        if (it.line !== undefined) this.lineLayer.addChild(this.drawLine(it.line));
+        if (it.line !== undefined) this.lineLayer.addChild(this.traceLine(it.line, 1, 0.3));
         const last = it.cells[it.cells.length - 1];
         const c = cellCenter(last[0], last[1]);
         this.addLabel(fmt(it.win), c.x, c.y + CELL_H * 0.36, it.line !== undefined ? LINE_COLORS[it.line] : 0xffd27a);
-        this.animateCells(it.cells, false);
+        this.highlightCells(it.cells, false, 0.04);
         onLine?.(i);
       });
-      tl.to({}, { duration: 1.4 });
+      tl.to({}, { duration: 1.5 });
     });
     this.cycleTl = tl;
   }
 
-  /** Book-style expansion: veins crawl down the reel, then the special symbol fills it. */
+  /** Book-style expansion: veins crawl down the reel, the reel bursts, then the strain fills it. */
   async expand(exp: Expansion, onReel?: (reel: number) => void): Promise<void> {
-    this.dimLayer.clear();
-    this.lineLayer.removeChildren().forEach((c) => c.destroy());
-    this.labelLayer.removeChildren().forEach((c) => c.destroy());
+    this.clearHighlights();
     for (const r of exp.reels) {
       const x = reelX(r);
+      // the strain symbols on this reel flare first
+      for (let row = 0; row < ROWS; row++) {
+        if (this.symbolAt(r, row) === exp.symbol) {
+          const g = this.attachGlow(r, row);
+          gsap.fromTo(g, { alpha: 0 }, { alpha: 1, duration: 0.15, yoyo: true, repeat: 1 });
+        }
+      }
       const veins = new Sprite(this.tex.veins);
       veins.position.set(x, 0);
       veins.width = CELL_W;
@@ -343,57 +529,49 @@ export class ReelBoard extends Container {
       big.width = CELL_W;
       big.height = BOARD_H;
       big.alpha = 0;
+      const flash = new Sprite(this.tex.glow);
+      flash.anchor.set(0.5);
+      flash.position.set(x + CELL_W / 2, BOARD_H / 2);
+      flash.width = CELL_W * 2.4;
+      flash.height = BOARD_H * 1.4;
+      flash.tint = COLORS.infection;
+      flash.blendMode = 'add';
+      flash.alpha = 0;
       this.expandLayer.addChild(vm, veins, big);
+      this.labelLayer.addChild(flash);
       onReel?.(r);
       await new Promise<void>((resolve) => {
+        const sx = big.scale.x;
+        const sy = big.scale.y;
         gsap
           .timeline({ onComplete: resolve })
           .to(vm.scale, { y: 1, duration: 0.45, ease: 'power2.in' })
-          .to(big, { alpha: 1, duration: 0.18 }, '-=0.05')
-          .fromTo(big.scale, { x: big.scale.x * 1.2, y: big.scale.y * 1.05 }, { x: big.scale.x, y: big.scale.y, duration: 0.35, ease: 'back.out(2)' }, '<')
-          .to(veins, { alpha: 0, duration: 0.3 });
+          .add(() => {
+            for (let row = 0; row < ROWS; row++) {
+              const c = cellCenter(r, row);
+              this.sparks.burst(c.x, c.y, 16, 0.7);
+            }
+          })
+          .to(flash, { alpha: 1, duration: 0.08 })
+          .to(big, { alpha: 1, duration: 0.12 }, '<')
+          .fromTo(big.scale, { x: sx * 1.25, y: sy * 1.08 }, { x: sx, y: sy, duration: 0.4, ease: 'back.out(2.2)' }, '<')
+          .to(flash, { alpha: 0, duration: 0.5 })
+          .to(veins, { alpha: 0, duration: 0.3 }, '<');
       });
+      gsap.to(big, { alpha: 0.85, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
     await wait(250);
-    for (const line of exp.lines) this.lineLayer.addChild(this.drawLine(line, 0.7));
-    this.addLabel(fmt(exp.win), BOARD_W / 2, BOARD_H / 2, 0xffd27a, 1.5);
-    await wait(1500);
+    exp.lines.forEach((line, i) => {
+      const g = this.traceLine(line, 0.75, 0.35);
+      g.alpha = 0;
+      this.lineLayer.addChild(g);
+      gsap.to(g, { alpha: 0.75, duration: 0.01, delay: i * 0.06 });
+    });
+    await wait(500);
+    this.addLabel(fmt(exp.win), BOARD_W / 2, BOARD_H / 2, 0xffd27a, 1.6);
+    this.sparks.burst(BOARD_W / 2, BOARD_H / 2, 40, 1);
+    await wait(1400);
   }
-}
-
-const REEL_SEP_OFFSET = 5;
-const FRAME_BLEED = 40;
-
-/** Frame outline with its red glow baked into a texture (a live glow filter costs a full pass every frame). */
-function frameTexture(pad: number): Texture {
-  const w = BOARD_W + pad * 2;
-  const h = BOARD_H + pad * 2;
-  const c = document.createElement('canvas');
-  c.width = w + FRAME_BLEED * 2;
-  c.height = h + FRAME_BLEED * 2;
-  const ctx = c.getContext('2d')!;
-  ctx.translate(FRAME_BLEED, FRAME_BLEED);
-  const rr = (x: number, y: number, ww: number, hh: number, r: number) => {
-    ctx.beginPath();
-    ctx.roundRect(x, y, ww, hh, r);
-  };
-  ctx.shadowColor = '#ff2a3d';
-  ctx.shadowBlur = 26;
-  ctx.strokeStyle = 'rgba(255,42,61,0.9)';
-  ctx.lineWidth = 3;
-  rr(7, 7, w - 14, h - 14, 13);
-  ctx.stroke();
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = '#2a2f38';
-  ctx.lineWidth = 5;
-  rr(0, 0, w, h, 18);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,42,61,0.6)';
-  ctx.lineWidth = 2;
-  rr(7, 7, w - 14, h - 14, 13);
-  ctx.stroke();
-  return Texture.from(c);
 }
 
 export function wait(ms: number): Promise<void> {

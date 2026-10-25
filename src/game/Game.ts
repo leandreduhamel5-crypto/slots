@@ -9,14 +9,15 @@ import { Paytable } from '../ui/Paytable';
 import { Audio } from './Audio';
 import { Background } from './Background';
 import { BOARD_H, BOARD_W, COLORS } from './layout';
-import { Logo, eyeFromCodex } from './Logo';
+import { Logo, eyeFromCodex, paintLogo } from './Logo';
+import { showIntro } from '../ui/Intro';
 import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
 import type { SymbolTextures } from './textures';
 
-const BOARD_Y = 140;
+const BOARD_Y = 152;
 const WORLD_TOP = -112;
-const WORLD_BOTTOM = BOARD_Y + BOARD_H + 34;
+const WORLD_BOTTOM = BOARD_Y + BOARD_H + 64;
 const WORLD_W = BOARD_W + 200;
 
 class FeatureBanner extends Container {
@@ -107,7 +108,8 @@ export class Game {
     tex: SymbolTextures,
     codexCanvas: HTMLCanvasElement,
   ) {
-    this.bg = new Background(tex.spore);
+    this.bg = new Background(tex.spore, tex.chain, tex.glow);
+    this.bg.onLightning = () => this.audio.thunder();
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
     this.logo = new Logo(eyeFromCodex(codexCanvas, codexCanvas.width));
@@ -175,7 +177,13 @@ export class Game {
     this.hud.setTurbo(false);
     this.hud.setSound(true);
 
-    if (this.server.state.pending) void this.resume(this.server.state.pending);
+    const eye = eyeFromCodex(codexCanvas, codexCanvas.width);
+    showIntro(paintLogo(eye).toDataURL('image/png'), tex.images, () => {
+      this.audio.unlock();
+      this.logo.glitch(2);
+      this.bg.flash();
+      if (this.server.state.pending) void this.resume(this.server.state.pending);
+    });
   }
 
   /** Dev console helper: game.debug('feature' | 'big' | 'retrigger' | 'expand'). */
@@ -428,6 +436,7 @@ export class Game {
 
   private enterFeature(on: boolean): void {
     this.bg.setFeature(on);
+    this.board.setFeature(on);
     this.audio.setFeature(on);
     this.hud.setFeature(on);
     this.banner.visible = true;
