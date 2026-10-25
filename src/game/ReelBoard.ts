@@ -43,6 +43,8 @@ export class ReelBoard extends Container {
   private anticipationFx: { glow: Sprite; veins: Sprite; mask: Graphics }[] = [];
   private glows: GlowPair[] = [];
   private hurried = false;
+  private ambientIn = 3;
+  private plaque: Container | null = null;
 
   constructor(
     private tex: SymbolTextures,
@@ -127,6 +129,11 @@ export class ReelBoard extends Container {
 
   update(dtMs: number): void {
     for (const r of this.reels) r.update(dtMs);
+    this.ambientIn -= dtMs / 1000;
+    if (this.ambientIn <= 0) {
+      this.ambientIn = 2.2 + Math.random() * 3;
+      this.ambient();
+    }
     this.sparks.update(dtMs);
     for (const g of this.glows) {
       g.glow.position.set(g.reel.x + g.src.x, g.src.y);
@@ -135,12 +142,84 @@ export class ReelBoard extends Container {
     }
   }
 
+  /** Signs of life while nothing happens: a premium symbol on the board stirs. */
+  private ambient(): void {
+    if (this.glows.length || this.cycleTl || !this.reels.every((r) => r.idle)) return;
+    const cells: Cell[] = [];
+    for (let r = 0; r < REELS; r++) for (let row = 0; row < ROWS; row++) if (this.symbolAt(r, row) <= Sym.HEART) cells.push([r, row]);
+    if (!cells.length) return;
+    const [r, row] = cells[Math.floor(Math.random() * cells.length)];
+    const g = this.attachGlow(r, row);
+    g.alpha = 0;
+    gsap.to(g, { alpha: 0.85, duration: 0.5, yoyo: true, repeat: 1, ease: 'sine.inOut', onComplete: () => this.detachGlow(g) });
+    const s = this.cell(r, row);
+    const b = s.scale.x;
+    gsap.to(s.scale, { x: b * 1.05, y: b * 1.05, duration: 0.5, yoyo: true, repeat: 1, ease: 'sine.inOut' });
+  }
+
+  /** Total-win plaque hanging under the reels. */
+  showPlaque(amount: number, label: string): void {
+    this.hidePlaque();
+    const c = new Container();
+    const w = 360;
+    const h = 74;
+    const plate = new Graphics()
+      .roundRect(-w / 2, -h / 2, w, h, 16)
+      .fill({ color: 0x0a0b0f, alpha: 0.96 })
+      .roundRect(-w / 2, -h / 2, w, h, 16)
+      .stroke({ width: 3, color: COLORS.infection })
+      .roundRect(-w / 2 + 7, -h / 2 + 7, w - 14, h - 14, 11)
+      .stroke({ width: 1.2, color: COLORS.gold, alpha: 0.7 });
+    const glow = new Sprite(this.tex.glow);
+    glow.anchor.set(0.5);
+    glow.width = w * 1.5;
+    glow.height = h * 2.6;
+    glow.tint = COLORS.infection;
+    glow.blendMode = 'add';
+    glow.alpha = 0.5;
+    const lab = new Text({
+      text: label,
+      style: { fontFamily: 'Cinzel, serif', fontWeight: '700', fontSize: 18, fill: 0xff6b78, letterSpacing: 4 },
+    });
+    lab.anchor.set(0.5);
+    lab.y = -18;
+    const val = new Text({
+      text: fmt(0),
+      style: {
+        fontFamily: 'Rajdhani, sans-serif',
+        fontWeight: '700',
+        fontSize: 44,
+        fill: 0xffd27a,
+        dropShadow: { color: 0xff5a3a, blur: 12, distance: 0, alpha: 1 },
+      },
+    });
+    val.anchor.set(0.5);
+    val.y = 12;
+    c.addChild(glow, plate, lab, val);
+    c.position.set(BOARD_W / 2, BOARD_H + FRAME_PAD + 8);
+    this.labelLayer.parent!.addChild(c);
+    this.plaque = c;
+    gsap.fromTo(c.scale, { x: 0.4, y: 0.4 }, { x: 1, y: 1, duration: 0.45, ease: 'back.out(2.2)' });
+    gsap.fromTo(c, { alpha: 0 }, { alpha: 1, duration: 0.2 });
+    const o = { v: 0 };
+    gsap.to(o, { v: amount, duration: 0.9, ease: 'power2.out', onUpdate: () => (val.text = fmt(o.v)) });
+    gsap.to(glow, { alpha: 0.2, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+  }
+
+  hidePlaque(): void {
+    const p = this.plaque;
+    if (!p) return;
+    this.plaque = null;
+    gsap.killTweensOf(p);
+    gsap.to(p, { alpha: 0, duration: 0.2, onComplete: () => p.destroy({ children: true }) });
+  }
+
   /** Free spins: the whole board breathes red. */
   setFeature(on: boolean): void {
     gsap.killTweensOf(this.infectionGlow);
     if (on) {
-      this.infectionGlow.alpha = 0.18;
-      gsap.to(this.infectionGlow, { alpha: 0.42, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+      this.infectionGlow.alpha = 0.14;
+      gsap.to(this.infectionGlow, { alpha: 0.32, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     } else gsap.to(this.infectionGlow, { alpha: 0, duration: 0.6 });
     for (const p of this.panels.children as Sprite[]) gsap.to(p, { tint: on ? 0xffb0b8 : 0xffffff, duration: 0.8 });
   }
@@ -263,6 +342,7 @@ export class ReelBoard extends Container {
   }
 
   clearWins(): void {
+    this.hidePlaque();
     this.cycleTl?.kill();
     this.cycleTl = null;
     this.dimLayer.clear();

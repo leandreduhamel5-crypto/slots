@@ -17,7 +17,7 @@ import type { SymbolTextures } from './textures';
 
 const BOARD_Y = 152;
 const WORLD_TOP = -112;
-const WORLD_BOTTOM = BOARD_Y + BOARD_H + 64;
+const WORLD_BOTTOM = BOARD_Y + BOARD_H + 82;
 const WORLD_W = BOARD_W + 200;
 
 class FeatureBanner extends Container {
@@ -117,7 +117,8 @@ export class Game {
     this.logo.homeX = BOARD_W / 2;
     this.banner = new FeatureBanner(tex);
     this.banner.position.set(BOARD_W / 2, 6);
-    this.world.addChild(this.logo, this.banner, this.board);
+    this.teaser = this.buildTeaser(tex);
+    this.world.addChild(this.logo, this.banner, this.board, this.teaser);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       shake: (p) => this.shake(p),
@@ -199,6 +200,45 @@ export class Game {
     void this.play();
   }
 
+  private teaser: Container;
+
+  /** Portrait-only reminder of the feature, filling the space under the reels. */
+  private buildTeaser(tex: SymbolTextures): Container {
+    const c = new Container();
+    for (let i = 0; i < 3; i++) {
+      const s = new Sprite(tex.normal[Sym.CODEX]);
+      s.anchor.set(0.5);
+      s.width = s.height = 118;
+      s.position.set((i - 1) * 104, 0);
+      s.rotation = (i - 1) * 0.12;
+      c.addChild(s);
+      gsap.to(s, { y: -8, duration: 1.4, delay: i * 0.25, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    }
+    const t = new Text({
+      text: '10 TOURS GRATUITS',
+      style: {
+        fontFamily: 'Cinzel, serif',
+        fontWeight: '900',
+        fontSize: 54,
+        fill: COLORS.bone,
+        stroke: { color: 0x050304, width: 8, join: 'round' },
+        dropShadow: { color: COLORS.infection, blur: 18, distance: 0, alpha: 1 },
+      },
+    });
+    t.anchor.set(0.5);
+    t.position.set(0, 100);
+    const sub = new Text({
+      text: 'la souche s\'étend sur tout le rouleau',
+      style: { fontFamily: 'Rajdhani, sans-serif', fontWeight: '600', fontSize: 34, fill: 0xff7a86, letterSpacing: 2 },
+    });
+    sub.anchor.set(0.5);
+    sub.position.set(0, 154);
+    c.addChild(t, sub);
+    c.position.set(BOARD_W / 2, BOARD_Y + BOARD_H + 150);
+    c.visible = false;
+    return c;
+  }
+
   private layout(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -206,11 +246,15 @@ export class Game {
     this.viewH = h;
     const hudH = this.hud.root.getBoundingClientRect().height || 120;
     const availH = h - hudH;
-    const worldH = WORLD_BOTTOM - WORLD_TOP;
-    const worldW = w < h ? BOARD_W + 70 : WORLD_W;
+    const portrait = w < h;
+    const bottom = portrait ? WORLD_BOTTOM + 270 : WORLD_BOTTOM;
+    const worldH = bottom - WORLD_TOP;
+    const worldW = portrait ? BOARD_W + 70 : WORLD_W;
     const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
+    this.teaser.visible = portrait && !this.inFeature;
+    this.logo.scale.set(portrait ? 1.25 : 1);
     this.world.scale.set(scale);
-    this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + WORLD_BOTTOM) / 2);
+    this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
     this.bg.resize(w, h);
     this.overlays.resize(w, h);
@@ -380,6 +424,7 @@ export class Game {
       shown += lineSum;
       this.hud.rollWin(shown, celebrate ? 900 : 300, label);
       if (size >= 2) this.shake(4);
+      if (celebrate && !inFeature) this.board.showPlaque(lineSum, 'GAIN');
       await this.board.presentWins(o.lineWins, o.scatter, celebrate, () => this.audio.tick());
     }
     for (const exp of o.expansions) {
@@ -434,7 +479,11 @@ export class Game {
     this.board.reels.forEach((r, i) => r.setStrip(BASE_STRIPS[i]));
   }
 
+  private inFeature = false;
+
   private enterFeature(on: boolean): void {
+    this.inFeature = on;
+    this.layout();
     this.bg.setFeature(on);
     this.board.setFeature(on);
     this.audio.setFeature(on);

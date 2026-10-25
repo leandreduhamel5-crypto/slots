@@ -174,11 +174,21 @@ export class Overlays extends Container {
   }
 
   private ringBurst(color: number): void {
-    const g = new Graphics().circle(0, 0, 100).stroke({ width: 10, color, alpha: 1 });
+    const g = new Graphics();
     g.blendMode = 'add';
     this.content.addChildAt(g, 0);
-    gsap.fromTo(g.scale, { x: 0.3, y: 0.3 }, { x: 7, y: 7, duration: 0.9, ease: 'power2.out' });
-    gsap.fromTo(g, { alpha: 1 }, { alpha: 0, duration: 0.9, ease: 'power1.in', onComplete: () => g.destroy() });
+    const o = { r: 40, a: 1 };
+    gsap.to(o, {
+      r: 900,
+      a: 0,
+      duration: 0.9,
+      ease: 'power2.out',
+      onUpdate: () => {
+        if (g.destroyed) return;
+        g.clear().circle(0, 0, o.r).stroke({ width: 6 + o.r * 0.02, color, alpha: o.a * 0.85 });
+      },
+      onComplete: () => g.destroy(),
+    });
   }
 
   private glowDisc(size: number, color: number, alpha = 0.8): Sprite {

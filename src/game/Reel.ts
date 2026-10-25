@@ -23,6 +23,10 @@ export class Reel extends Container {
   private landed: (() => void) | null = null;
   private stripPos: number;
   speedScale = 1;
+
+  get idle(): boolean {
+    return this.phase === 'idle';
+  }
   onLand: (() => void) | null = null;
 
   constructor(
