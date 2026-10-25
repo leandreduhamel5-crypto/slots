@@ -25,7 +25,7 @@ export class Paytable {
           return `<li><b>${n}×</b><span>${fmt(v)}</span></li>`;
         })
         .join('');
-      return `<div class="pt-sym${s <= Sym.HEART ? ' premium' : ''}"><img src="${this.images[s]}" alt="${d.name}"><div><h4>${d.name}</h4><ul>${rows}</ul></div></div>`;
+      return `<div class="pt-sym${s <= Sym.BLOOD ? ' premium' : ''}"><img src="${this.images[s]}" alt="${d.name}"><div><h4>${d.name}</h4><ul>${rows}</ul></div></div>`;
     };
     const lineGrid = (rows: number[], i: number) =>
       `<div class="pt-line"><span>${i + 1}</span><div class="grid">${[0, 1, 2]
@@ -56,7 +56,7 @@ export class Paytable {
 
         <section>
           <h3>Paiements</h3>
-          <div class="pt-grid">${[Sym.ZERO, Sym.MASK, Sym.SERUM, Sym.HEART, Sym.A, Sym.K, Sym.Q, Sym.J, Sym.TEN].map(sym).join('')}</div>
+          <div class="pt-grid">${[Sym.ZERO, Sym.MASK, Sym.ANTIDOTE, Sym.BLOOD, Sym.A, Sym.K, Sym.Q, Sym.J, Sym.TEN].map(sym).join('')}</div>
         </section>
 
         <section>

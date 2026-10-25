@@ -5,8 +5,8 @@ export enum Sym {
   CODEX = 0,
   ZERO = 1,
   MASK = 2,
-  SERUM = 3,
-  HEART = 4,
+  ANTIDOTE = 3,
+  BLOOD = 4,
   A = 5,
   K = 6,
   Q = 7,
@@ -26,10 +26,10 @@ export interface SymbolDef {
 
 export const SYMBOLS: SymbolDef[] = [
   { id: Sym.CODEX, key: 'codex', name: 'Codex Infecta', pays: [0, 0, 0, 2, 20, 200] },
-  { id: Sym.ZERO, key: 'zero', name: 'Patient Zéro', pays: [0, 0, 10, 100, 1000, 5000] },
+  { id: Sym.ZERO, key: 'zero', name: "L'Infecté", pays: [0, 0, 10, 100, 1000, 5000] },
   { id: Sym.MASK, key: 'mask', name: 'Masque à gaz', pays: [0, 0, 5, 40, 400, 2000] },
-  { id: Sym.SERUM, key: 'serum', name: 'Sérum', pays: [0, 0, 0, 30, 100, 750] },
-  { id: Sym.HEART, key: 'heart', name: 'Cœur contaminé', pays: [0, 0, 0, 30, 100, 750] },
+  { id: Sym.ANTIDOTE, key: 'antidote', name: 'Antidote', pays: [0, 0, 0, 30, 100, 750] },
+  { id: Sym.BLOOD, key: 'blood', name: 'Poche de sang', pays: [0, 0, 0, 30, 100, 750] },
   { id: Sym.A, key: 'a', name: 'As', pays: [0, 0, 0, 5, 40, 150] },
   { id: Sym.K, key: 'k', name: 'Roi', pays: [0, 0, 0, 5, 40, 150] },
   { id: Sym.Q, key: 'q', name: 'Dame', pays: [0, 0, 0, 5, 25, 100] },
@@ -66,7 +66,7 @@ export const BET_LEVELS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
 export const DEFAULT_BET_INDEX = 3;
 export const START_BALANCE = 1000;
 
-/** Symbol counts per reel, in Sym order: CODEX, ZERO, MASK, SERUM, HEART, A, K, Q, J, TEN. Tuned with scripts/simulate.ts. */
+/** Symbol counts per reel, in Sym order: CODEX, ZERO, MASK, ANTIDOTE, BLOOD, A, K, Q, J, TEN. Tuned with scripts/simulate.ts. */
 export const BASE_COUNTS: number[][] = [
   [1, 2, 3, 3, 3, 5, 5, 6, 6, 6],
   [1, 2, 3, 3, 3, 5, 5, 6, 6, 6],

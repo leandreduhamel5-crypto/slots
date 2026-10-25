@@ -1,21 +1,23 @@
-import '@fontsource/cinzel/700.css';
-import '@fontsource/cinzel/900.css';
-import '@fontsource/rajdhani/600.css';
-import '@fontsource/rajdhani/700.css';
+import '@fontsource/luckiest-guy/400.css';
+import '@fontsource/nunito/700.css';
+import '@fontsource/nunito/800.css';
+import '@fontsource/nunito/900.css';
 import './style.css';
 import { Application } from 'pixi.js';
+import gsap from 'gsap';
 import { Game } from './game/Game';
 import { buildSymbolTextures } from './game/textures';
+import { buildMascotTextures } from './game/Mascot';
 
 async function boot(): Promise<void> {
   const progress = document.getElementById('loader-bar');
   const setProgress = (p: number) => progress?.style.setProperty('--p', String(p));
 
   await Promise.all([
-    document.fonts.load('900 64px Cinzel'),
-    document.fonts.load('700 64px Cinzel'),
-    document.fonts.load('700 64px Rajdhani'),
-    document.fonts.load('600 64px Rajdhani'),
+    document.fonts.load('400 64px "Luckiest Guy"'),
+    document.fonts.load('700 64px Nunito'),
+    document.fonts.load('800 64px Nunito'),
+    document.fonts.load('900 64px Nunito'),
   ]);
   setProgress(0.3);
 
@@ -30,11 +32,11 @@ async function boot(): Promise<void> {
   document.getElementById('stage')!.appendChild(app.canvas);
   setProgress(0.55);
 
-  const tex = await buildSymbolTextures();
+  const [tex, mascot] = await Promise.all([buildSymbolTextures(), buildMascotTextures()]);
   setProgress(1);
 
-  const game = new Game(app, tex, tex.canvases[0]);
-  if (import.meta.env.DEV) Object.assign(window, { game, app });
+  const game = new Game(app, tex, tex.canvases[0], mascot);
+  if (import.meta.env.DEV) Object.assign(window, { game, app, gsap });
 
   const loader = document.getElementById('loader');
   if (loader) {

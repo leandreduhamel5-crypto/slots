@@ -1,4 +1,6 @@
-/** Procedural Canvas2D painters for frame, reel panels and decor. Everything is drawn once and cached as a texture. */
+/** Procedural Canvas2D painters (cartoon style: flat fills, cel shadow, thick ink outlines). Drawn once, cached as textures. */
+
+export const INK = '#170b14';
 
 export function makeCanvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
@@ -19,122 +21,110 @@ function rrect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   ctx.roundRect(x, y, w, h, r);
 }
 
-/** Speckle noise clipped to the current path. */
-function grain(ctx: CanvasRenderingContext2D, w: number, h: number, rnd: () => number, n: number, light = 0.05, dark = 0.18): void {
-  for (let i = 0; i < n; i++) {
-    const x = rnd() * w;
-    const y = rnd() * h;
-    const s = rnd() * 2.2 + 0.4;
-    ctx.fillStyle = rnd() < 0.5 ? `rgba(255,255,255,${rnd() * light})` : `rgba(0,0,0,${rnd() * dark})`;
-    ctx.fillRect(x, y, s, s);
-  }
+function ink(ctx: CanvasRenderingContext2D, w: number): void {
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = w;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
 }
 
-function gem(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  ctx.save();
-  ctx.shadowColor = '#ff2a3d';
-  ctx.shadowBlur = r * 1.6;
-  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
-  g.addColorStop(0, '#ffd0c0');
-  g.addColorStop(0.3, '#ff3a4a');
-  g.addColorStop(0.75, '#a0001a');
-  g.addColorStop(1, '#2a0006');
-  ctx.fillStyle = g;
+function rivet(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#9aa6b0';
   ctx.fill();
-  ctx.restore();
+  ink(ctx, 3);
+  ctx.beginPath();
+  ctx.arc(x + r * 0.25, y + r * 0.25, r * 0.55, 0, Math.PI * 2);
+  ctx.fillStyle = '#6d7983';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.28, 0, Math.PI * 2);
+  ctx.fillStyle = '#e6edf2';
+  ctx.fill();
 }
 
-function goldPlate(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  const g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
-  g.addColorStop(0, '#f6dca0');
-  g.addColorStop(0.45, '#a8783c');
-  g.addColorStop(1, '#3a220a');
-  ctx.fillStyle = g;
-  ctx.strokeStyle = '#1a0f05';
-  ctx.lineWidth = 2;
-  // quatrefoil
-  ctx.beginPath();
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    ctx.moveTo(x + Math.cos(a) * r * 0.45 + r * 0.55, y + Math.sin(a) * r * 0.45);
-    ctx.arc(x + Math.cos(a) * r * 0.45, y + Math.sin(a) * r * 0.45, r * 0.55, 0, Math.PI * 2);
-  }
+/** Cartoon goo drip with ink outline. */
+export function goo(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, w: number, color = '#e0213a', light = '#ff7d8c'): void {
+  const path = () => {
+    ctx.beginPath();
+    ctx.moveTo(x - w * 1.6, y);
+    ctx.quadraticCurveTo(x - w, y + 2, x - w, y + len * 0.4);
+    ctx.lineTo(x - w * 0.9, y + len);
+    ctx.arc(x, y + len, w, Math.PI, 0, true);
+    ctx.lineTo(x + w, y + len * 0.4);
+    ctx.quadraticCurveTo(x + w, y + 2, x + w * 1.6, y);
+    ctx.closePath();
+  };
+  path();
+  ctx.fillStyle = color;
   ctx.fill();
-  ctx.stroke();
+  ink(ctx, 3.5);
   ctx.beginPath();
-  ctx.arc(x, y, r * 0.62, 0, Math.PI * 2);
-  ctx.fillStyle = '#120a06';
+  ctx.arc(x - w * 0.35, y + len - w * 0.15, w * 0.32, 0, Math.PI * 2);
+  ctx.fillStyle = light;
   ctx.fill();
-  gem(ctx, x, y, r * 0.42);
 }
 
+/** Cartoon tendril: ink casing, red core, yellow pustules. */
 function tendril(ctx: CanvasRenderingContext2D, pts: number[], width: number, rnd: () => number): void {
   const path = () => {
     ctx.beginPath();
     ctx.moveTo(pts[0], pts[1]);
     for (let i = 2; i + 3 < pts.length; i += 4) ctx.quadraticCurveTo(pts[i], pts[i + 1], pts[i + 2], pts[i + 3]);
   };
-  ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   path();
-  ctx.strokeStyle = '#1a0206';
-  ctx.lineWidth = width + 4;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = width + 7;
   ctx.stroke();
   path();
-  const g = ctx.createLinearGradient(pts[0], pts[1], pts[pts.length - 2], pts[pts.length - 1]);
-  g.addColorStop(0, '#6a0a1a');
-  g.addColorStop(1, '#2a0208');
-  ctx.strokeStyle = g;
+  ctx.strokeStyle = '#b5122f';
   ctx.lineWidth = width;
   ctx.stroke();
-  ctx.shadowColor = '#ff2a3d';
-  ctx.shadowBlur = 10;
   path();
-  ctx.strokeStyle = 'rgba(255,60,80,0.85)';
-  ctx.lineWidth = Math.max(1, width * 0.18);
+  ctx.strokeStyle = '#ff5a6a';
+  ctx.lineWidth = width * 0.3;
   ctx.stroke();
-  ctx.restore();
-  // pustules along the tendril
   for (let i = 2; i + 3 < pts.length; i += 4) {
-    if (rnd() < 0.6) {
-      const r = 2 + rnd() * width * 0.45;
-      const x = pts[i + 2] + (rnd() - 0.5) * width;
-      const y = pts[i + 3] + (rnd() - 0.5) * width;
-      const pg = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
-      pg.addColorStop(0, '#fff0d0');
-      pg.addColorStop(0.4, '#ff5a3a');
-      pg.addColorStop(1, '#6a0010');
-      ctx.save();
-      ctx.shadowColor = '#ff2a3d';
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = pg;
+    if (rnd() < 0.7) {
+      const r = 3 + rnd() * width * 0.35;
+      const x = pts[i + 2] + (rnd() - 0.5) * width * 0.8;
+      const y = pts[i + 3] + (rnd() - 0.5) * width * 0.8;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffd23f';
       ctx.fill();
-      ctx.restore();
+      ink(ctx, 3);
+      ctx.beginPath();
+      ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.3, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff6c0';
+      ctx.fill();
     }
   }
 }
 
-function drip(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, w: number): void {
-  const g = ctx.createLinearGradient(0, y, 0, y + len);
-  g.addColorStop(0, '#5a0010');
-  g.addColorStop(1, '#d0102a');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(x - w, y);
-  ctx.quadraticCurveTo(x - w * 0.5, y + len * 0.6, x - w * 0.9, y + len);
-  ctx.arc(x, y + len, w, Math.PI, 0, true);
-  ctx.quadraticCurveTo(x + w * 0.5, y + len * 0.6, x + w, y);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,210,210,0.55)';
-  ctx.beginPath();
-  ctx.arc(x - w * 0.35, y + len - w * 0.2, w * 0.3, 0, Math.PI * 2);
-  ctx.fill();
+function hazard(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  ctx.save();
+  rrect(ctx, x, y, w, h, h / 2);
+  ctx.clip();
+  ctx.fillStyle = '#ffd23f';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = INK;
+  for (let sx = x - h; sx < x + w + h; sx += h * 1.6) {
+    ctx.beginPath();
+    ctx.moveTo(sx, y + h);
+    ctx.lineTo(sx + h * 0.8, y + h);
+    ctx.lineTo(sx + h * 1.6, y);
+    ctx.lineTo(sx + h * 0.8, y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+  rrect(ctx, x, y, w, h, h / 2);
+  ink(ctx, 4);
 }
 
 export interface FrameSpec {
@@ -147,191 +137,192 @@ export interface FrameSpec {
   reels: number;
 }
 
-/** Ornate gothic metal frame overgrown with infected tendrils; the board area stays transparent. */
+/** Chunky asylum-steel cabinet frame overgrown with infected tendrils. The reel window stays transparent. */
 export function paintFrame(s: FrameSpec): HTMLCanvasElement {
   const W = s.boardW + s.pad * 2;
   const H = s.boardH + s.pad * 2;
   const [c, ctx] = makeCanvas(W + s.bleed * 2, H + s.bleed * 2);
-  const rnd = seeded(1337);
+  const rnd = seeded(77);
   ctx.translate(s.bleed, s.bleed);
-  const inner = { x: s.pad - 4, y: s.pad - 4, w: s.boardW + 8, h: s.boardH + 8 };
+  const inner = { x: s.pad - 6, y: s.pad - 6, w: s.boardW + 12, h: s.boardH + 12 };
 
-  // outer glow
+  // drop shadow (the reel window is punched back out of it)
   ctx.save();
-  ctx.shadowColor = 'rgba(255,42,61,0.55)';
-  ctx.shadowBlur = 40;
-  rrect(ctx, 0, 0, W, H, 22);
-  ctx.fillStyle = '#0b0c10';
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  rrect(ctx, 10, 18, W, H, 30);
   ctx.fill();
   ctx.globalCompositeOperation = 'destination-out';
-  ctx.shadowBlur = 0;
-  rrect(ctx, inner.x, inner.y, inner.w, inner.h, 10);
+  rrect(ctx, inner.x, inner.y, inner.w, inner.h, 14);
+  ctx.fillStyle = '#000';
   ctx.fill();
   ctx.restore();
 
-  // metal ring
+  const ring = () => {
+    rrect(ctx, 0, 0, W, H, 30);
+    ctx.roundRect(inner.x, inner.y, inner.w, inner.h, 14);
+  };
+  // steel body
   ctx.save();
-  rrect(ctx, 0, 0, W, H, 22);
-  ctx.roundRect(inner.x, inner.y, inner.w, inner.h, 10);
+  ring();
   ctx.clip('evenodd');
-  const metal = ctx.createLinearGradient(0, 0, 0, H);
-  metal.addColorStop(0, '#3a414e');
-  metal.addColorStop(0.08, '#1d2129');
-  metal.addColorStop(0.5, '#14171d');
-  metal.addColorStop(0.92, '#1d2129');
-  metal.addColorStop(1, '#0a0b0e');
-  ctx.fillStyle = metal;
+  ctx.fillStyle = '#3a4a55';
   ctx.fillRect(0, 0, W, H);
-  grain(ctx, W, H, rnd, 9000, 0.06, 0.25);
-  // engraved channel
-  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-  ctx.lineWidth = 3;
-  rrect(ctx, 11, 11, W - 22, H - 22, 16);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(195,149,85,0.35)';
-  ctx.lineWidth = 1.2;
-  rrect(ctx, 12.5, 12.5, W - 25, H - 25, 15);
-  ctx.stroke();
-  // gothic notches on the channel
-  ctx.fillStyle = 'rgba(195,149,85,0.4)';
-  for (let x = 70; x < W - 70; x += 46) {
-    ctx.beginPath();
-    ctx.moveTo(x, 8);
-    ctx.lineTo(x + 5, 14);
-    ctx.lineTo(x, 20);
-    ctx.lineTo(x - 5, 14);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(x, H - 8);
-    ctx.lineTo(x + 5, H - 14);
-    ctx.lineTo(x, H - 20);
-    ctx.lineTo(x - 5, H - 14);
-    ctx.fill();
-  }
+  // cel shadow on the lower/right part of the ring
+  ctx.fillStyle = '#26323b';
+  ctx.beginPath();
+  ctx.moveTo(W, 0);
+  ctx.lineTo(W, H);
+  ctx.lineTo(0, H);
+  ctx.lineTo(0, H - s.pad * 0.45);
+  ctx.lineTo(W - s.pad * 0.45, H - s.pad * 0.45);
+  ctx.lineTo(W - s.pad * 0.45, 0);
+  ctx.closePath();
+  ctx.fill();
+  // highlight band
+  ctx.fillStyle = '#5d7280';
+  ctx.fillRect(14, 8, W - 28, 7);
+  ctx.fillRect(8, 14, 7, H - 28);
   ctx.restore();
-
-  // bevels
-  ctx.strokeStyle = 'rgba(200,210,230,0.22)';
-  ctx.lineWidth = 2;
-  rrect(ctx, 1, 1, W - 2, H - 2, 21);
-  ctx.stroke();
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 4;
-  rrect(ctx, inner.x - 1, inner.y - 1, inner.w + 2, inner.h + 2, 11);
-  ctx.stroke();
-
-  // inner infected lip
+  rrect(ctx, 0, 0, W, H, 30);
+  ink(ctx, 9);
+  rrect(ctx, inner.x, inner.y, inner.w, inner.h, 14);
+  ink(ctx, 8);
+  // inner lip glowing red
   ctx.save();
-  ctx.shadowColor = '#ff2a3d';
-  ctx.shadowBlur = 22;
-  ctx.strokeStyle = 'rgba(255,42,61,0.95)';
-  ctx.lineWidth = 2.5;
-  rrect(ctx, inner.x + 1, inner.y + 1, inner.w - 2, inner.h - 2, 9);
-  ctx.stroke();
+  ctx.shadowColor = '#ff3347';
+  ctx.shadowBlur = 18;
+  rrect(ctx, inner.x + 6, inner.y + 6, inner.w - 12, inner.h - 12, 10);
+  ctx.strokeStyle = '#ff3347';
+  ctx.lineWidth = 3;
   ctx.stroke();
   ctx.restore();
 
-  // reel separators: thin iron bars with rivets
+  // rivets along the ring
+  for (let x = 70; x < W - 60; x += 64) {
+    rivet(ctx, x, s.pad / 2, 6);
+    rivet(ctx, x, H - s.pad / 2 - 6, 6);
+  }
+  for (let y = 80; y < H - 70; y += 72) {
+    rivet(ctx, s.pad / 2, y, 6);
+    rivet(ctx, W - s.pad / 2, y, 6);
+  }
+
+  // hazard stripe plates bottom left/right
+  hazard(ctx, 60, H - 24, 150, 18);
+  hazard(ctx, W - 210, H - 24, 150, 18);
+
+  // reel separators: steel bars with ink
   for (let r = 1; r < s.reels; r++) {
     const x = s.pad + s.reelX(r) - 5;
-    const g = ctx.createLinearGradient(x - 3, 0, x + 3, 0);
-    g.addColorStop(0, '#0a0b0e');
-    g.addColorStop(0.5, '#3a414e');
-    g.addColorStop(1, '#0a0b0e');
-    ctx.fillStyle = g;
-    ctx.fillRect(x - 3, s.pad, 6, s.boardH);
-    for (const y of [s.pad + 10, s.pad + s.boardH / 2, s.pad + s.boardH - 10]) {
-      ctx.fillStyle = '#c39555';
-      ctx.beginPath();
-      ctx.arc(x, y, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f6e3b5';
-      ctx.beginPath();
-      ctx.arc(x - 1, y - 1, 1.1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // tendrils creeping from the corners over the frame
-  const T = (pts: number[], w: number) => tendril(ctx, pts, w, rnd);
-  T([-10, 60, 20, 30, 60, 22, 110, 14, 170, 18, 230, 22, 270, 8], 9);
-  T([-6, 90, 10, 140, 6, 190, 4, 240, 14, 280], 7);
-  T([W + 10, H - 70, W - 30, H - 20, W - 90, H - 18, W - 150, H - 10, W - 220, H - 16], 9);
-  T([W + 6, H - 110, W - 6, H - 170, W - 2, H - 230, W - 12, H - 280], 6);
-  T([W + 4, 40, W - 40, 14, W - 100, 22, W - 140, 6], 6);
-  T([-4, H - 40, 40, H - 10, 90, H - 18, 120, H - 4], 6);
-
-  // corner ornaments
-  const co = 26;
-  for (const [x, y] of [
-    [co - 6, co - 6],
-    [W - co + 6, co - 6],
-    [co - 6, H - co + 6],
-    [W - co + 6, H - co + 6],
-  ]) {
-    // spikes
-    ctx.fillStyle = '#20242c';
-    const dx = x < W / 2 ? -1 : 1;
-    const dy = y < H / 2 ? -1 : 1;
-    ctx.beginPath();
-    ctx.moveTo(x + dx * 10, y);
-    ctx.lineTo(x + dx * 46, y + dy * 46);
-    ctx.lineTo(x, y + dy * 10);
-    ctx.closePath();
+    rrect(ctx, x - 5, s.pad - 2, 10, s.boardH + 4, 4);
+    ctx.fillStyle = '#3a4a55';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(200,210,230,0.25)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    goldPlate(ctx, x, y, 24);
-  }
-  // side gems
-  for (const [x, y] of [
-    [0, H / 2],
-    [W, H / 2],
-  ]) {
-    goldPlate(ctx, x, y, 18);
+    ink(ctx, 4);
+    ctx.fillStyle = '#5d7280';
+    ctx.fillRect(x - 2, s.pad + 4, 2.5, s.boardH - 8);
+    rivet(ctx, x, s.pad + 14, 4.5);
+    rivet(ctx, x, s.pad + s.boardH - 14, 4.5);
   }
 
-  // blood dripping off the bottom edge
-  for (let i = 0; i < 9; i++) {
-    const x = 90 + rnd() * (W - 180);
-    drip(ctx, x, H - 3, 10 + rnd() * 34, 2.5 + rnd() * 2.5);
+  // corner caps
+  for (const [x, y] of [
+    [26, 26],
+    [W - 26, 26],
+    [26, H - 26],
+    [W - 26, H - 26],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(x, y, 24, 0, Math.PI * 2);
+    ctx.fillStyle = '#26323b';
+    ctx.fill();
+    ink(ctx, 6);
+    ctx.beginPath();
+    ctx.arc(x, y, 15, 0, Math.PI * 2);
+    ctx.fillStyle = '#f2b642';
+    ctx.fill();
+    ink(ctx, 4);
+    ctx.beginPath();
+    ctx.arc(x + 3, y + 3, 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#b07a1e';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - 7, y);
+    ctx.lineTo(x + 7, y);
+    ctx.moveTo(x, y - 7);
+    ctx.lineTo(x, y + 7);
+    ink(ctx, 3.5);
+  }
+
+  // tendrils
+  const T = (pts: number[], w: number) => tendril(ctx, pts, w, rnd);
+  T([-14, 70, 20, 40, 60, 30, 110, 22, 170, 28, 220, 30, 260, 14], 12);
+  T([-8, 110, 12, 160, 8, 210, 4, 250, 16, 300], 9);
+  T([W + 14, H - 80, W - 30, H - 26, W - 90, H - 22, W - 150, H - 12, W - 230, H - 20], 12);
+  T([W + 8, H - 120, W - 6, H - 180, W - 2, H - 240, W - 12, H - 290], 8);
+  T([W + 6, 50, W - 40, 20, W - 100, 28, W - 150, 10], 8);
+  T([-6, H - 50, 40, H - 14, 90, H - 22, 130, H - 6], 8);
+
+  // bandage tape on the top-left corner
+  ctx.save();
+  ctx.translate(60, 4);
+  ctx.rotate(-0.5);
+  rrect(ctx, -40, -10, 80, 22, 4);
+  ctx.fillStyle = '#efe3c6';
+  ctx.fill();
+  ink(ctx, 4);
+  ctx.fillStyle = '#d8c8a2';
+  for (let i = -30; i < 34; i += 10) ctx.fillRect(i, -6, 3, 3);
+  ctx.restore();
+
+  // goo dripping off the bottom edge
+  for (let i = 0; i < 10; i++) {
+    const x = 240 + rnd() * (W - 480);
+    goo(ctx, x, H - 2, 10 + rnd() * 30, 3 + rnd() * 3);
   }
   return c;
 }
 
-/** Background of one reel column: recessed panel with faint organic texture. */
+/** One reel column: dark asylum tiles. */
 export function paintReelPanel(w: number, h: number, seed: number): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(w, h);
   const rnd = seeded(seed);
-  const g = ctx.createLinearGradient(0, 0, w, 0);
-  g.addColorStop(0, '#07080b');
-  g.addColorStop(0.15, '#12151c');
-  g.addColorStop(0.5, '#171a22');
-  g.addColorStop(0.85, '#12151c');
-  g.addColorStop(1, '#07080b');
-  ctx.fillStyle = g;
+  ctx.fillStyle = '#1e1726';
   ctx.fillRect(0, 0, w, h);
-  grain(ctx, w, h, rnd, 1600, 0.03, 0.15);
-  ctx.globalAlpha = 0.07;
-  ctx.strokeStyle = '#ff2a3d';
-  ctx.lineWidth = 1.2;
-  for (let i = 0; i < 5; i++) {
+  const tile = 46;
+  for (let y = 0; y < h; y += tile) {
+    for (let x = (y / tile) % 2 ? -tile / 2 : 0; x < w; x += tile) {
+      ctx.fillStyle = rnd() < 0.5 ? '#231b2c' : '#1f1828';
+      ctx.fillRect(x + 2, y + 2, tile - 4, tile - 4);
+    }
+  }
+  ctx.strokeStyle = '#150f1b';
+  ctx.lineWidth = 2;
+  for (let y = 0; y < h; y += tile) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+  // a couple of cracks
+  ctx.strokeStyle = '#120c17';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 2; i++) {
     let x = rnd() * w;
-    let y = 0;
+    let y = rnd() * h;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    while (y < h) {
-      x += (rnd() - 0.5) * 30;
-      y += 20 + rnd() * 30;
+    for (let k = 0; k < 4; k++) {
+      x += (rnd() - 0.5) * 40;
+      y += 10 + rnd() * 20;
       ctx.lineTo(x, y);
     }
     ctx.stroke();
   }
-  ctx.globalAlpha = 1;
-  const v = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, h * 0.6);
-  v.addColorStop(0, 'rgba(90,0,16,0.10)');
-  v.addColorStop(1, 'rgba(0,0,0,0)');
+  const v = ctx.createLinearGradient(0, 0, w, 0);
+  v.addColorStop(0, 'rgba(0,0,0,0.45)');
+  v.addColorStop(0.18, 'rgba(0,0,0,0)');
+  v.addColorStop(0.82, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,0,0,0.45)');
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, w, h);
   return c;
@@ -341,77 +332,72 @@ export function paintReelPanel(w: number, h: number, seed: number): HTMLCanvasEl
 export function paintDepthShade(h: number): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(4, h);
   const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, 'rgba(0,0,0,0.92)');
-  g.addColorStop(0.12, 'rgba(0,0,0,0.25)');
-  g.addColorStop(0.2, 'rgba(0,0,0,0)');
-  g.addColorStop(0.8, 'rgba(0,0,0,0)');
-  g.addColorStop(0.88, 'rgba(0,0,0,0.25)');
-  g.addColorStop(1, 'rgba(0,0,0,0.92)');
+  g.addColorStop(0, 'rgba(10,4,12,0.9)');
+  g.addColorStop(0.1, 'rgba(10,4,12,0.2)');
+  g.addColorStop(0.16, 'rgba(10,4,12,0)');
+  g.addColorStop(0.84, 'rgba(10,4,12,0)');
+  g.addColorStop(0.9, 'rgba(10,4,12,0.2)');
+  g.addColorStop(1, 'rgba(10,4,12,0.9)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 4, h);
   return c;
 }
 
-/** Glowing bracket frame drawn around each winning cell. */
+/** Thick cartoon win frame drawn around each winning cell. */
 export function paintWinFrame(w: number, h: number): HTMLCanvasElement {
-  const b = 18;
+  const b = 14;
   const [c, ctx] = makeCanvas(w + b * 2, h + b * 2);
   ctx.translate(b, b);
-  ctx.save();
-  ctx.shadowColor = '#ff2a3d';
-  ctx.shadowBlur = 16;
-  ctx.strokeStyle = 'rgba(255,42,61,0.9)';
-  ctx.lineWidth = 3;
-  rrect(ctx, 4, 4, w - 8, h - 8, 12);
+  rrect(ctx, 4, 4, w - 8, h - 8, 22);
+  ink(ctx, 12);
+  rrect(ctx, 4, 4, w - 8, h - 8, 22);
+  ctx.strokeStyle = '#ffd23f';
+  ctx.lineWidth = 6;
   ctx.stroke();
-  ctx.restore();
-  const g = ctx.createLinearGradient(0, 0, w, h);
-  g.addColorStop(0, '#f6dca0');
-  g.addColorStop(1, '#a8783c');
-  ctx.strokeStyle = g;
-  ctx.lineWidth = 4;
-  ctx.lineCap = 'round';
-  const L = 26;
-  const corners: [number, number, number, number][] = [
-    [2, 2, 1, 1],
-    [w - 2, 2, -1, 1],
-    [2, h - 2, 1, -1],
-    [w - 2, h - 2, -1, -1],
-  ];
-  for (const [x, y, dx, dy] of corners) {
+  rrect(ctx, 8, 8, w - 16, h - 16, 18);
+  ctx.strokeStyle = '#fff6c0';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  for (const [x, y] of [
+    [8, 8],
+    [w - 8, 8],
+    [8, h - 8],
+    [w - 8, h - 8],
+  ]) {
     ctx.beginPath();
-    ctx.moveTo(x, y + dy * L);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x + dx * L, y);
-    ctx.stroke();
-    gem(ctx, x + dx * 3, y + dy * 3, 4);
+    ctx.arc(x, y, 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff3347';
+    ctx.fill();
+    ink(ctx, 4);
+    ctx.beginPath();
+    ctx.arc(x - 3, y - 3, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
   }
   return c;
 }
 
 /** One vertical hanging chain strip. */
 export function paintChain(len: number): HTMLCanvasElement {
-  const lw = 22;
-  const lh = 34;
-  const [c, ctx] = makeCanvas(lw + 8, len);
-  for (let y = 0, i = 0; y < len; y += lh - 8, i++) {
+  const lw = 26;
+  const lh = 38;
+  const [c, ctx] = makeCanvas(lw + 12, len);
+  for (let y = 0, i = 0; y < len; y += lh - 10, i++) {
     ctx.save();
-    ctx.translate(lw / 2 + 4, y + lh / 2);
-    const g = ctx.createLinearGradient(-lw / 2, 0, lw / 2, 0);
-    g.addColorStop(0, '#0a0b0e');
-    g.addColorStop(0.45, i % 2 ? '#3a414e' : '#5a6474');
-    g.addColorStop(1, '#0a0b0e');
-    ctx.strokeStyle = g;
+    ctx.translate(lw / 2 + 6, y + lh / 2);
     if (i % 2) {
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(0, -lh / 2);
-      ctx.lineTo(0, lh / 2);
-      ctx.stroke();
+      rrect(ctx, -3, -lh / 2, 6, lh, 3);
+      ctx.fillStyle = '#4b5a66';
+      ctx.fill();
+      ink(ctx, 3);
     } else {
-      ctx.lineWidth = 5;
       ctx.beginPath();
       ctx.ellipse(0, 0, lw / 2 - 3, lh / 2 - 2, 0, 0, Math.PI * 2);
+      ink(ctx, 10);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, lw / 2 - 3, lh / 2 - 2, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = '#5d6e7a';
+      ctx.lineWidth = 5;
       ctx.stroke();
     }
     ctx.restore();
@@ -419,44 +405,88 @@ export function paintChain(len: number): HTMLCanvasElement {
   return c;
 }
 
-/**
- * Glow map of a symbol: only its bright / saturated parts (eyes, veins, liquid, gems), blurred.
- * Added on top with additive blending, it makes the symbol "light up" on wins.
- */
-export function glowMap(src: HTMLCanvasElement): HTMLCanvasElement {
-  const w = src.width;
-  const h = src.height;
-  const [mc, m] = makeCanvas(w, h);
-  m.drawImage(src, 0, 0);
-  const img = m.getImageData(0, 0, w, h);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const sat = max ? (max - min) / max : 0;
-    const keep = a > 120 && ((max > 170 && sat > 0.55) || max > 235);
-    if (!keep) d[i + 3] = 0;
-    else d[i + 3] = Math.min(255, (max - 120) * 2.2);
-  }
-  m.putImageData(img, 0, 0);
-  // colour-preserving blur: offset copies on rings (works without ctx.filter support)
-  const [c, ctx] = makeCanvas(w, h);
+/** Colour-preserving blur by stacking offset copies (works without ctx.filter support). */
+export function softGlow(src: HTMLCanvasElement, radius = 12): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(src.width, src.height);
   ctx.globalCompositeOperation = 'lighter';
-  for (const [radius, alpha] of [
-    [14, 0.07],
-    [8, 0.1],
-    [4, 0.14],
+  for (const [r, a] of [
+    [radius, 0.08],
+    [radius * 0.6, 0.11],
+    [radius * 0.3, 0.15],
   ]) {
     for (let k = 0; k < 12; k++) {
-      const a = (k / 12) * Math.PI * 2;
-      ctx.globalAlpha = alpha;
-      ctx.drawImage(mc, Math.cos(a) * radius, Math.sin(a) * radius);
+      const ang = (k / 12) * Math.PI * 2;
+      ctx.globalAlpha = a;
+      ctx.drawImage(src, Math.cos(ang) * r, Math.sin(ang) * r);
     }
   }
   ctx.globalAlpha = 0.9;
-  ctx.drawImage(mc, 0, 0);
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(src, 0, 0);
+  return c;
+}
+
+/** Particle: blood droplet with ink outline. */
+export function paintDrop(color = '#e0213a', light = '#ff8a96'): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(48, 64);
+  ctx.translate(24, 0);
+  ctx.beginPath();
+  ctx.moveTo(0, 6);
+  ctx.bezierCurveTo(10, 24, 18, 32, 18, 42);
+  ctx.arc(0, 42, 18, 0, Math.PI);
+  ctx.bezierCurveTo(-18, 32, -10, 24, 0, 6);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ink(ctx, 5);
+  ctx.beginPath();
+  ctx.ellipse(-7, 42, 4, 7, 0.3, 0, Math.PI * 2);
+  ctx.fillStyle = light;
+  ctx.fill();
+  return c;
+}
+
+/** Particle: comic 4-point star. */
+export function paintStar(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(64, 64);
+  ctx.translate(32, 32);
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const r = i % 2 ? 9 : 27;
+    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#fff6c0';
+  ctx.fill();
+  ink(ctx, 4);
+  return c;
+}
+
+/** Particle: cartoon smoke puff. */
+export function paintPuff(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(96, 80);
+  const blobs: [number, number, number][] = [
+    [30, 46, 22],
+    [52, 34, 26],
+    [70, 48, 20],
+    [48, 56, 20],
+  ];
+  ctx.beginPath();
+  for (const [x, y, r] of blobs) {
+    ctx.moveTo(x + r, y);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+  }
+  ink(ctx, 8);
+  ctx.fillStyle = '#efe6f2';
+  for (const [x, y, r] of blobs) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#c9bcd2';
+  ctx.beginPath();
+  ctx.arc(56, 56, 18, 0, Math.PI * 2);
+  ctx.arc(72, 52, 14, 0, Math.PI * 2);
+  ctx.fill();
   return c;
 }

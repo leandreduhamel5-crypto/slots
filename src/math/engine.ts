@@ -66,7 +66,7 @@ export interface Round {
   capped: boolean;
 }
 
-export const PREMIUM_EXPANDERS: Sym[] = [Sym.ZERO, Sym.MASK, Sym.SERUM, Sym.HEART, Sym.A, Sym.K, Sym.Q, Sym.J, Sym.TEN];
+export const PREMIUM_EXPANDERS: Sym[] = [Sym.ZERO, Sym.MASK, Sym.ANTIDOTE, Sym.BLOOD, Sym.A, Sym.K, Sym.Q, Sym.J, Sym.TEN];
 
 export function spinStops(rng: Rng, strips: Sym[][]): { stops: number[]; grid: Grid } {
   const stops: number[] = [];

@@ -10,6 +10,7 @@ import { Audio } from './Audio';
 import { Background } from './Background';
 import { BOARD_H, BOARD_W, COLORS } from './layout';
 import { Logo, eyeFromCodex, paintLogo } from './Logo';
+import { Mascot, type MascotTextures } from './Mascot';
 import { showIntro } from '../ui/Intro';
 import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
@@ -17,7 +18,8 @@ import type { SymbolTextures } from './textures';
 
 const BOARD_Y = 152;
 const WORLD_TOP = -112;
-const WORLD_BOTTOM = BOARD_Y + BOARD_H + 82;
+const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
+const MASCOT_X = 230;
 const WORLD_W = BOARD_W + 200;
 
 class FeatureBanner extends Container {
@@ -26,37 +28,35 @@ class FeatureBanner extends Container {
 
   constructor(private tex: SymbolTextures) {
     super();
+    const ink = COLORS.ink;
+    const cartoon = (size: number, fill: number) => ({
+      fontFamily: '"Luckiest Guy", sans-serif',
+      fontSize: size,
+      fill,
+      stroke: { color: ink, width: size * 0.2, join: 'round' as const },
+      dropShadow: { color: ink, blur: 0, distance: size * 0.08, angle: Math.PI / 2, alpha: 1 },
+      letterSpacing: 2,
+    });
     const plate = new Graphics()
-      .roundRect(-330, -70, 660, 140, 20)
-      .fill({ color: 0x0a0b0f, alpha: 0.9 })
-      .roundRect(-330, -70, 660, 140, 20)
-      .stroke({ width: 3, color: COLORS.infection })
-      .roundRect(-322, -62, 644, 124, 15)
-      .stroke({ width: 1, color: COLORS.gold, alpha: 0.5 });
-    const label = new Text({
-      text: 'TOURS GRATUITS',
-      style: { fontFamily: 'Cinzel, serif', fontWeight: '700', fontSize: 26, fill: 0xff5a6a, letterSpacing: 4 },
-    });
+      .roundRect(-340, -66, 680, 150, 30)
+      .fill(ink)
+      .roundRect(-340, -76, 680, 150, 30)
+      .fill(0x2a1530)
+      .stroke({ width: 9, color: ink })
+      .roundRect(-326, -66, 652, 12, 6)
+      .fill({ color: 0xffffff, alpha: 0.12 })
+      .roundRect(-320, -60, 300, 118, 20)
+      .fill(0x1a0d20)
+      .stroke({ width: 6, color: ink });
+    const label = new Text({ text: 'TOURS GRATUITS', style: cartoon(28, COLORS.infection) });
     label.anchor.set(0.5);
-    label.position.set(-170, -28);
-    this.count = new Text({
-      text: '0 / 10',
-      style: {
-        fontFamily: 'Rajdhani, sans-serif',
-        fontWeight: '700',
-        fontSize: 68,
-        fill: COLORS.bone,
-        dropShadow: { color: COLORS.infection, blur: 14, distance: 0, alpha: 1 },
-      },
-    });
+    label.position.set(-170, -34);
+    this.count = new Text({ text: '0 / 10', style: cartoon(64, COLORS.yellow) });
     this.count.anchor.set(0.5);
-    this.count.position.set(-170, 22);
-    const strains = new Text({
-      text: 'SOUCHES',
-      style: { fontFamily: 'Cinzel, serif', fontWeight: '700', fontSize: 20, fill: 0x9aa3b2, letterSpacing: 4 },
-    });
+    this.count.position.set(-170, 18);
+    const strains = new Text({ text: 'SOUCHES', style: cartoon(24, 0xe8dcf0) });
     strains.anchor.set(0.5);
-    strains.position.set(150, -46);
+    strains.position.set(150, -48);
     this.icons.position.set(150, 14);
     this.addChild(plate, label, this.count, strains, this.icons);
     this.visible = false;
@@ -69,16 +69,16 @@ class FeatureBanner extends Container {
       specials.forEach((s, i) => {
         const sp = new Sprite(this.tex.normal[s]);
         sp.anchor.set(0.5);
-        sp.width = sp.height = 96;
+        sp.width = sp.height = 100;
         sp.x = (i - (specials.length - 1) / 2) * 104;
         this.icons.addChild(sp);
-        gsap.from(sp.scale, { x: 0, y: 0, duration: 0.5, ease: 'back.out(2)' });
+        gsap.from(sp.scale, { x: 0, y: 0, duration: 0.7, ease: 'elastic.out(1.2, 0.4)' });
       });
     }
   }
 
   bump(): void {
-    gsap.fromTo(this.count.scale, { x: 1.3, y: 1.3 }, { x: 1, y: 1, duration: 0.35, ease: 'back.out(3)' });
+    gsap.fromTo(this.count.scale, { x: 1.4, y: 0.7 }, { x: 1, y: 1, duration: 0.5, ease: 'elastic.out(1.2, 0.4)' });
   }
 }
 
@@ -107,6 +107,7 @@ export class Game {
     app: Application,
     tex: SymbolTextures,
     codexCanvas: HTMLCanvasElement,
+    mascotTex: MascotTextures,
   ) {
     this.bg = new Background(tex.spore, tex.chain, tex.glow);
     this.bg.onLightning = () => this.audio.thunder();
@@ -118,7 +119,10 @@ export class Game {
     this.banner = new FeatureBanner(tex);
     this.banner.position.set(BOARD_W / 2, 6);
     this.teaser = this.buildTeaser(tex);
-    this.world.addChild(this.logo, this.banner, this.board, this.teaser);
+    this.mascot = new Mascot(mascotTex);
+    this.mascot.scale.set(-1, 1);
+    this.mascot.position.set(BOARD_W + MASCOT_X, BOARD_Y + BOARD_H + 46);
+    this.world.addChild(this.mascot, this.logo, this.banner, this.board, this.teaser);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       shake: (p) => this.shake(p),
@@ -201,6 +205,7 @@ export class Game {
   }
 
   private teaser: Container;
+  private mascot: Mascot;
 
   /** Portrait-only reminder of the feature, filling the space under the reels. */
   private buildTeaser(tex: SymbolTextures): Container {
@@ -217,19 +222,18 @@ export class Game {
     const t = new Text({
       text: '10 TOURS GRATUITS',
       style: {
-        fontFamily: 'Cinzel, serif',
-        fontWeight: '900',
-        fontSize: 54,
-        fill: COLORS.bone,
-        stroke: { color: 0x050304, width: 8, join: 'round' },
-        dropShadow: { color: COLORS.infection, blur: 18, distance: 0, alpha: 1 },
+        fontFamily: '"Luckiest Guy", sans-serif',
+        fontSize: 64,
+        fill: COLORS.yellow,
+        stroke: { color: COLORS.ink, width: 12, join: 'round' },
+        dropShadow: { color: COLORS.ink, blur: 0, distance: 6, angle: Math.PI / 2, alpha: 1 },
       },
     });
     t.anchor.set(0.5);
     t.position.set(0, 100);
     const sub = new Text({
-      text: 'la souche s\'étend sur tout le rouleau',
-      style: { fontFamily: 'Rajdhani, sans-serif', fontWeight: '600', fontSize: 34, fill: 0xff7a86, letterSpacing: 2 },
+      text: 'la souche envahit tout le rouleau',
+      style: { fontFamily: 'Nunito, sans-serif', fontWeight: '900', fontSize: 34, fill: 0xffffff, stroke: { color: COLORS.ink, width: 7, join: 'round' } },
     });
     sub.anchor.set(0.5);
     sub.position.set(0, 154);
@@ -256,6 +260,8 @@ export class Game {
     this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
+    const mascotRight = (BOARD_W + MASCOT_X + 170 - BOARD_W / 2) * scale + w / 2;
+    this.mascot.visible = !portrait && mascotRight < w;
     this.bg.resize(w, h);
     this.overlays.resize(w, h);
   }
@@ -347,6 +353,7 @@ export class Game {
     this.hud.setBalance(this.server.state.balance);
     this.audio.spinStart();
     this.hud.pulseSpin();
+    this.mascot.react('spin');
 
     await this.spinTo(round.base.grid, null);
     await this.presentOutcome(round.base, round.bet, 0, false);
@@ -354,7 +361,10 @@ export class Game {
     if (round.feature) await this.runFeature(round, 0);
     else {
       const tier = winTier(round.totalWin, round.bet);
-      if (tier >= 0) await this.overlays.bigWin(round.totalWin, round.bet, (v) => this.hud.setWin(v));
+      if (tier >= 0) {
+        this.mascot.react('big');
+        await this.overlays.bigWin(round.totalWin, round.bet, (v) => this.hud.setWin(v));
+      }
     }
     this.finishRound(round);
   }
@@ -425,6 +435,7 @@ export class Game {
       this.hud.rollWin(shown, celebrate ? 900 : 300, label);
       if (size >= 2) this.shake(4);
       if (celebrate && !inFeature) this.board.showPlaque(lineSum, 'GAIN');
+      if (celebrate) this.mascot.react('win');
       await this.board.presentWins(o.lineWins, o.scatter, celebrate, () => this.audio.tick());
     }
     for (const exp of o.expansions) {
@@ -444,6 +455,7 @@ export class Game {
     const firstSpecials = f.spins[0]?.specials.slice(0, 1) ?? [f.special];
     if (startAt === 0) {
       await this.sleep(this.turbo ? 300 : 700);
+      this.mascot.react('feature');
       await this.overlays.featureIntro(f.special, 10);
     }
     this.enterFeature(true);

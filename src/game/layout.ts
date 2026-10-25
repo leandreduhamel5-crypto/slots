@@ -6,7 +6,10 @@ export const BOARD_H = 3 * CELL_H;
 export const SYMBOL_SIZE = 178;
 
 export const COLORS = {
-  infection: 0xff2a3d,
+  ink: 0x170b14,
+  yellow: 0xffd23f,
+  cyan: 0x38dcff,
+  infection: 0xff3347,
   blood: 0x5a0010,
   bone: 0xe9dfc9,
   steel: 0x6f7d8c,
@@ -16,7 +19,7 @@ export const COLORS = {
 
 /** One colour per payline so overlapping wins stay readable. */
 export const LINE_COLORS = [
-  0xff2a3d, 0xffb347, 0xe9dfc9, 0xc06bff, 0x8fb4ff, 0xff6b9a, 0x6be0c4, 0xffe066, 0xff7a3a, 0xb0f05a,
+  0xff3347, 0xffd23f, 0x38dcff, 0xb46bff, 0x7be05a, 0xff7ab8, 0xffa23a, 0xf6ead0, 0x5affc8, 0xff5ad2,
 ];
 
 export function reelX(reel: number): number {

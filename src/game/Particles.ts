@@ -1,31 +1,97 @@
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, Sprite, type Texture } from 'pixi.js';
+
+export interface ParticleTextures {
+  drop: Texture;
+  dropCyan: Texture;
+  star: Texture;
+  puff: Texture;
+  spore: Texture;
+}
+
+type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark';
 
 interface P {
   s: Sprite;
+  kind: Kind;
   vx: number;
   vy: number;
   life: number;
   max: number;
   spin: number;
   g: number;
+  size: number;
 }
 
-const TINTS = [0xff2a3d, 0xff5a3a, 0xb0001a, 0xffd27a, 0xe9dfc9];
-
-/** Blood-spore bursts and fountains for wins. */
+/** Cartoon VFX: ink-outlined blood drops, comic stars, smoke puffs and glowing sparks. */
 export class Particles extends Container {
   private ps: P[] = [];
   private fountain: { x: number; y: number; rate: number; acc: number } | null = null;
 
-  constructor(private tex: Texture) {
+  constructor(private tex: ParticleTextures) {
     super();
   }
 
-  burst(x: number, y: number, n: number, power = 1): void {
+  private add(kind: Kind, x: number, y: number, vx: number, vy: number, max: number, size: number): void {
+    const t = kind === 'drop' ? this.tex.drop : kind === 'cyan' ? this.tex.dropCyan : kind === 'star' ? this.tex.star : kind === 'puff' ? this.tex.puff : this.tex.spore;
+    const s = new Sprite(t);
+    s.anchor.set(0.5, kind === 'drop' || kind === 'cyan' ? 0.65 : 0.5);
+    if (kind === 'puff') s.tint = 0xc8ecb4;
+    if (kind === 'spark') {
+      s.blendMode = 'add';
+      s.tint = Math.random() < 0.5 ? 0xff3347 : 0xffd23f;
+    }
+    s.position.set(x, y);
+    this.addChild(s);
+    const g = kind === 'puff' ? -60 : kind === 'star' ? 300 : 1300;
+    this.ps.push({ s, kind, vx, vy, life: 0, max, spin: (Math.random() - 0.5) * 10, g, size });
+    this.scaleOf(this.ps[this.ps.length - 1]);
+  }
+
+  private scaleOf(p: P): void {
+    const k = p.life / p.max;
+    let sc = p.size;
+    if (p.kind === 'star') sc *= k < 0.2 ? k / 0.2 : 1 - (k - 0.2) * 0.8;
+    if (p.kind === 'puff') sc *= 0.6 + k * 0.8;
+    p.s.scale.set(sc / 64);
+  }
+
+  /** Blood (or antidote) splash: drops + a few stars. */
+  burst(x: number, y: number, n: number, power = 1, cyan = false): void {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
-      const v = (200 + Math.random() * 700) * power;
-      this.add(x, y, Math.cos(a) * v, Math.sin(a) * v - 200 * power, 0.8 + Math.random() * 1.2);
+      const v = (250 + Math.random() * 650) * power;
+      const r = Math.random();
+      const kind: Kind = r < 0.62 ? (cyan ? 'cyan' : 'drop') : r < 0.82 ? 'star' : 'spark';
+      const size = kind === 'star' ? 34 + Math.random() * 30 : kind === 'spark' ? 18 + Math.random() * 24 : 22 + Math.random() * 26;
+      this.add(kind, x, y, Math.cos(a) * v, Math.sin(a) * v - 260 * power, 0.7 + Math.random() * 0.9, size);
+    }
+  }
+
+  /** Comic impact: a ring of stars and smoke. */
+  impact(x: number, y: number, power = 1): void {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const v = 380 * power;
+      this.add('star', x, y, Math.cos(a) * v, Math.sin(a) * v, 0.55, 44);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = 160 * power;
+      this.add('puff', x + Math.cos(a) * 30, y + Math.sin(a) * 30, Math.cos(a) * v, Math.sin(a) * v, 0.7, 50 + Math.random() * 30);
+    }
+  }
+
+  puffs(x: number, y: number, n: number, spread = 60): void {
+    for (let i = 0; i < n; i++) {
+      this.add('puff', x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread * 0.4, (Math.random() - 0.5) * 80, -50 - Math.random() * 60, 0.9 + Math.random() * 0.5, 36 + Math.random() * 26);
+    }
+  }
+
+  sparks(x: number, y: number, n: number, power = 0.5): void {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = (200 + Math.random() * 400) * power;
+      this.add('spark', x, y, Math.cos(a) * v, Math.sin(a) * v - 120, 0.5 + Math.random() * 0.5, 14 + Math.random() * 20);
     }
   }
 
@@ -37,18 +103,6 @@ export class Particles extends Container {
     this.fountain = null;
   }
 
-  private add(x: number, y: number, vx: number, vy: number, max: number): void {
-    const s = new Sprite(this.tex);
-    s.anchor.set(0.5);
-    s.blendMode = 'add';
-    const size = 6 + Math.random() * 22;
-    s.width = s.height = size;
-    s.tint = TINTS[Math.floor(Math.random() * TINTS.length)];
-    s.position.set(x, y);
-    this.addChild(s);
-    this.ps.push({ s, vx, vy, life: 0, max, spin: (Math.random() - 0.5) * 8, g: 900 + Math.random() * 600 });
-  }
-
   update(dtMs: number): void {
     const dt = Math.min(0.05, dtMs / 1000);
     if (this.fountain) {
@@ -56,20 +110,27 @@ export class Particles extends Container {
       f.acc += f.rate * dt;
       while (f.acc >= 1) {
         f.acc--;
-        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.3;
-        const v = 700 + Math.random() * 700;
-        this.add(f.x + (Math.random() - 0.5) * 60, f.y, Math.cos(a) * v, Math.sin(a) * v, 1.4 + Math.random());
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.4;
+        const v = 800 + Math.random() * 700;
+        const r = Math.random();
+        const kind: Kind = r < 0.55 ? 'drop' : r < 0.75 ? 'cyan' : 'star';
+        this.add(kind, f.x + (Math.random() - 0.5) * 80, f.y, Math.cos(a) * v, Math.sin(a) * v, 1.5 + Math.random(), kind === 'star' ? 50 : 34 + Math.random() * 20);
       }
     }
     for (let i = this.ps.length - 1; i >= 0; i--) {
       const p = this.ps[i];
       p.life += dt;
       p.vy += p.g * dt;
-      p.vx *= 0.995;
+      const drag = p.kind === 'puff' ? 0.94 : 0.995;
+      p.vx *= drag;
+      p.vy *= p.kind === 'puff' ? drag : 1;
       p.s.x += p.vx * dt;
       p.s.y += p.vy * dt;
-      p.s.rotation += p.spin * dt;
-      p.s.alpha = Math.max(0, 1 - p.life / p.max);
+      if (p.kind === 'drop' || p.kind === 'cyan') p.s.rotation = Math.atan2(p.vy, p.vx) - Math.PI / 2;
+      else p.s.rotation += p.spin * dt * (p.kind === 'puff' ? 0.1 : 1);
+      this.scaleOf(p);
+      const k = p.life / p.max;
+      p.s.alpha = p.kind === 'puff' ? Math.max(0, 1 - k) * 0.6 : k > 0.7 ? Math.max(0, (1 - k) / 0.3) : 1;
       if (p.life >= p.max) {
         p.s.destroy();
         this.ps.splice(i, 1);

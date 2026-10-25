@@ -1,128 +1,199 @@
 import { Container, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
+import { INK, goo, makeCanvas, seeded } from './art/painters';
+
+const FONT = '"Luckiest Guy", sans-serif';
+
+/** One cel-shaded cartoon letter (ink casing, drop, shadow tone, base tone, gloss). */
+function letter(
+  ctx: CanvasRenderingContext2D,
+  ch: string,
+  x: number,
+  y: number,
+  size: number,
+  rot: number,
+  colors: { base: string; shadow: string; light: string },
+): void {
+  const pad = size;
+  const [lc, l] = makeCanvas(size * 2, size * 2);
+  l.font = `${size}px ${FONT}`;
+  l.textAlign = 'center';
+  l.textBaseline = 'middle';
+  l.fillStyle = colors.shadow;
+  l.fillText(ch, pad, pad);
+  l.globalCompositeOperation = 'source-atop';
+  l.fillStyle = colors.base;
+  l.fillText(ch, pad - 4, pad - 7);
+  l.fillStyle = colors.light;
+  l.beginPath();
+  l.ellipse(pad - size * 0.08, pad - size * 0.3, size * 0.3, size * 0.09, -0.1, 0, Math.PI * 2);
+  l.fill();
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.font = `${size}px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = size * 0.17;
+  ctx.strokeText(ch, 0, size * 0.06);
+  ctx.strokeText(ch, 0, 0);
+  ctx.drawImage(lc, -pad, -pad);
+  ctx.restore();
+}
+
+function splat(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, seed: number): void {
+  const rnd = seeded(seed);
+  ctx.beginPath();
+  const n = 26;
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const spike = i % 2 ? 0.78 + rnd() * 0.12 : 1 + rnd() * 0.22;
+    const x = cx + Math.cos(a) * rx * spike;
+    const y = cy + Math.sin(a) * ry * spike;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#b5122f';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 8;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  for (let i = 0; i < 9; i++) {
+    const a = rnd() * Math.PI * 2;
+    const d = 1.12 + rnd() * 0.25;
+    const r = 6 + rnd() * 10;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#b5122f';
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.stroke();
+  }
+}
 
 export function paintLogo(eye: HTMLCanvasElement): HTMLCanvasElement {
   const w = 1100;
-  const h = 250;
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const ctx = c.getContext('2d')!;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  const h = 330;
+  const [c, ctx] = makeCanvas(w, h);
+  splat(ctx, w / 2, 120, 330, 92, 11);
 
-  // CODEX — cracked bone
-  ctx.font = '900 132px Cinzel, serif';
-  if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '14px';
-  const g = ctx.createLinearGradient(0, 30, 0, 170);
-  g.addColorStop(0, '#fffaf0');
-  g.addColorStop(0.5, '#d8c9a8');
-  g.addColorStop(1, '#5c4a30');
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = 14;
-  ctx.strokeStyle = '#050304';
-  ctx.strokeText('CODEX', w / 2, 100);
-  ctx.save();
-  ctx.shadowColor = 'rgba(255,42,61,0.9)';
-  ctx.shadowBlur = 30;
-  ctx.fillStyle = g;
-  ctx.fillText('CODEX', w / 2, 100);
-  ctx.restore();
-  ctx.fillStyle = g;
-  ctx.fillText('CODEX', w / 2, 100);
-  // cracks on the letters
-  ctx.save();
-  ctx.globalCompositeOperation = 'source-atop';
-  ctx.strokeStyle = 'rgba(20,4,6,0.85)';
-  ctx.lineWidth = 2;
-  let seed = 3;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-  for (let i = 0; i < 18; i++) {
-    let x = 260 + rnd() * 580;
-    let y = 50 + rnd() * 100;
+  const word = 'CODEX';
+  const size = 176;
+  ctx.font = `${size}px ${FONT}`;
+  const widths = [...word].map((ch) => ctx.measureText(ch).width);
+  const spacing = 4;
+  const total = widths.reduce((a, b) => a + b, 0) + spacing * (word.length - 1);
+  let x = w / 2 - total / 2;
+  const rot = [-0.07, 0.05, -0.03, 0.06, -0.05];
+  const dy = [8, -6, 4, -8, 6];
+  const bone = { base: '#f6ead0', shadow: '#c9a978', light: '#fffaf0' };
+  [...word].forEach((ch, i) => {
+    letter(ctx, ch, x + widths[i] / 2, 128 + dy[i], size, rot[i], bone);
+    x += widths[i] + spacing;
+  });
+  const rnd = seeded(4);
+  for (const gx of [w / 2 - 170, w / 2 - 40, w / 2 + 120, w / 2 + 200]) goo(ctx, gx, 196, 18 + rnd() * 26, 6 + rnd() * 3);
+
+  // ribbon
+  const rw = 520;
+  const ry = 262;
+  const rh = 66;
+  const ribbon = (dir: number) => {
     ctx.beginPath();
-    ctx.moveTo(x, y);
-    for (let k = 0; k < 4; k++) {
-      x += (rnd() - 0.5) * 40;
-      y += (rnd() - 0.5) * 40;
-      ctx.lineTo(x, y);
-    }
+    const x0 = w / 2 + dir * (rw / 2 - 20);
+    ctx.moveTo(x0, ry - rh / 2 + 10);
+    ctx.lineTo(x0 + dir * 70, ry - rh / 2 + 10);
+    ctx.lineTo(x0 + dir * 46, ry + 6);
+    ctx.lineTo(x0 + dir * 70, ry + rh / 2 + 10);
+    ctx.lineTo(x0, ry + rh / 2 + 10);
+    ctx.closePath();
+    ctx.fillStyle = '#4a0718';
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 7;
     ctx.stroke();
-  }
-  ctx.restore();
+  };
+  ribbon(-1);
+  ribbon(1);
+  ctx.beginPath();
+  ctx.moveTo(w / 2 - rw / 2, ry - rh / 2);
+  ctx.quadraticCurveTo(w / 2, ry - rh / 2 - 14, w / 2 + rw / 2, ry - rh / 2);
+  ctx.lineTo(w / 2 + rw / 2, ry + rh / 2);
+  ctx.quadraticCurveTo(w / 2, ry + rh / 2 - 14, w / 2 - rw / 2, ry + rh / 2);
+  ctx.closePath();
+  ctx.fillStyle = '#2a1530';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 8;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(w / 2 - rw / 2 + 12, ry - rh / 2 + 9);
+  ctx.quadraticCurveTo(w / 2, ry - rh / 2 - 4, w / 2 + rw / 2 - 12, ry - rh / 2 + 9);
+  ctx.strokeStyle = '#5a3366';
+  ctx.lineWidth = 4;
+  ctx.stroke();
 
-  // INFECTA — glowing red with flanking rules
-  ctx.font = '700 54px Cinzel, serif';
-  if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '26px';
-  ctx.save();
-  ctx.shadowColor = '#ff2a3d';
-  ctx.shadowBlur = 24;
-  ctx.fillStyle = '#ff3448';
-  ctx.fillText('INFECTA', w / 2 + 13, 200);
-  ctx.restore();
-  ctx.fillStyle = '#ffd0d4';
-  ctx.globalAlpha = 0.35;
-  ctx.fillText('INFECTA', w / 2 + 13, 198);
-  ctx.globalAlpha = 1;
-
-  // rules ending in an infected eye on each side of the word
-  const half = ctx.measureText('INFECTA').width / 2;
-  const eyeW = 64;
-  const gap = 26;
-  ctx.strokeStyle = 'rgba(255,42,61,0.7)';
-  ctx.lineWidth = 2;
+  const red = { base: '#ff3347', shadow: '#a3102a', light: '#ff9aa4' };
+  const sub = 'INFECTA';
+  const ss = 58;
+  ctx.font = `${ss}px ${FONT}`;
+  const sw = [...sub].map((ch) => ctx.measureText(ch).width);
+  const st = sw.reduce((a, b) => a + b, 0) + 10 * (sub.length - 1);
+  let sx = w / 2 - st / 2;
+  [...sub].forEach((ch, i) => {
+    letter(ctx, ch, sx + sw[i] / 2, ry - 2 + (i % 2 ? -2 : 2), ss, (i % 2 ? 1 : -1) * 0.04, red);
+    sx += sw[i] + 10;
+  });
   for (const dir of [-1, 1]) {
-    const ex = w / 2 + dir * (half + gap + eyeW / 2);
-    ctx.beginPath();
-    ctx.moveTo(ex + dir * (eyeW / 2 + 8), 200);
-    ctx.lineTo(ex + dir * (eyeW / 2 + 190), 200);
-    ctx.stroke();
-    ctx.save();
-    ctx.shadowColor = '#ff2a3d';
-    ctx.shadowBlur = 18;
-    ctx.drawImage(eye, ex - eyeW / 2, 200 - eyeW / 2, eyeW, eyeW);
-    ctx.restore();
+    const ex = w / 2 + dir * (st / 2 + 44);
+    ctx.drawImage(eye, ex - 30, ry - 30, 60, 60);
   }
   return c;
 }
 
 export class Logo extends Container {
   private split = new RGBSplitFilter({ red: { x: 0, y: 0 }, green: { x: 0, y: 0 }, blue: { x: 0, y: 0 } });
+  private sprite: Sprite;
 
   constructor(eye: HTMLCanvasElement) {
     super();
-    const s = new Sprite(Texture.from(paintLogo(eye)));
-    s.anchor.set(0.5);
-    s.scale.set(0.82);
-    this.addChild(s);
+    this.sprite = new Sprite(Texture.from(paintLogo(eye)));
+    this.sprite.anchor.set(0.5, 0.45);
+    this.sprite.scale.set(0.78);
+    this.addChild(this.sprite);
     this.scheduleGlitch();
-    gsap.to(s.scale, { x: 0.835, y: 0.835, duration: 2.2, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    gsap.to(this.sprite.scale, { x: 0.8, y: 0.77, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
   }
 
   private scheduleGlitch(): void {
-    gsap.delayedCall(3 + Math.random() * 5, () => {
+    gsap.delayedCall(4 + Math.random() * 5, () => {
       this.glitch();
       this.scheduleGlitch();
     });
   }
 
+  /** Cartoon "boing" plus a short chromatic glitch. */
   glitch(power = 1): void {
     this.filters = [this.split];
+    gsap.fromTo(this.sprite, { rotation: -0.04 * power }, { rotation: 0, duration: 0.6, ease: 'elastic.out(1.2, 0.3)' });
     const tl = gsap.timeline();
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       tl.add(() => {
-        const j = () => (Math.random() - 0.5) * 14 * power;
-        this.split.red = { x: j(), y: j() / 3 };
-        this.split.blue = { x: j(), y: j() / 3 };
-        this.x += (Math.random() - 0.5) * 6 * power;
+        const j = () => (Math.random() - 0.5) * 10 * power;
+        this.split.red = { x: j(), y: 0 };
+        this.split.blue = { x: j(), y: 0 };
       });
       tl.to({}, { duration: 0.04 });
     }
     tl.add(() => {
       this.split.red = { x: 0, y: 0 };
       this.split.blue = { x: 0, y: 0 };
-      this.x = this.homeX;
       this.filters = [];
     });
   }
@@ -130,15 +201,19 @@ export class Logo extends Container {
   homeX = 0;
 }
 
-/** Cuts the iris out of the codex symbol art for the logo. */
+/** Cuts the eye out of the codex symbol art for the logo. */
 export function eyeFromCodex(codex: HTMLImageElement | HTMLCanvasElement, size: number): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = c.height = 120;
-  const ctx = c.getContext('2d')!;
+  const [c, ctx] = makeCanvas(120, 120);
   ctx.beginPath();
-  ctx.ellipse(60, 60, 58, 34, 0, 0, Math.PI * 2);
+  ctx.arc(60, 60, 56, 0, Math.PI * 2);
+  ctx.fillStyle = INK;
+  ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(60, 60, 50, 0, Math.PI * 2);
   ctx.clip();
   const scale = size / 256;
-  ctx.drawImage(codex, 86 * scale, 86 * scale, 84 * scale, 84 * scale, 0, 0, 120, 120);
+  ctx.drawImage(codex, 72 * scale, 70 * scale, 112 * scale, 112 * scale, 0, 0, 120, 120);
+  ctx.restore();
   return c;
 }

@@ -1,22 +1,42 @@
 import { Texture } from 'pixi.js';
 import { SYMBOLS, Sym } from '../math/config';
-import { PREMIUM_SVGS, VEINS_SVG } from './art/symbols';
-import { glowMap, paintChain, paintDepthShade, paintFrame, paintReelPanel, paintWinFrame } from './art/painters';
+import { SYMBOL_ART, VEINS_SVG } from './art/symbols';
+import {
+  INK,
+  goo,
+  makeCanvas,
+  paintChain,
+  paintDepthShade,
+  paintDrop,
+  paintFrame,
+  paintPuff,
+  paintReelPanel,
+  paintStar,
+  paintWinFrame,
+  seeded,
+  softGlow,
+} from './art/painters';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP, reelX } from './layout';
 
-export const FRAME_PAD = 34;
+export const TEX_SIZE = 320;
+export const FRAME_PAD = 40;
 export const FRAME_BLEED = 60;
 
-export const TEX_SIZE = 320;
+export interface SymbolRig {
+  /** the symbol without its animated parts */
+  base: Texture;
+  parts: Record<string, Texture>;
+}
 
 export interface SymbolTextures {
   normal: Texture[];
   blur: Texture[];
   canvases: HTMLCanvasElement[];
-  /** data URLs for DOM usage (paytable) */
+  /** data URLs for DOM usage (paytable, intro) */
   images: string[];
+  rigs: Map<Sym, SymbolRig>;
   expanded: Map<Sym, Texture>;
-  /** additive glow maps that make each symbol light up on wins */
+  /** additive glow layers that make each symbol light up */
   glowMaps: Texture[];
   frame: Texture;
   reelPanels: Texture[];
@@ -26,22 +46,19 @@ export interface SymbolTextures {
   veins: Texture;
   glow: Texture;
   spore: Texture;
+  drop: Texture;
+  dropCyan: Texture;
+  star: Texture;
+  puff: Texture;
 }
 
-const ROYALS: Record<string, { text: string; top: string; mid: string; bottom: string; glow: string }> = {
-  a: { text: 'A', top: '#ff8a94', mid: '#e0122c', bottom: '#4a0010', glow: '#ff2a3d' },
-  k: { text: 'K', top: '#e2ebf6', mid: '#7f93ad', bottom: '#1e2738', glow: '#8fb4ff' },
-  q: { text: 'Q', top: '#ecc6ff', mid: '#9346bf', bottom: '#2a0b3d', glow: '#c06bff' },
-  j: { text: 'J', top: '#fff6dc', mid: '#c9b083', bottom: '#4a3a1e', glow: '#ffe2a8' },
-  ten: { text: '10', top: '#ffd2a0', mid: '#d0601c', bottom: '#4a1804', glow: '#ff8a3a' },
+const ROYALS: Record<string, { text: string; base: string; shadow: string; light: string; deco: 'goo' | 'bandage' | 'stitch' | 'bolt' | 'crack' }> = {
+  a: { text: 'A', base: '#ff3347', shadow: '#a3102a', light: '#ff8a96', deco: 'goo' },
+  k: { text: 'K', base: '#38dcff', shadow: '#1580a6', light: '#c8fbff', deco: 'bandage' },
+  q: { text: 'Q', base: '#b46bff', shadow: '#6a2fb0', light: '#e2c4ff', deco: 'stitch' },
+  j: { text: 'J', base: '#7be05a', shadow: '#2f8a2a', light: '#d2ffb8', deco: 'bolt' },
+  ten: { text: '10', base: '#ffa23a', shadow: '#b3560c', light: '#ffe0a8', deco: 'crack' },
 };
-
-function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  return [c, c.getContext('2d')!];
-}
 
 export function loadSvg(svg: string, w: number, h: number): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -52,177 +69,199 @@ export function loadSvg(svg: string, w: number, h: number): Promise<HTMLImageEle
   });
 }
 
-/** Seeded so every royal gets the same cracks on every load. */
-function mulberry(seed: number) {
-  return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+async function svgCanvas(svg: string, size = TEX_SIZE): Promise<HTMLCanvasElement> {
+  const img = await loadSvg(svg, size, size);
+  const [c, ctx] = makeCanvas(size, size);
+  ctx.drawImage(img, 0, 0, size, size);
+  return c;
+}
+
+/** Glyph mask of a royal letter, used for fills / shading. */
+function glyph(text: string, size: number, color: string, dx = 0, dy = 0): HTMLCanvasElement {
+  const S = TEX_SIZE;
+  const [c, ctx] = makeCanvas(S, S);
+  ctx.font = `${size}px "Luckiest Guy", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.fillText(text, S / 2 + dx, S / 2 + 18 + dy);
+  return c;
 }
 
 function drawRoyal(key: string, seed: number): HTMLCanvasElement {
   const r = ROYALS[key];
   const S = TEX_SIZE;
-  const [c, ctx] = canvas(S, S);
-  const fontSize = r.text.length > 1 ? 168 : 212;
-  ctx.font = `900 ${fontSize}px Cinzel, serif`;
+  const size = r.text.length > 1 ? 196 : 236;
+  const rnd = seeded(seed);
+  const [c, ctx] = makeCanvas(S, S);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(S / 2, S - 26, 96, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.font = `${size}px "Luckiest Guy", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const cx = S / 2;
-  const cy = S / 2 + 6;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 26;
+  ctx.strokeStyle = INK;
+  ctx.strokeText(r.text, S / 2, S / 2 + 18 + 7);
+  ctx.strokeText(r.text, S / 2, S / 2 + 18);
 
-  // Aura
-  const aura = ctx.createRadialGradient(cx, cy, 10, cx, cy, S * 0.48);
-  aura.addColorStop(0, hexA(r.glow, 0.28));
-  aura.addColorStop(1, hexA(r.glow, 0));
-  ctx.fillStyle = aura;
-  ctx.fillRect(0, 0, S, S);
-
-  // Letter in its own layer so cracks and veins can be clipped to it
-  const [lc, l] = canvas(S, S);
-  l.font = ctx.font;
-  l.textAlign = 'center';
-  l.textBaseline = 'middle';
-  const grad = l.createLinearGradient(0, cy - fontSize / 2, 0, cy + fontSize / 2);
-  grad.addColorStop(0, r.top);
-  grad.addColorStop(0.45, r.mid);
-  grad.addColorStop(1, r.bottom);
-  l.lineJoin = 'round';
-  l.lineWidth = 16;
-  l.strokeStyle = '#050304';
-  l.strokeText(r.text, cx, cy);
-  l.fillStyle = grad;
-  l.fillText(r.text, cx, cy);
-
-  // Bevel highlight
-  l.save();
+  // cel-shaded fill: shadow colour, base offset up-left, gloss band on top
+  const [lc, l] = makeCanvas(S, S);
+  l.drawImage(glyph(r.text, size, r.shadow), 0, 0);
   l.globalCompositeOperation = 'source-atop';
-  const shine = l.createLinearGradient(0, cy - fontSize / 2, 0, cy);
-  shine.addColorStop(0, 'rgba(255,255,255,0.55)');
-  shine.addColorStop(1, 'rgba(255,255,255,0)');
-  l.fillStyle = shine;
-  l.fillRect(0, cy - fontSize / 2, S, fontSize / 2.2);
+  l.drawImage(glyph(r.text, size, r.base, -5, -7), 0, 0);
+  l.fillStyle = r.light;
+  l.beginPath();
+  l.ellipse(S / 2 - 22, S / 2 - size * 0.28, size * 0.42, size * 0.13, -0.12, 0, Math.PI * 2);
+  l.fill();
+  l.fillStyle = 'rgba(255,255,255,0.85)';
+  l.beginPath();
+  l.ellipse(S / 2 - 46, S / 2 - size * 0.32, 14, 6, -0.4, 0, Math.PI * 2);
+  l.fill();
 
-  // Infection: cracks + glowing veins clipped to the glyph
-  const rnd = mulberry(seed);
-  l.strokeStyle = 'rgba(10,2,4,0.8)';
-  l.lineWidth = 2;
-  for (let i = 0; i < 6; i++) crack(l, rnd, cx + (rnd() - 0.5) * 120, cy + (rnd() - 0.5) * 140, 5);
-  l.shadowColor = '#ff2a3d';
-  l.shadowBlur = 8;
-  l.strokeStyle = 'rgba(255,42,61,0.9)';
-  l.lineWidth = 2.2;
-  for (let i = 0; i < 4; i++) crack(l, rnd, cx + (rnd() - 0.5) * 100, cy + fontSize * 0.35, 6, -1);
-  l.restore();
-
-  // Inner stroke rim
-  l.lineWidth = 2;
-  l.strokeStyle = hexA(r.top, 0.6);
-  l.strokeText(r.text, cx, cy - 1);
-
-  ctx.save();
-  ctx.shadowColor = hexA(r.glow, 0.85);
-  ctx.shadowBlur = 22;
+  l.strokeStyle = INK;
+  l.lineCap = 'round';
+  if (r.deco === 'stitch') {
+    l.lineWidth = 4;
+    l.beginPath();
+    l.moveTo(S / 2 - 60, S / 2 + 30);
+    l.quadraticCurveTo(S / 2, S / 2 + 4, S / 2 + 60, S / 2 + 36);
+    l.stroke();
+    for (let i = -50; i <= 50; i += 20) {
+      l.beginPath();
+      l.moveTo(S / 2 + i - 6, S / 2 + 12 + Math.abs(i) * 0.25);
+      l.lineTo(S / 2 + i + 6, S / 2 + 34 + Math.abs(i) * 0.25);
+      l.stroke();
+    }
+  } else if (r.deco === 'crack') {
+    l.lineWidth = 4;
+    let x = S / 2 - 50;
+    let y = S / 2 - 50;
+    l.beginPath();
+    l.moveTo(x, y);
+    for (let i = 0; i < 6; i++) {
+      x += 14 + rnd() * 6;
+      y += (rnd() - 0.3) * 34;
+      l.lineTo(x, y);
+    }
+    l.stroke();
+  }
   ctx.drawImage(lc, 0, 0);
-  ctx.restore();
-  ctx.drawImage(lc, 0, 0);
 
-  // Blood drips from the base of the glyph
-  const drips = 2 + Math.floor(rnd() * 2);
-  for (let i = 0; i < drips; i++) {
-    const x = cx + (rnd() - 0.5) * fontSize * 0.7;
-    const y0 = cy + fontSize * 0.36;
-    const len = 18 + rnd() * 34;
-    drip(ctx, x, y0, len, 3 + rnd() * 3);
+  if (r.deco === 'bandage') {
+    ctx.save();
+    ctx.translate(S / 2 + 10, S / 2 + 24);
+    ctx.rotate(-0.55);
+    ctx.beginPath();
+    ctx.roundRect(-70, -16, 140, 32, 8);
+    ctx.fillStyle = '#efe3c6';
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.fillStyle = '#d4c09a';
+    ctx.fillRect(-20, -14, 40, 28);
+    ctx.fillStyle = '#c4ab7c';
+    for (let i = -14; i <= 14; i += 9) for (let j = -8; j <= 8; j += 8) ctx.fillRect(i, j, 3, 3);
+    ctx.fillStyle = '#e0213a';
+    ctx.beginPath();
+    ctx.arc(6, 2, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (r.deco === 'bolt') {
+    for (const [x, y] of [
+      [S / 2 + 18, S / 2 - 64],
+      [S / 2 + 18, S / 2 + 6],
+    ]) {
+      ctx.beginPath();
+      ctx.arc(x, y, 10, 0, Math.PI * 2);
+      ctx.fillStyle = '#9aa6b0';
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - 6, y);
+      ctx.lineTo(x + 6, y);
+      ctx.stroke();
+    }
+  } else if (r.deco === 'goo') {
+    ctx.beginPath();
+    ctx.moveTo(S / 2 - 30, S / 2 - size * 0.36);
+    ctx.quadraticCurveTo(S / 2, S / 2 - size * 0.48, S / 2 + 30, S / 2 - size * 0.36);
+    ctx.quadraticCurveTo(S / 2 + 18, S / 2 - size * 0.28, S / 2 + 6, S / 2 - size * 0.3);
+    ctx.quadraticCurveTo(S / 2 - 12, S / 2 - size * 0.26, S / 2 - 30, S / 2 - size * 0.36);
+    ctx.fillStyle = '#7be05a';
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
+
+  const n = 2 + Math.floor(rnd() * 2);
+  for (let i = 0; i < n; i++) {
+    const x = S / 2 + (rnd() - 0.5) * size * 0.6;
+    goo(ctx, x, S / 2 + size * 0.36, 14 + rnd() * 26, 4 + rnd() * 3, r.base, r.light);
   }
   return c;
 }
 
-function crack(l: CanvasRenderingContext2D, rnd: () => number, x: number, y: number, segs: number, dirY = 0) {
-  l.beginPath();
-  l.moveTo(x, y);
-  for (let i = 0; i < segs; i++) {
-    x += (rnd() - 0.5) * 34;
-    y += dirY ? dirY * (8 + rnd() * 16) : (rnd() - 0.5) * 34;
-    l.lineTo(x, y);
-  }
-  l.stroke();
-}
-
-function drip(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, w: number) {
-  const g = ctx.createLinearGradient(0, y, 0, y + len);
-  g.addColorStop(0, '#7a0014');
-  g.addColorStop(1, '#d0102a');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(x - w, y);
-  ctx.quadraticCurveTo(x - w * 0.6, y + len * 0.6, x - w * 0.9, y + len);
-  ctx.arc(x, y + len, w, Math.PI, 0, true);
-  ctx.quadraticCurveTo(x + w * 0.6, y + len * 0.6, x + w, y);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,200,200,0.5)';
-  ctx.beginPath();
-  ctx.arc(x - w * 0.35, y + len - w * 0.2, w * 0.3, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function hexA(hex: string, a: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-}
-
 function motionBlur(src: HTMLCanvasElement): HTMLCanvasElement {
-  const [c, ctx] = canvas(src.width, src.height);
+  const [c, ctx] = makeCanvas(src.width, src.height);
   const steps = 9;
   for (let i = 0; i < steps; i++) {
     ctx.globalAlpha = 0.22;
-    ctx.drawImage(src, 0, (i - steps / 2) * 7);
+    ctx.drawImage(src, 0, (i - steps / 2) * 8);
   }
   ctx.globalAlpha = 1;
   return c;
 }
 
 function drawExpanded(symbolCanvas: HTMLCanvasElement, veins: HTMLImageElement, w: number, h: number): HTMLCanvasElement {
-  const [c, ctx] = canvas(w, h);
-  const bg = ctx.createLinearGradient(0, 0, 0, h);
-  bg.addColorStop(0, 'rgba(40,0,8,0.92)');
-  bg.addColorStop(0.5, 'rgba(90,0,16,0.92)');
-  bg.addColorStop(1, 'rgba(40,0,8,0.92)');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, w, h);
-  ctx.globalAlpha = 0.55;
-  ctx.drawImage(veins, 0, 0, w, h);
-  ctx.globalAlpha = 1;
-  const aura = ctx.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, h * 0.5);
-  aura.addColorStop(0, 'rgba(255,42,61,0.55)');
-  aura.addColorStop(1, 'rgba(255,42,61,0)');
-  ctx.fillStyle = aura;
-  ctx.fillRect(0, 0, w, h);
-  const size = Math.min(w * 1.15, h * 0.62);
+  const [c, ctx] = makeCanvas(w, h);
+  ctx.beginPath();
+  ctx.roundRect(6, 6, w - 12, h - 12, 22);
+  ctx.fillStyle = '#3a0a22';
+  ctx.fill();
   ctx.save();
-  ctx.shadowColor = '#ff2a3d';
-  ctx.shadowBlur = 40;
-  ctx.drawImage(symbolCanvas, (w - size) / 2, (h - size) / 2, size, size);
-  ctx.restore();
-  const ghost = size * 0.55;
-  ctx.globalAlpha = 0.25;
-  ctx.drawImage(symbolCanvas, (w - ghost) / 2, h * 0.02, ghost, ghost);
-  ctx.drawImage(symbolCanvas, (w - ghost) / 2, h - ghost - h * 0.02, ghost, ghost);
+  ctx.clip();
+  ctx.fillStyle = '#5a0b2a';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.62, 0);
+  ctx.lineTo(w, 0);
+  ctx.lineTo(w, h);
+  ctx.lineTo(w * 0.3, h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 0.9;
+  ctx.drawImage(veins, 0, 0, w, h);
+  ctx.globalAlpha = 0.35;
+  const ghost = w * 0.62;
+  ctx.drawImage(symbolCanvas, (w - ghost) / 2, 8, ghost, ghost);
+  ctx.drawImage(symbolCanvas, (w - ghost) / 2, h - ghost - 8, ghost, ghost);
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = 'rgba(255,42,61,0.9)';
-  ctx.lineWidth = 6;
-  ctx.shadowColor = '#ff2a3d';
-  ctx.shadowBlur = 20;
-  ctx.strokeRect(3, 3, w - 6, h - 6);
+  ctx.restore();
+  const size = Math.min(w * 1.18, h * 0.6);
+  ctx.drawImage(symbolCanvas, (w - size) / 2, (h - size) / 2, size, size);
+  ctx.beginPath();
+  ctx.roundRect(6, 6, w - 12, h - 12, 22);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 12;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.roundRect(6, 6, w - 12, h - 12, 22);
+  ctx.strokeStyle = '#ffd23f';
+  ctx.lineWidth = 5;
+  ctx.stroke();
   return c;
 }
 
 function radial(size: number, stops: [number, string][]): HTMLCanvasElement {
-  const [c, ctx] = canvas(size, size);
+  const [c, ctx] = makeCanvas(size, size);
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
   for (const [o, col] of stops) g.addColorStop(o, col);
   ctx.fillStyle = g;
@@ -232,15 +271,27 @@ function radial(size: number, stops: [number, string][]): HTMLCanvasElement {
 
 export async function buildSymbolTextures(): Promise<SymbolTextures> {
   const canvases: HTMLCanvasElement[] = [];
+  const glowCanvases: HTMLCanvasElement[] = [];
+  const rigs = new Map<Sym, SymbolRig>();
   for (const def of SYMBOLS) {
-    const svg = PREMIUM_SVGS[def.key];
-    if (svg) {
-      const img = await loadSvg(svg, TEX_SIZE, TEX_SIZE);
-      const [c, ctx] = canvas(TEX_SIZE, TEX_SIZE);
-      ctx.drawImage(img, 0, 0, TEX_SIZE, TEX_SIZE);
-      canvases.push(c);
+    const art = SYMBOL_ART[def.key];
+    if (art) {
+      const base = await svgCanvas(art.base);
+      const parts: Record<string, Texture> = {};
+      const [full, f] = makeCanvas(TEX_SIZE, TEX_SIZE);
+      f.drawImage(base, 0, 0);
+      for (const [name, svg] of Object.entries(art.parts)) {
+        const pc = await svgCanvas(svg);
+        parts[name] = Texture.from(pc);
+        if (name !== 'lid') f.drawImage(pc, 0, 0);
+      }
+      rigs.set(def.id, { base: Texture.from(base), parts });
+      canvases.push(full);
+      glowCanvases.push(softGlow(await svgCanvas(art.glow), 14));
     } else {
+      const r = ROYALS[def.key];
       canvases.push(drawRoyal(def.key, def.id * 977 + 13));
+      glowCanvases.push(softGlow(glyph(r.text, r.text.length > 1 ? 196 : 236, r.light), 10));
     }
   }
   const veinsImg = await loadSvg(VEINS_SVG, 200, 600);
@@ -248,7 +299,7 @@ export async function buildSymbolTextures(): Promise<SymbolTextures> {
   canvases.forEach((c, i) => {
     if (i !== Sym.CODEX) expanded.set(i as Sym, Texture.from(drawExpanded(c, veinsImg, 220, 600)));
   });
-  const [vc, vctx] = canvas(200, 600);
+  const [vc, vctx] = makeCanvas(200, 600);
   vctx.drawImage(veinsImg, 0, 0);
 
   return {
@@ -256,8 +307,9 @@ export async function buildSymbolTextures(): Promise<SymbolTextures> {
     normal: canvases.map((c) => Texture.from(c)),
     blur: canvases.map((c) => Texture.from(motionBlur(c))),
     images: canvases.map((c) => c.toDataURL('image/png')),
+    rigs,
     expanded,
-    glowMaps: canvases.map((c) => Texture.from(glowMap(c))),
+    glowMaps: glowCanvases.map((c) => Texture.from(c)),
     frame: Texture.from(
       paintFrame({ boardW: BOARD_W, boardH: BOARD_H, pad: FRAME_PAD, bleed: FRAME_BLEED, reelX, cellW: CELL_W, reels: 5 }),
     ),
@@ -268,5 +320,9 @@ export async function buildSymbolTextures(): Promise<SymbolTextures> {
     veins: Texture.from(vc),
     glow: Texture.from(radial(256, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
     spore: Texture.from(radial(64, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),
+    drop: Texture.from(paintDrop()),
+    dropCyan: Texture.from(paintDrop('#38dcff', '#c8fbff')),
+    star: Texture.from(paintStar()),
+    puff: Texture.from(paintPuff()),
   };
 }

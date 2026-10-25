@@ -34,7 +34,7 @@ export function showIntro(logo: string, images: string[], onStart: () => void): 
           <p>s'étend sur <b>tout le rouleau</b> et paie sur les 10 lignes.</p>
         </div>
         <div class="intro-card">
-          <div class="intro-art"><img src="${images[Sym.MASK]}" alt=""><img src="${images[Sym.HEART]}" alt=""><img src="${images[Sym.SERUM]}" alt=""></div>
+          <div class="intro-art"><img src="${images[Sym.MASK]}" alt=""><img src="${images[Sym.BLOOD]}" alt=""><img src="${images[Sym.ANTIDOTE]}" alt=""></div>
           <h3>Mutation</h3>
           <p>chaque relance ajoute <b>+10 tours</b> et une <b>nouvelle souche</b>.</p>
         </div>

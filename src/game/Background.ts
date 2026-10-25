@@ -1,130 +1,327 @@
 import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import gsap from 'gsap';
+import { INK, goo, makeCanvas, seeded } from './art/painters';
 import { COLORS } from './layout';
 
 const W = 1920;
 const H = 1080;
+const LAMPS = [470, 960, 1450];
+const PORTHOLES: [number, number][] = [
+  [225, 470],
+  [345, 470],
+  [1575, 470],
+  [1695, 470],
+];
 
-function makeCanvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  return [c, c.getContext('2d')!];
+function ink(ctx: CanvasRenderingContext2D, w: number): void {
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = w;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
 }
 
-/** Ruined asylum hall: arched windows bleeding red light, brick wall, light shafts and vignette. */
+function shape(ctx: CanvasRenderingContext2D, draw: () => void, fill: string, line = 6): void {
+  draw();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  draw();
+  ink(ctx, line);
+}
+
+function door(ctx: CanvasRenderingContext2D, x: number, w: number, top: number, bottom: number, bloody: boolean): void {
+  // frame
+  shape(ctx, () => {
+    ctx.beginPath();
+    ctx.roundRect(x - 18, top - 18, w + 36, bottom - top + 18, [16, 16, 0, 0]);
+  }, '#2b3a44', 7);
+  for (const [dx, flip] of [
+    [0, false],
+    [w / 2, true],
+  ] as [number, boolean][]) {
+    const dw = w / 2;
+    shape(ctx, () => {
+      ctx.beginPath();
+      ctx.rect(x + dx, top, dw, bottom - top);
+    }, '#4b6370', 6);
+    ctx.fillStyle = '#3a4f5a';
+    ctx.fillRect(x + dx + (flip ? 4 : dw - 22), top + 4, 18, bottom - top - 8);
+    ctx.fillStyle = '#6a8794';
+    ctx.fillRect(x + dx + (flip ? dw - 14 : 8), top + 10, 6, bottom - top - 20);
+    // porthole
+    const cx = x + dx + dw / 2;
+    const cy = top + 140;
+    shape(ctx, () => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+    }, '#9aa6b0', 6);
+    shape(ctx, () => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 32, 0, Math.PI * 2);
+    }, '#5a0b22', 5);
+    ctx.fillStyle = '#ff3347';
+    ctx.beginPath();
+    ctx.arc(cx, cy + 6, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath();
+    ctx.ellipse(cx - 12, cy - 12, 8, 4, -0.7, 0, Math.PI * 2);
+    ctx.fill();
+    // push plate
+    shape(ctx, () => {
+      ctx.beginPath();
+      ctx.roundRect(cx - 28, top + 250, 56, 18, 6);
+    }, '#c9d3dc', 4);
+    // kick plate
+    shape(ctx, () => {
+      ctx.beginPath();
+      ctx.rect(x + dx + 10, bottom - 60, dw - 20, 44);
+    }, '#2b3a44', 4);
+  }
+  if (bloody) {
+    // handprint smear
+    ctx.save();
+    ctx.translate(x + w * 0.72, top + 300);
+    ctx.rotate(0.2);
+    shape(ctx, () => {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 22, 26, 0, 0, Math.PI * 2);
+      for (const [fx, fy, fr] of [
+        [-20, -34, 7],
+        [-6, -42, 7],
+        [8, -40, 7],
+        [20, -30, 6],
+        [28, 2, 6],
+      ]) {
+        ctx.moveTo(fx + fr, fy);
+        ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+      }
+    }, '#b5122f', 4);
+    ctx.restore();
+    goo(ctx, x + w * 0.72, top + 320, 70, 5, '#b5122f', '#ff5a6a');
+  }
+}
+
+function lamp(ctx: CanvasRenderingContext2D, x: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x, 0);
+  ctx.lineTo(x, 150);
+  ink(ctx, 6);
+  ctx.beginPath();
+  ctx.moveTo(x, 0);
+  ctx.lineTo(x, 150);
+  ctx.strokeStyle = '#3a3440';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  shape(ctx, () => {
+    ctx.beginPath();
+    ctx.moveTo(x - 20, 150);
+    ctx.lineTo(x + 20, 150);
+    ctx.lineTo(x + 70, 210);
+    ctx.lineTo(x - 70, 210);
+    ctx.closePath();
+  }, '#3f5a52', 6);
+  ctx.fillStyle = '#5d7e72';
+  ctx.beginPath();
+  ctx.moveTo(x - 16, 156);
+  ctx.lineTo(x - 4, 156);
+  ctx.lineTo(x - 40, 204);
+  ctx.lineTo(x - 58, 204);
+  ctx.closePath();
+  ctx.fill();
+  shape(ctx, () => {
+    ctx.beginPath();
+    ctx.ellipse(x, 212, 26, 12, 0, 0, Math.PI * 2);
+  }, '#fff1b0', 5);
+}
+
 function paintScene(): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(W, H);
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#0b0d13');
-  bg.addColorStop(0.6, '#07080c');
-  bg.addColorStop(1, '#030304');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
+  const rnd = seeded(31);
 
-  // bricks
-  ctx.strokeStyle = 'rgba(120,130,150,0.05)';
-  ctx.lineWidth = 2;
-  for (let y = 0, row = 0; y < H; y += 38, row++) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-    for (let x = row % 2 ? 0 : 60; x < W; x += 120) {
+  // wall
+  ctx.fillStyle = '#35294a';
+  ctx.fillRect(0, 0, W, 780);
+  ctx.fillStyle = '#2d233f';
+  for (let x = 0; x < W; x += 160) ctx.fillRect(x + 70, 140, 26, 400);
+  // ceiling + pipes
+  ctx.fillStyle = '#160f1c';
+  ctx.fillRect(0, 0, W, 120);
+  for (const [y, r, col] of [
+    [56, 18, '#3a4a55'],
+    [98, 12, '#4b3a2a'],
+  ] as [number, number, string][]) {
+    shape(ctx, () => {
       ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y + 38);
-      ctx.stroke();
+      ctx.roundRect(-20, y - r, W + 40, r * 2, r);
+    }, col, 6);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(0, y - r + 4, W, 4);
+    for (let x = 120; x < W; x += 340) {
+      shape(ctx, () => {
+        ctx.beginPath();
+        ctx.roundRect(x, y - r - 6, 26, r * 2 + 12, 6);
+      }, '#5d7280', 5);
     }
   }
+  // drip from a pipe
+  goo(ctx, 812, 108, 60, 5, '#7be05a', '#d2ffb8');
 
-  const windows = [250, 640, 1280, 1670];
-  for (const wx of windows) {
-    const ww = 190;
-    const top = 120;
-    const bottom = 760;
-    const arch = (inset: number) => {
-      ctx.beginPath();
-      ctx.moveTo(wx - ww / 2 + inset, bottom);
-      ctx.lineTo(wx - ww / 2 + inset, top + ww / 2);
-      ctx.quadraticCurveTo(wx - ww / 2 + inset, top + inset, wx, top - 30 + inset);
-      ctx.quadraticCurveTo(wx + ww / 2 - inset, top + inset, wx + ww / 2 - inset, top + ww / 2);
-      ctx.lineTo(wx + ww / 2 - inset, bottom);
-      ctx.closePath();
-    };
-    // stone surround
-    arch(-18);
-    ctx.fillStyle = '#12151c';
-    ctx.fill();
-    arch(0);
-    const glow = ctx.createLinearGradient(0, top, 0, bottom);
-    glow.addColorStop(0, '#5a0614');
-    glow.addColorStop(0.5, '#2a020a');
-    glow.addColorStop(1, '#0c0103');
-    ctx.fillStyle = glow;
-    ctx.fill();
-    // bars + cross
-    ctx.save();
-    arch(0);
-    ctx.clip();
-    ctx.fillStyle = '#05060a';
-    for (let bx = wx - ww / 2 + 22; bx < wx + ww / 2; bx += 30) ctx.fillRect(bx, top - 40, 7, bottom - top + 40);
-    ctx.fillRect(wx - ww / 2, top + 210, ww, 10);
-    ctx.fillRect(wx - ww / 2, top + 420, ww, 10);
-    ctx.restore();
+  // wainscot tiles
+  const ty = 540;
+  ctx.fillStyle = '#1d3a46';
+  ctx.fillRect(0, ty, W, 240);
+  for (let y = ty; y < 780; y += 40) {
+    for (let x = (y / 40) % 2 ? -30 : 0; x < W; x += 60) {
+      ctx.fillStyle = rnd() < 0.5 ? '#2a5262' : '#264a59';
+      ctx.fillRect(x + 3, y + 3, 54, 34);
+    }
   }
+  ctx.fillStyle = '#2b4a56';
+  ctx.fillRect(0, ty - 14, W, 16);
+  ctx.beginPath();
+  ctx.moveTo(0, ty - 14);
+  ctx.lineTo(W, ty - 14);
+  ctx.moveTo(0, ty + 2);
+  ctx.lineTo(W, ty + 2);
+  ink(ctx, 5);
 
-  // light shafts from the windows
-  ctx.globalCompositeOperation = 'lighter';
-  for (const wx of windows) {
-    const g = ctx.createLinearGradient(wx, 200, wx + 140, 1080);
-    g.addColorStop(0, 'rgba(255,42,61,0.10)');
-    g.addColorStop(1, 'rgba(255,42,61,0)');
-    ctx.fillStyle = g;
+  // floor (perspective rows)
+  ctx.fillStyle = '#17111d';
+  ctx.fillRect(0, 780, W, H - 780);
+  let y = 780;
+  let rowH = 30;
+  let row = 0;
+  while (y < H) {
+    const tw = rowH * 2.2;
+    for (let x = row % 2 ? -tw / 2 : 0; x < W; x += tw) {
+      ctx.fillStyle = (Math.floor(x / tw) + row) % 2 ? '#241c2c' : '#1b1522';
+      ctx.fillRect(x, y, tw, rowH);
+    }
+    y += rowH;
+    rowH *= 1.32;
+    row++;
+  }
+  ctx.beginPath();
+  ctx.moveTo(0, 780);
+  ctx.lineTo(W, 780);
+  ink(ctx, 7);
+
+  door(ctx, 165, 240, 330, 780, false);
+  door(ctx, 1515, 240, 330, 780, true);
+
+  // SORTIE sign over the right door
+  shape(ctx, () => {
     ctx.beginPath();
-    ctx.moveTo(wx - 80, 200);
-    ctx.lineTo(wx + 80, 200);
-    ctx.lineTo(wx + 330, H);
-    ctx.lineTo(wx - 40, H);
+    ctx.roundRect(1560, 262, 150, 50, 8);
+  }, '#5a0b22', 6);
+  ctx.font = '34px "Luckiest Guy", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ff5a6a';
+  ctx.fillText('SORTIE', 1635, 290);
+
+  // quarantine poster on the left
+  ctx.save();
+  ctx.translate(560, 330);
+  ctx.rotate(-0.06);
+  shape(ctx, () => {
+    ctx.beginPath();
+    ctx.rect(-80, -100, 160, 200);
+  }, '#ffd23f', 6);
+  ctx.fillStyle = INK;
+  ctx.fillRect(-80, 50, 160, 50);
+  ctx.font = '26px "Luckiest Guy", sans-serif';
+  ctx.fillStyle = '#ffd23f';
+  ctx.fillText('QUARANTAINE', 0, 78);
+  // biohazard
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 9;
+  for (const a of [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6]) {
+    ctx.beginPath();
+    ctx.arc(Math.cos(a) * 18, -24 + Math.sin(a) * 18, 22, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(0, -24, 8, 0, Math.PI * 2);
+  ctx.fillStyle = INK;
+  ctx.fill();
+  // torn corner
+  ctx.fillStyle = '#2b2236';
+  ctx.beginPath();
+  ctx.moveTo(80, -100);
+  ctx.lineTo(40, -100);
+  ctx.lineTo(80, -60);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // blood splats on the wall
+  for (const [sx, sy, sr] of [
+    [1330, 420, 40],
+    [700, 610, 28],
+    [1240, 680, 22],
+  ]) {
+    shape(ctx, () => {
+      ctx.beginPath();
+      for (let i = 0; i <= 18; i++) {
+        const a = (i / 18) * Math.PI * 2;
+        const r = sr * (i % 2 ? 0.7 : 1 + rnd() * 0.3);
+        if (i === 0) ctx.moveTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r);
+        else ctx.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r);
+      }
+      ctx.closePath();
+    }, '#8e0f26', 5);
+    goo(ctx, sx + 6, sy + sr * 0.6, sr * 1.4, 5, '#8e0f26', '#e0213a');
+  }
+
+  // wheelchair silhouette
+  ctx.save();
+  ctx.translate(1290, 900);
+  shape(ctx, () => {
+    ctx.beginPath();
+    ctx.arc(0, 0, 64, 0, Math.PI * 2);
+    ctx.moveTo(150, 30);
+    ctx.arc(120, 30, 30, 0, Math.PI * 2);
+  }, '#100b14', 7);
+  shape(ctx, () => {
+    ctx.beginPath();
+    ctx.moveTo(-30, -150);
+    ctx.lineTo(-10, -20);
+    ctx.lineTo(120, -20);
+    ctx.lineTo(130, 10);
+    ctx.lineTo(-10, 10);
+    ctx.lineTo(-40, -150);
     ctx.closePath();
-    ctx.fill();
-  }
-  ctx.globalCompositeOperation = 'source-over';
+  }, '#211a28', 6);
+  ctx.restore();
 
-  // floor
-  const floor = ctx.createLinearGradient(0, 760, 0, H);
-  floor.addColorStop(0, 'rgba(0,0,0,0)');
-  floor.addColorStop(1, 'rgba(0,0,0,0.85)');
-  ctx.fillStyle = floor;
-  ctx.fillRect(0, 760, W, H - 760);
-
-  // stains / blood splatters
-  const rnd = seeded(7);
-  for (let i = 0; i < 26; i++) {
-    const x = rnd() * W;
-    const y = rnd() * H;
-    const r = 6 + rnd() * 40;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, 'rgba(90,0,16,0.35)');
-    g.addColorStop(1, 'rgba(90,0,16,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
-  }
+  for (const lx of LAMPS) lamp(ctx, lx);
 
   // vignette
-  const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.95);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,0.92)');
+  const v = ctx.createRadialGradient(W / 2, H * 0.48, H * 0.3, W / 2, H / 2, H);
+  v.addColorStop(0, 'rgba(10,4,12,0)');
+  v.addColorStop(1, 'rgba(10,4,12,0.7)');
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, W, H);
   return c;
 }
 
-function seeded(seed: number) {
-  return () => {
-    seed = (seed * 16807) % 2147483647;
-    return (seed - 1) / 2147483646;
-  };
+/** Light cone under a hanging lamp. */
+function paintCone(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(600, 900);
+  const g = ctx.createLinearGradient(0, 0, 0, 900);
+  g.addColorStop(0, 'rgba(255,241,176,0.55)');
+  g.addColorStop(1, 'rgba(255,241,176,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(250, 0);
+  ctx.lineTo(350, 0);
+  ctx.lineTo(600, 900);
+  ctx.lineTo(0, 900);
+  ctx.closePath();
+  ctx.fill();
+  return c;
 }
 
 /** Tileable value-noise fog. */
@@ -154,9 +351,8 @@ function paintFog(size = 512): HTMLCanvasElement {
         v += (a * (1 - ty) + b * ty) * o.amp;
       });
       const i = (y * size + x) * 4;
-      const a = Math.max(0, v - 0.35) * 2.2;
       img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
-      img.data[i + 3] = Math.min(255, a * 255);
+      img.data[i + 3] = Math.min(255, Math.max(0, v - 0.4) * 2.4 * 255);
     }
   }
   ctx.putImageData(img, 0, 0);
@@ -168,27 +364,29 @@ interface Spore {
   vx: number;
   vy: number;
   phase: number;
-  life: number;
 }
-
-const WINDOWS = [250, 640, 1280, 1670];
 
 export class Background extends Container {
   private sceneC = new Container();
   private scene: Sprite;
-  private windowGlows: Sprite[] = [];
-  private lightning: Sprite;
+  private lampGlows: Sprite[] = [];
+  private cones: Sprite[] = [];
+  private portholes: Sprite[] = [];
+  private blackout = new Graphics();
   private chains: Sprite[] = [];
-  private nextFlash = 6;
-  onLightning: (() => void) | null = null;
+  private chainFront = new Container();
   private redWash: Sprite;
-  private fogA: TilingSprite;
-  private fogB: TilingSprite;
+  private fog: TilingSprite;
   private spores: Spore[] = [];
   private sporeLayer = new Container();
   private pulse = new Graphics();
   private t = 0;
   private feature = 0;
+  private nextOutage = 7;
+  private dark = 0;
+  private w = W;
+  private h = H;
+  onLightning: (() => void) | null = null;
 
   constructor(
     private sporeTex: Texture,
@@ -199,116 +397,108 @@ export class Background extends Container {
     this.scene = new Sprite(Texture.from(paintScene()));
     this.scene.anchor.set(0.5);
     this.sceneC.addChild(this.scene);
-    for (const wx of WINDOWS) {
+    const coneTex = Texture.from(paintCone());
+    for (const lx of LAMPS) {
+      const cone = new Sprite(coneTex);
+      cone.anchor.set(0.5, 0);
+      cone.position.set(lx - W / 2, 215 - H / 2);
+      cone.blendMode = 'add';
+      cone.alpha = 0.3;
+      this.cones.push(cone);
       const g = new Sprite(glowTex);
       g.anchor.set(0.5);
-      g.position.set(wx - W / 2, 440 - H / 2);
-      g.width = 420;
-      g.height = 900;
+      g.position.set(lx - W / 2, 212 - H / 2);
+      g.width = g.height = 220;
+      g.tint = 0xfff1b0;
+      g.blendMode = 'add';
+      this.lampGlows.push(g);
+      this.sceneC.addChild(cone, g);
+    }
+    for (const [px, py] of PORTHOLES) {
+      const g = new Sprite(glowTex);
+      g.anchor.set(0.5);
+      g.position.set(px - W / 2, py - H / 2);
+      g.width = g.height = 170;
       g.tint = COLORS.infection;
       g.blendMode = 'add';
-      g.alpha = 0.25;
-      this.windowGlows.push(g);
+      this.portholes.push(g);
       this.sceneC.addChild(g);
     }
-    this.lightning = new Sprite(glowTex);
-    this.lightning.anchor.set(0.5);
-    this.lightning.width = W * 1.6;
-    this.lightning.height = H * 1.4;
-    this.lightning.position.set(0, -H * 0.3);
-    this.lightning.tint = 0xffc2c8;
-    this.lightning.blendMode = 'add';
-    this.lightning.alpha = 0;
-    this.sceneC.addChild(this.lightning);
+    this.blackout.rect(-W, -H, W * 2, H * 2).fill(0x05020a);
+    this.blackout.alpha = 0;
+    this.sceneC.addChild(this.blackout);
+
     this.redWash = new Sprite(sporeTex);
     this.redWash.anchor.set(0.5);
     this.redWash.tint = COLORS.infection;
     this.redWash.blendMode = 'add';
-    this.redWash.alpha = 0.12;
-    const fogTex = Texture.from(paintFog());
-    this.fogA = new TilingSprite({ texture: fogTex, width: W, height: H });
-    this.fogB = new TilingSprite({ texture: fogTex, width: W, height: H });
-    this.fogA.tint = 0x8a96aa;
-    this.fogB.tint = 0x6a2030;
-    this.fogA.alpha = 0.16;
-    this.fogB.alpha = 0.14;
-    this.fogB.tileScale.set(1.6);
-    const chainLayer = new Container();
-    for (const [x, len, alpha] of [
-      [70, 760, 0.95],
-      [150, 520, 0.7],
-      [W - 70, 820, 0.95],
-      [W - 170, 460, 0.65],
+    this.redWash.alpha = 0;
+    this.fog = new TilingSprite({ texture: Texture.from(paintFog()), width: W, height: H });
+    this.fog.tint = 0x9a7aa8;
+    this.fog.alpha = 0.1;
+
+    for (const [x, len] of [
+      [60, 700],
+      [W - 60, 780],
     ]) {
       const c = new Sprite(chainTex);
       c.anchor.set(0.5, 0);
       c.position.set(x - W / 2, -H / 2 - 20);
       c.height = len;
       c.scale.x = c.scale.y;
-      c.alpha = alpha;
-      c.tint = 0x9aa3b5;
       this.chains.push(c);
-      chainLayer.addChild(c);
+      this.chainFront.addChild(c);
     }
-    const front = new Container();
-    front.addChild(chainLayer);
-    this.chainFront = front;
-    this.addChild(this.sceneC, this.redWash, this.fogA, this.sporeLayer, this.fogB, front, this.pulse);
 
-    for (let i = 0; i < 80; i++) this.spores.push(this.spawn(true));
+    this.addChild(this.sceneC, this.redWash, this.fog, this.sporeLayer, this.chainFront, this.pulse);
+    for (let i = 0; i < 50; i++) this.spores.push(this.spawn(true));
   }
 
   private spawn(initial: boolean): Spore {
     const s = new Sprite(this.sporeTex);
     s.anchor.set(0.5);
     s.blendMode = 'add';
-    const size = 3 + Math.random() * Math.random() * 16;
-    s.width = s.height = size;
-    s.tint = Math.random() < 0.8 ? COLORS.infection : 0xe9dfc9;
+    s.width = s.height = 3 + Math.random() * Math.random() * 12;
+    s.tint = Math.random() < 0.75 ? COLORS.infection : 0xfff1b0;
     s.position.set(Math.random() * this.w, initial ? Math.random() * this.h : this.h + 20);
     this.sporeLayer.addChild(s);
-    return { s, vx: (Math.random() - 0.5) * 12, vy: -(8 + Math.random() * 28), phase: Math.random() * 10, life: 0 };
+    return { s, vx: (Math.random() - 0.5) * 10, vy: -(6 + Math.random() * 20), phase: Math.random() * 10 };
   }
-
-  private w = W;
-  private h = H;
-
-  private chainFront: Container;
 
   resize(w: number, h: number): void {
     this.w = w;
     this.h = h;
     const scale = Math.max(w / W, h / H);
-    this.sceneC.scale.set(scale);
-    this.sceneC.position.set(w / 2, h / 2);
-    this.chainFront.scale.set(scale);
-    this.chainFront.position.set(w / 2, h / 2);
-    this.redWash.position.set(w / 2, h * 0.45);
-    this.redWash.width = w * 1.1;
-    this.redWash.height = h * 1.1;
-    for (const f of [this.fogA, this.fogB]) {
-      f.width = w;
-      f.height = h;
+    for (const c of [this.sceneC, this.chainFront]) {
+      c.scale.set(scale);
+      c.position.set(w / 2, h / 2);
     }
+    this.redWash.position.set(w / 2, h * 0.45);
+    this.redWash.width = w * 1.2;
+    this.redWash.height = h * 1.2;
+    this.fog.width = w;
+    this.fog.height = h;
   }
 
   setFeature(on: boolean): void {
     gsap.to(this, { feature: on ? 1 : 0, duration: 1.2 });
   }
 
-  /** Distant lightning behind the windows: two quick flickers. */
+  /** Deceit-style power outage: lights die, flicker, come back. */
   flash(): void {
-    gsap.killTweensOf(this.lightning);
+    const o = { d: 0 };
     gsap
-      .timeline()
-      .to(this.lightning, { alpha: 0.5, duration: 0.05 })
-      .to(this.lightning, { alpha: 0.1, duration: 0.08 })
-      .to(this.lightning, { alpha: 0.7, duration: 0.04 })
-      .to(this.lightning, { alpha: 0, duration: 0.9, ease: 'power2.out' });
+      .timeline({ onUpdate: () => (this.dark = o.d) })
+      .to(o, { d: 0.85, duration: 0.06 })
+      .to(o, { d: 0.2, duration: 0.05 })
+      .to(o, { d: 0.9, duration: 0.05 })
+      .to(o, { d: 0.9, duration: 0.5 })
+      .to(o, { d: 0.3, duration: 0.05 })
+      .to(o, { d: 0.75, duration: 0.05 })
+      .to(o, { d: 0, duration: 0.3 });
     this.onLightning?.();
   }
 
-  /** Big red heartbeat flash. */
   thump(strength = 0.35): void {
     this.pulse.clear().rect(0, 0, this.w, this.h).fill({ color: COLORS.infection });
     this.pulse.blendMode = 'add';
@@ -318,30 +508,31 @@ export class Background extends Container {
   update(dtMs: number): void {
     const dt = dtMs / 1000;
     this.t += dt;
-    this.fogA.tilePosition.x += dt * 14;
-    this.fogA.tilePosition.y += dt * 3;
-    this.fogB.tilePosition.x -= dt * 22;
-    this.fogB.tilePosition.y += dt * 6;
+    this.fog.tilePosition.x += dt * 12;
+    this.fog.tilePosition.y += dt * 3;
     const beat = Math.pow(Math.max(0, Math.sin(this.t * (2.6 + this.feature * 1.6))), 12);
-    this.redWash.alpha = 0.08 + this.feature * 0.16 + beat * (0.05 + this.feature * 0.1);
-    this.fogB.alpha = 0.12 + this.feature * 0.12;
-    for (let i = 0; i < this.windowGlows.length; i++) {
-      const flicker = 0.5 + 0.5 * Math.sin(this.t * (7 + i * 1.3) + i * 2) * Math.sin(this.t * (2.3 + i) + i);
-      this.windowGlows[i].alpha = 0.16 + this.feature * 0.2 + flicker * 0.1 + beat * 0.08;
-    }
+    this.redWash.alpha = this.feature * (0.14 + beat * 0.12);
+    this.blackout.alpha = this.dark * 0.9;
+    this.lampGlows.forEach((g, i) => {
+      const flick = Math.sin(this.t * (13 + i * 3)) * Math.sin(this.t * (3.1 + i)) > 0.92 ? 0.25 : 1;
+      const on = (1 - this.dark) * flick;
+      g.alpha = 0.55 * on;
+      this.cones[i].alpha = (0.4 + this.feature * 0.05) * on;
+      this.cones[i].tint = this.feature > 0.5 ? 0xff9aa4 : 0xffffff;
+    });
+    this.portholes.forEach((g, i) => (g.alpha = 0.35 + 0.25 * Math.sin(this.t * 2 + i) + this.feature * 0.3 + beat * 0.2));
     this.chains.forEach((c, i) => (c.rotation = Math.sin(this.t * (0.6 + i * 0.13) + i) * 0.015));
-    this.nextFlash -= dt;
-    if (this.nextFlash <= 0) {
-      this.nextFlash = 9 + Math.random() * 14;
+    this.nextOutage -= dt;
+    if (this.nextOutage <= 0) {
+      this.nextOutage = 12 + Math.random() * 16;
       this.flash();
     }
     const speed = 1 + this.feature * 1.5;
     for (let i = 0; i < this.spores.length; i++) {
       const p = this.spores[i];
-      p.life += dt;
-      p.s.x += (p.vx + Math.sin(this.t + p.phase) * 10) * dt * speed;
+      p.s.x += (p.vx + Math.sin(this.t + p.phase) * 8) * dt * speed;
       p.s.y += p.vy * dt * speed;
-      p.s.alpha = 0.35 + 0.45 * Math.abs(Math.sin(this.t * 1.7 + p.phase));
+      p.s.alpha = 0.3 + 0.4 * Math.abs(Math.sin(this.t * 1.7 + p.phase));
       if (p.s.y < -30 || p.s.x < -30 || p.s.x > this.w + 30) {
         p.s.destroy();
         this.spores[i] = this.spawn(false);
