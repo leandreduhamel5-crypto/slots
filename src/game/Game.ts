@@ -11,6 +11,7 @@ import { Background } from './Background';
 import { BOARD_H, BOARD_W, COLORS } from './layout';
 import { Logo, eyeFromCodex, paintLogo } from './Logo';
 import { Mascot, type MascotTextures } from './Mascot';
+import { Particles } from './Particles';
 import { showIntro } from '../ui/Intro';
 import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
@@ -19,7 +20,7 @@ import type { SymbolTextures } from './textures';
 const BOARD_Y = 152;
 const WORLD_TOP = -140;
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
-const MASCOT_X = 230;
+const MASCOT_X = 250;
 const WORLD_W = BOARD_W + 200;
 
 class FeatureBanner extends Container {
@@ -120,9 +121,21 @@ export class Game {
     this.banner.position.set(BOARD_W / 2, 6);
     this.teaser = this.buildTeaser(tex);
     this.mascot = new Mascot(mascotTex);
-    this.mascot.scale.set(-1, 1);
+    this.mascot.scale.set(-1.12, 1.12);
     this.mascot.position.set(BOARD_W + MASCOT_X, BOARD_Y + BOARD_H + 46);
-    this.world.addChild(this.mascot, this.logo, this.banner, this.board, this.teaser);
+    this.mascotFx = new Particles(tex);
+    this.mascot.onTransform = (to) => {
+      if (!this.mascot.visible) return;
+      const x = this.mascot.x;
+      const y = this.mascot.y - 300;
+      this.mascotFx.impact(x, y, 1.6);
+      this.mascotFx.burst(x, y, 30, 1.1);
+      this.mascotFx.puffs(x, this.mascot.y - 40, 6, 200);
+      this.audio.stinger(to === 'inhuman' ? 2 : 0);
+      this.bg.thump(to === 'inhuman' ? 0.4 : 0.15);
+      this.shake(to === 'inhuman' ? 16 : 6);
+    };
+    this.world.addChild(this.mascot, this.logo, this.banner, this.board, this.teaser, this.mascotFx);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       shake: (p) => this.shake(p),
@@ -206,6 +219,7 @@ export class Game {
 
   private teaser: Container;
   private mascot: Mascot;
+  private mascotFx: Particles;
 
   /** Portrait-only reminder of the feature, filling the space under the reels. */
   private buildTeaser(tex: SymbolTextures): Container {
@@ -261,7 +275,7 @@ export class Game {
     this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
-    const mascotRight = (BOARD_W + MASCOT_X + 170 - BOARD_W / 2) * scale + w / 2;
+    const mascotRight = (BOARD_W + MASCOT_X + 240 - BOARD_W / 2) * scale + w / 2;
     this.mascot.visible = !portrait && mascotRight < w;
     this.bg.resize(w, h);
     this.overlays.resize(w, h);
@@ -269,6 +283,7 @@ export class Game {
 
   private update(dt: number): void {
     this.board.update(dt);
+    this.mascotFx.update(dt);
     this.bg.update(dt);
     this.overlays.update(dt);
     if (this.shakePower > 0.2) {
@@ -364,6 +379,7 @@ export class Game {
       const tier = winTier(round.totalWin, round.bet);
       if (tier >= 0) {
         this.mascot.react('big');
+        if (this.mascot.visible) await this.sleep(900);
         await this.overlays.bigWin(round.totalWin, round.bet, (v) => this.hud.setWin(v));
       }
     }
@@ -457,6 +473,7 @@ export class Game {
     if (startAt === 0) {
       await this.sleep(this.turbo ? 300 : 700);
       this.mascot.react('feature');
+      if (this.mascot.visible) await this.sleep(1300);
       await this.overlays.featureIntro(f.special, 10);
     }
     this.enterFeature(true);
@@ -495,6 +512,8 @@ export class Game {
   private inFeature = false;
 
   private enterFeature(on: boolean): void {
+    if (!on) this.mascot.setForm('human');
+    else if (this.mascot.form !== 'inhuman') this.mascot.setForm('inhuman', false);
     this.inFeature = on;
     this.layout();
     this.bg.setFeature(on);
