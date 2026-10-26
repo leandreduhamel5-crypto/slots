@@ -1,7 +1,7 @@
 import { Container, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
-import { INK, MATERIALS, makeCanvas, render3DText, seeded } from './art/painters';
+import { INK, MATERIALS, makeCanvas, paintDrop, paintShine, render3DText, seeded, softGlow } from './art/painters';
 
 /** Jagged blood splash behind the title, with a glossy gradient and ink rim. */
 function splash(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, seed: number): void {
@@ -167,22 +167,110 @@ export function logoCanvas(eye: HTMLCanvasElement, custom: HTMLImageElement | nu
   return c;
 }
 
+interface Drop {
+  s: Sprite;
+  vy: number;
+  life: number;
+}
+
+/**
+ * The in-game logo, alive: it breathes, a light sweep crosses the letters, a red halo pulses
+ * behind it, blood drops fall from the letters, and now and then it glitches.
+ */
 export class Logo extends Container {
   private split = new RGBSplitFilter({ red: { x: 0, y: 0 }, green: { x: 0, y: 0 }, blue: { x: 0, y: 0 } });
+  private inner = new Container();
   private sprite: Sprite;
+  private halo: Sprite;
+  private shine: Sprite;
+  private dropTex: Texture;
+  private drops: Drop[] = [];
+  private dropLayer = new Container();
+  private art: HTMLCanvasElement;
 
   constructor(art: HTMLCanvasElement) {
     super();
-    this.sprite = new Sprite(Texture.from(art));
+    this.art = art;
+    const tex = Texture.from(art);
+    this.inner.scale.set(0.78);
+    // red halo hugging the silhouette
+    this.halo = new Sprite(Texture.from(softGlow(art, 18)));
+    this.halo.anchor.set(0.5, 0.45);
+    this.halo.blendMode = 'add';
+    this.halo.tint = 0xff2a44;
+    this.halo.alpha = 0.35;
+    this.sprite = new Sprite(tex);
     this.sprite.anchor.set(0.5, 0.45);
-    this.sprite.scale.set(0.78);
-    this.addChild(this.sprite);
+    // light sweep, masked by the logo itself
+    const mask = new Sprite(tex);
+    mask.anchor.set(0.5, 0.45);
+    this.shine = new Sprite(Texture.from(paintShine()));
+    this.shine.anchor.set(0.5);
+    this.shine.height = art.height * 1.3;
+    this.shine.width = 220;
+    this.shine.rotation = 0.35;
+    this.shine.blendMode = 'add';
+    this.shine.x = -art.width;
+    this.shine.mask = mask;
+    this.dropTex = Texture.from(paintDrop());
+    this.inner.addChild(this.halo, this.sprite, mask, this.shine, this.dropLayer);
+    this.addChild(this.inner);
     this.scheduleGlitch();
-    gsap.to(this.sprite.scale, { x: 0.8, y: 0.77, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.scheduleShine();
+    gsap.to(this.inner.scale, { x: 0.8, y: 0.77, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    gsap.to(this.halo, { alpha: 0.6, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    gsap.ticker.add(this.tick);
   }
+
+  private scheduleShine(): void {
+    gsap.delayedCall(2.5 + Math.random() * 2.5, () => {
+      if (this.destroyed) return;
+      this.sweep();
+      this.scheduleShine();
+    });
+  }
+
+  /** Light sweep across the letters. */
+  sweep(duration = 0.9): void {
+    const w = this.art.width;
+    gsap.fromTo(this.shine, { x: -w * 0.6 }, { x: w * 0.6, duration, ease: 'power1.inOut' });
+  }
+
+  private tick = (): void => {
+    if (this.destroyed) return;
+    const dt = Math.min(0.05, gsap.ticker.deltaRatio() / 60);
+    // a drop forms under a random letter now and then
+    if (Math.random() < dt * 0.9) {
+      const s = new Sprite(this.dropTex);
+      s.anchor.set(0.5, 0);
+      s.scale.set(0.5 + Math.random() * 0.35);
+      s.position.set((Math.random() - 0.5) * this.art.width * 0.55, this.art.height * 0.12 + Math.random() * 20);
+      s.alpha = 0;
+      this.dropLayer.addChild(s);
+      this.drops.push({ s, vy: 0, life: 0 });
+    }
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      d.life += dt;
+      if (d.life < 0.5) {
+        // swelling on the letter before letting go
+        d.s.alpha = d.life / 0.5;
+        d.s.scale.y = d.s.scale.x * (0.6 + d.life);
+      } else {
+        d.vy += 1400 * dt;
+        d.s.y += d.vy * dt;
+        d.s.alpha = Math.max(0, 1 - (d.life - 0.5) * 1.4);
+      }
+      if (d.life > 1.3) {
+        d.s.destroy();
+        this.drops.splice(i, 1);
+      }
+    }
+  };
 
   private scheduleGlitch(): void {
     gsap.delayedCall(4 + Math.random() * 5, () => {
+      if (this.destroyed) return;
       this.glitch();
       this.scheduleGlitch();
     });
@@ -191,7 +279,8 @@ export class Logo extends Container {
   /** Cartoon "boing" plus a short chromatic glitch. */
   glitch(power = 1): void {
     this.filters = [this.split];
-    gsap.fromTo(this.sprite, { rotation: -0.04 * power }, { rotation: 0, duration: 0.6, ease: 'elastic.out(1.2, 0.3)' });
+    gsap.fromTo(this.inner, { rotation: -0.04 * power }, { rotation: 0, duration: 0.6, ease: 'elastic.out(1.2, 0.3)' });
+    if (power > 1) this.sweep(0.6);
     const tl = gsap.timeline();
     for (let i = 0; i < 5; i++) {
       tl.add(() => {

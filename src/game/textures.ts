@@ -3,10 +3,7 @@ import { SYMBOLS, Sym } from '../math/config';
 import { VEINS_SVG } from './art/symbols';
 import {
   INK,
-  MATERIALS,
-  glossyDrip,
   makeCanvas,
-  render3DText,
   paintShine,
   paintSunburst,
   paintDepthShade,
@@ -16,13 +13,13 @@ import {
   paintReelPanel,
   paintStar,
   paintWinFrame,
-  seeded,
   softGlow,
 } from './art/painters';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP, reelX } from './layout';
 import { containCanvas } from './assets';
 import { PAINTED } from './art/premium';
 import { downsample } from './art/paint';
+import { paintRoyal } from './art/royals';
 
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
@@ -90,187 +87,18 @@ function glyph(text: string, size: number, color: string): HTMLCanvasElement {
   return c;
 }
 
-function rivet3d(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  ctx.beginPath();
-  ctx.arc(x, y + 2, r + 3, 0, Math.PI * 2);
-  ctx.fillStyle = INK;
-  ctx.fill();
-  const g = ctx.createRadialGradient(x - r * 0.4, y - r * 0.4, r * 0.1, x, y, r);
-  g.addColorStop(0, '#ffffff');
-  g.addColorStop(0.35, '#c9d3dc');
-  g.addColorStop(1, '#5a6672');
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = g;
-  ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(x - r * 0.55, y + r * 0.2);
-  ctx.lineTo(x + r * 0.55, y - r * 0.2);
-  ctx.stroke();
-}
-
-function splat(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, rnd: () => number): void {
-  ctx.beginPath();
-  for (let i = 0; i <= 14; i++) {
-    const a = (i / 14) * Math.PI * 2;
-    const rr = r * (i % 2 ? 0.6 + rnd() * 0.15 : 1 + rnd() * 0.25);
-    const px = x + Math.cos(a) * rr;
-    const py = y + Math.sin(a) * rr;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = INK;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.beginPath();
-  ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.22, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-/** Royal: 3D lettering in its own material, with themed details and a soft colour aura. */
-function drawRoyal(key: string, seed: number): HTMLCanvasElement {
+/** Royal: 3D lettering over its painted emblem (art/royals.ts), with a soft colour aura. */
+function drawRoyal(key: string): HTMLCanvasElement {
   const r = ROYALS[key];
   const S = TEX_SIZE;
-  const two = r.text.length > 1;
-  const size = two ? 176 : 214;
-  const rnd = seeded(seed);
   const [c, ctx] = makeCanvas(S, S);
-
   const aura = ctx.createRadialGradient(S / 2, S / 2, 10, S / 2, S / 2, S * 0.5);
-  aura.addColorStop(0, r.glow + '55');
-  aura.addColorStop(0.6, r.glow + '18');
+  aura.addColorStop(0, r.glow + '44');
+  aura.addColorStop(0.6, r.glow + '14');
   aura.addColorStop(1, r.glow + '00');
   ctx.fillStyle = aura;
   ctx.fillRect(0, 0, S, S);
-  ctx.fillStyle = 'rgba(0,0,0,0.38)';
-  ctx.beginPath();
-  ctx.ellipse(S / 2, S - 30, 92, 11, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  const letter = render3DText(r.text, { size, material: MATERIALS[r.material] });
-  const lx = (S - letter.width) / 2 + 4;
-  const ly = (S - letter.height) / 2 - 2;
-  // where the glyph sits inside the 320 canvas
-  const top = S / 2 - size * 0.4;
-  const bottom = S / 2 + size * 0.36;
-  const halfW = two ? size * 0.55 : size * 0.38;
-
-  if (r.material === 'blood') splat(ctx, S / 2 + halfW * 0.95, top + 20, 16, '#e0213a', rnd);
-  ctx.drawImage(letter, lx, ly);
-
-  switch (r.material) {
-    case 'blood': {
-      glossyDrip(ctx, S / 2 - halfW * 0.62, bottom - 6, 34, 7, r.drip);
-      glossyDrip(ctx, S / 2 + halfW * 0.7, bottom - 6, 50, 8, r.drip);
-      glossyDrip(ctx, S / 2 + 4, S / 2 + size * 0.1, 22, 5, r.drip);
-      splat(ctx, S / 2 - halfW * 1.05, top + 46, 7, '#e0213a', rnd);
-      break;
-    }
-    case 'steel': {
-      rivet3d(ctx, S / 2 - halfW * 0.5, top + 34, 9);
-      rivet3d(ctx, S / 2 - halfW * 0.5, bottom - 34, 9);
-      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(S / 2 + 10, S / 2 - 30);
-      ctx.lineTo(S / 2 + 36, S / 2 - 58);
-      ctx.moveTo(S / 2 + 16, S / 2 - 22);
-      ctx.lineTo(S / 2 + 30, S / 2 - 38);
-      ctx.stroke();
-      ctx.save();
-      ctx.translate(S / 2 + 18, S / 2 + 34);
-      ctx.rotate(-0.6);
-      ctx.beginPath();
-      ctx.roundRect(-62, -15, 124, 30, 8);
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = INK;
-      ctx.stroke();
-      const bg = ctx.createLinearGradient(0, -15, 0, 15);
-      bg.addColorStop(0, '#fff6e2');
-      bg.addColorStop(1, '#d8c49c');
-      ctx.fillStyle = bg;
-      ctx.fill();
-      ctx.fillStyle = '#c9b086';
-      ctx.fillRect(-18, -13, 36, 26);
-      ctx.fillStyle = '#a88c60';
-      for (let i = -12; i <= 12; i += 8) for (let j = -7; j <= 7; j += 7) ctx.fillRect(i, j, 3, 3);
-      ctx.fillStyle = '#e0213a';
-      ctx.beginPath();
-      ctx.arc(4, 1, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      glossyDrip(ctx, S / 2 + halfW * 0.65, bottom - 8, 26, 6, r.drip);
-      break;
-    }
-    case 'toxic': {
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 4.5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(S / 2 - 56, S / 2 + 4);
-      ctx.quadraticCurveTo(S / 2 - 10, S / 2 + 22, S / 2 + 24, S / 2 + 10);
-      ctx.stroke();
-      for (let i = -48; i <= 18; i += 16) {
-        ctx.beginPath();
-        ctx.moveTo(S / 2 + i - 5, S / 2 - 6 + Math.abs(i + 15) * 0.1);
-        ctx.lineTo(S / 2 + i + 5, S / 2 + 22 - Math.abs(i + 15) * 0.1);
-        ctx.stroke();
-      }
-      for (const [bx, by, br] of [
-        [S / 2 + 30, S / 2 - 44, 8],
-        [S / 2 + 46, S / 2 - 22, 5],
-        [S / 2 - 40, S / 2 - 40, 4],
-      ]) {
-        ctx.beginPath();
-        ctx.arc(bx, by, br, 0, Math.PI * 2);
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
-        ctx.fill();
-      }
-      glossyDrip(ctx, S / 2 + halfW * 0.78, bottom - 4, 40, 8, r.drip);
-      glossyDrip(ctx, S / 2 - halfW * 0.35, bottom - 6, 24, 6, r.drip);
-      break;
-    }
-    case 'slime': {
-      rivet3d(ctx, S / 2 + 14, top + 34, 10);
-      glossyDrip(ctx, S / 2 - halfW * 0.6, bottom - 18, 30, 7, r.drip);
-      glossyDrip(ctx, S / 2 + 20, bottom - 2, 44, 8, r.drip);
-      glossyDrip(ctx, S / 2 + 22, top + 8, 18, 5, r.drip);
-      break;
-    }
-    case 'rust': {
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 4;
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      let x = S / 2 + 18;
-      let y = S / 2 - 52;
-      ctx.moveTo(x, y);
-      for (let i = 0; i < 5; i++) {
-        x += 10 + rnd() * 8;
-        y += 14 + rnd() * 6 * (i % 2 ? -1 : 1);
-        ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      rivet3d(ctx, S / 2 - halfW * 0.58, top + 36, 8);
-      for (let i = 0; i < 6; i++) {
-        ctx.fillStyle = 'rgba(122,48,6,0.55)';
-        ctx.beginPath();
-        ctx.arc(S / 2 + (rnd() - 0.2) * halfW * 1.4, S / 2 + (rnd() - 0.5) * size * 0.5, 3 + rnd() * 5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      glossyDrip(ctx, S / 2 + halfW * 0.25, bottom - 4, 30, 7, ['#ff8a96', '#e0213a', '#7a0418']);
-      break;
-    }
-  }
+  ctx.drawImage(downsample(paintRoyal(key), S), 0, 0);
   return c;
 }
 
@@ -394,8 +222,8 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
       glowCanvases.push(softGlow(downsample(painted.glow, TEX_SIZE), 14));
     } else {
       const r = ROYALS[def.key];
-      canvases.push(drawRoyal(def.key, def.id * 977 + 13));
-      glowCanvases.push(softGlow(glyph(r.text, r.text.length > 1 ? 176 : 214, r.glow), 10));
+      canvases.push(drawRoyal(def.key));
+      glowCanvases.push(softGlow(glyph(r.text, r.text.length > 1 ? 168 : 206, r.glow), 10));
     }
   }
   const veinsImg = await loadSvg(VEINS_SVG, 200, 600);

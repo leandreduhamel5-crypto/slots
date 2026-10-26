@@ -48,5 +48,5 @@ scripts/       simulateur Monte Carlo
 - La partie en cours est sauvegardée : si on recharge la page au milieu des tours gratuits, la partie reprend là où elle s'était arrêtée.
 - Tout le visuel est généré dans le navigateur (SVG, Canvas 2D, PixiJS) et tout le son est synthétisé avec la Web Audio API. Le projet ne contient aucun fichier image ou audio.
 - Des illustrations professionnelles peuvent remplacer les symboles, le décor ou le logo : déposez les fichiers dans `public/assets/` et déclarez-les dans `public/assets/manifest.json` (voir `public/assets/LISEZMOI.md`).
-- `npm run dev` puis http://localhost:5173/gallery.html affiche une planche de tous les visuels (symboles, effets, mascotte) pour la revue artistique, et http://localhost:5173/lab.html les symboles premium peints en grand (`?only=codex` pour n'en voir qu'un).
+- `npm run dev` puis http://localhost:5173/gallery.html affiche une planche de tous les visuels (symboles, effets, mascotte) pour la revue artistique, et http://localhost:5173/lab.html les symboles peints en grand (`?only=codex` pour un seul symbole, `?only=royals` pour les lettres, `?only=spectre` pour le personnage).
 - Un gain inférieur ou égal à la mise s'affiche sans célébration. Cela évite les « pertes déguisées en gains ».

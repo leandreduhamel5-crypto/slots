@@ -1,5 +1,6 @@
 import { coverCanvas } from './assets';
 import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
+import { GodrayFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { makeCanvas, seeded } from './art/painters';
 import { H, W, paintScene } from './art/scene';
@@ -72,6 +73,8 @@ export class Background extends Container {
   private portholes: Sprite[] = [];
   private blackout = new Graphics();
   private heart: Sprite | null = null;
+  /** volumetric light shafts slanting down through the corridor */
+  private rays = new GodrayFilter({ angle: 22, parallel: true, gain: 0.42, lacunarity: 2.6, alpha: 0.32 });
   private redWash: Sprite;
   private fog: TilingSprite;
   private spores: Spore[] = [];
@@ -148,6 +151,8 @@ export class Background extends Container {
     this.fog.alpha = 0.1;
 
     this.addChild(this.sceneC, this.redWash, this.fog, this.sporeLayer, this.pulse);
+    this.rays.resolution = 0.5;
+    this.sceneC.filters = [this.rays];
     for (let i = 0; i < 50; i++) this.spores.push(this.spawn(true));
   }
 
@@ -203,6 +208,8 @@ export class Background extends Container {
   update(dtMs: number): void {
     const dt = dtMs / 1000;
     this.t += dt;
+    this.rays.time += dt * 0.25;
+    this.rays.alpha = (0.32 + this.feature * 0.1) * (1 - this.dark);
     this.fog.tilePosition.x += dt * 12;
     this.fog.tilePosition.y += dt * 3;
     const beat = Math.pow(Math.max(0, Math.sin(this.t * (2.6 + this.feature * 1.6))), 12);

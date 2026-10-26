@@ -387,7 +387,7 @@ export class ReelBoard extends Container {
           .to(rig.parts.jaw, { y: 0, duration: 0.1, ease: 'power2.in' })
           .to(rig.parts.jaw, { y: 14, duration: 0.12, ease: 'power2.out' })
           .to(rig.parts.jaw, { y: 0, duration: 0.1, ease: 'power2.in' })
-          .to(rig.glow, { alpha: 0.9, duration: 0.15 }, 0)
+          .to(rig.glow, { alpha: 0.5, duration: 0.15 }, 0)
           .to(rig.glow, { alpha: 0, duration: 0.4 }, 0.5);
         break;
       case Sym.BLOOD:
@@ -400,9 +400,11 @@ export class ReelBoard extends Container {
       default:
         tl = gsap
           .timeline()
-          .to(rig.glow, { alpha: 0.9, duration: 0.25, yoyo: true, repeat: 1 })
+          .to(rig.glow, { alpha: 0.5, duration: 0.25, yoyo: true, repeat: 1 })
           .to(b, { rotation: 0.06, duration: 0.15, yoyo: true, repeat: 3, ease: 'sine.inOut' }, 0);
     }
+    // a light sweep glints across the symbol
+    tl.fromTo(rig.shine, { x: -320 }, { x: 320, duration: 0.7, ease: 'power1.inOut' }, 0);
     tl.eventCallback('onComplete', () => this.dropRig(rig));
     rig.tweens.push(tl);
   }
@@ -427,7 +429,7 @@ export class ReelBoard extends Container {
     tl.to(b.scale, { x: s * (1 + 0.28 * amp), y: s * (1 + 0.18 * amp), duration: 0.12, ease: 'power2.out' })
       .to(b.scale, { x: s * (1 + 0.12 * amp), y: s * (1 + 0.24 * amp), duration: 0.1 })
       .to(b.scale, { x: s * 1.12, y: s * 1.12, duration: 0.35, ease: 'elastic.out(1.2, 0.4)' })
-      .to(rig.glow, { alpha: 1, duration: 0.15 }, 0);
+      .to(rig.glow, { alpha: 0.45, duration: 0.15 }, 0);
     switch (this.motionOf(rig)) {
       case Sym.CODEX:
         tl.to(rig.parts.iris, { x: -12, duration: 0.18 }, 0.2)
@@ -487,7 +489,7 @@ export class ReelBoard extends Container {
       .timeline({ onComplete: () => this.dropRig(rig) })
       .fromTo(rig.body.scale, { x: s * 1.45, y: s * 0.7 }, { x: s * 0.9, y: s * 1.25, duration: 0.1 })
       .to(rig.body.scale, { x: s, y: s, duration: 0.5, ease: 'elastic.out(1.2, 0.35)' })
-      .fromTo(rig.glow, { alpha: 1 }, { alpha: 0, duration: 0.7 }, 0);
+      .fromTo(rig.glow, { alpha: 0.6 }, { alpha: 0, duration: 0.7 }, 0);
     if (rig.parts.lid) tl.add(this.blink(rig), 0.35);
     rig.tweens.push(tl);
   }
@@ -649,7 +651,7 @@ export class ReelBoard extends Container {
       ...lineWins.map((w) => ({ cells: w.cells, line: w.line, win: w.win })),
       ...(scatter ? [{ cells: scatter.cells, win: scatter.win }] : []),
     ];
-    if (items.length < 2 && !celebrate) return;
+    if (items.length < 2) return;
     const tl = gsap.timeline({ repeat: -1 });
     items.forEach((it, i) => {
       tl.add(() => {
@@ -718,7 +720,7 @@ export class ReelBoard extends Container {
             gsap
               .timeline()
               .to(rig.body.scale, { x: s * 1.3, y: s * 1.3, duration: 0.2, ease: 'back.out(3)' })
-              .to(rig.glow, { alpha: 1, duration: 0.2 }, 0),
+              .to(rig.glow, { alpha: 0.55, duration: 0.2 }, 0),
           );
         }
       }

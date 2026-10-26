@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
-import { ShockwaveFilter } from 'pixi-filters';
+import { AdvancedBloomFilter, ShockwaveFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { BASE_STRIPS, BET_LEVELS, FREE_STRIPS, REELS, ROWS, Sym, minCount } from '../math/config';
 import type { FreeSpinOutcome, Grid, Round, SpinOutcome } from '../math/engine';
@@ -149,6 +149,9 @@ export class Game {
       glitch: (p) => this.logo.glitch(p),
       thump: (p) => this.bg.thump(p),
     });
+    // bloom: emissive bits (eyes, veins, orb, neon, glows) radiate
+    this.bloom.resolution = app.renderer.resolution;
+    this.scene.filters = [this.bloom];
     app.stage.addChild(this.scene, this.overlays);
 
     this.hud = new Hud({
@@ -332,17 +335,19 @@ export class Game {
     this.shakePower = Math.max(this.shakePower, power);
   }
 
+  private bloom = new AdvancedBloomFilter({ threshold: 0.7, bloomScale: 0.6, brightness: 1, blur: 6, quality: 5 });
+
   private shockwave(): void {
     this.shock.center = { x: this.viewW / 2, y: this.viewH / 2 };
     this.shock.time = 0;
-    this.scene.filters = [this.shock];
+    this.scene.filters = [this.bloom, this.shock];
     gsap.killTweensOf(this.shock);
     gsap.to(this.shock, {
       time: 1.4,
       duration: 1.4,
       ease: 'none',
       onComplete: () => {
-        this.scene.filters = [];
+        this.scene.filters = [this.bloom];
       },
     });
   }
