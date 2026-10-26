@@ -27,19 +27,33 @@ export interface Piece {
   detail?: (ctx: CanvasRenderingContext2D) => void;
 }
 
-export function layer(): [HTMLCanvasElement, CanvasRenderingContext2D] {
-  return makeCanvas(P, P);
+export function layer(w = P, h = P): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  return makeCanvas(w, h);
 }
 
-/** Paints a shaded piece onto ctx. */
+/** A scratch layer the size of ctx's canvas, drawing with ctx's current transform (so it stays sharp). */
+function scratch(ctx: CanvasRenderingContext2D): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const [c, x] = makeCanvas(ctx.canvas.width, ctx.canvas.height);
+  x.setTransform(ctx.getTransform());
+  return [c, x];
+}
+
+function blit(ctx: CanvasRenderingContext2D, c: HTMLCanvasElement): void {
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(c, 0, 0);
+  ctx.restore();
+}
+
+/** Paints a shaded piece onto ctx (in ctx's current coordinate space). */
 export function piece(ctx: CanvasRenderingContext2D, path: Path2D, o: Piece): void {
-  const [t, tc] = layer();
+  const [t, tc] = scratch(ctx);
   tc.fillStyle = o.fill;
   tc.fill(path);
   tc.save();
   tc.clip(path);
   if (o.shadow) {
-    const [s, sc] = layer();
+    const [s, sc] = scratch(ctx);
     sc.fillStyle = o.shadow;
     sc.fill(path);
     sc.globalCompositeOperation = 'destination-out';
@@ -47,10 +61,10 @@ export function piece(ctx: CanvasRenderingContext2D, path: Path2D, o: Piece): vo
     if (o.shadowSoft) sc.filter = `blur(${o.shadowSoft}px)`;
     sc.translate(dx, dy);
     sc.fill(path);
-    tc.drawImage(s, 0, 0);
+    blit(tc, s);
   }
   if (o.light) {
-    const [s, sc] = layer();
+    const [s, sc] = scratch(ctx);
     sc.fillStyle = o.light;
     sc.fill(path);
     sc.globalCompositeOperation = 'destination-out';
@@ -58,7 +72,7 @@ export function piece(ctx: CanvasRenderingContext2D, path: Path2D, o: Piece): vo
     sc.filter = 'blur(1.5px)';
     sc.translate(dx, dy);
     sc.fill(path);
-    tc.drawImage(s, 0, 0);
+    blit(tc, s);
   }
   if (o.ao) {
     tc.save();
@@ -78,7 +92,7 @@ export function piece(ctx: CanvasRenderingContext2D, path: Path2D, o: Piece): vo
     tc.lineCap = 'round';
     tc.stroke(path);
   }
-  ctx.drawImage(t, 0, 0);
+  blit(ctx, t);
 }
 
 /** Plain ink line (for creases, seams, details). */
@@ -131,7 +145,12 @@ export function rad(ctx: CanvasRenderingContext2D, x: number, y: number, r0: num
 }
 
 /** Speckle / scratch texture for worn materials, drawn inside the current clip. */
-export function grunge(ctx: CanvasRenderingContext2D, seed: number, o: { color: string; count: number; size: [number, number]; alpha: number; scratches?: number }): void {
+export function grunge(
+  ctx: CanvasRenderingContext2D,
+  seed: number,
+  o: { color: string; count: number; size: [number, number]; alpha: number; scratches?: number; area?: [number, number, number, number] },
+): void {
+  const [ax, ay, aw, ah] = o.area ?? [0, 0, P, P];
   const rnd = seeded(seed);
   ctx.save();
   ctx.fillStyle = o.color;
@@ -140,15 +159,15 @@ export function grunge(ctx: CanvasRenderingContext2D, seed: number, o: { color: 
     ctx.globalAlpha = o.alpha * (0.4 + rnd() * 0.6);
     const r = o.size[0] + rnd() * (o.size[1] - o.size[0]);
     ctx.beginPath();
-    ctx.ellipse(rnd() * P, rnd() * P, r, r * (0.5 + rnd() * 0.5), rnd() * 3, 0, Math.PI * 2);
+    ctx.ellipse(ax + rnd() * aw, ay + rnd() * ah, r, r * (0.5 + rnd() * 0.5), rnd() * 3, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.lineCap = 'round';
   for (let i = 0; i < (o.scratches ?? 0); i++) {
     ctx.globalAlpha = o.alpha * (0.5 + rnd() * 0.5);
     ctx.lineWidth = 1.5 + rnd() * 2;
-    const x = rnd() * P;
-    const y = rnd() * P;
+    const x = ax + rnd() * aw;
+    const y = ay + rnd() * ah;
     const a = rnd() * Math.PI;
     const l = 14 + rnd() * 40;
     ctx.beginPath();

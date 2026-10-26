@@ -1,24 +1,15 @@
 import { Container, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
-import * as Art from './art/mascot';
-import { makeCanvas } from './art/painters';
-import { loadSvg } from './textures';
+import { MH, MRES, MW, paintMascot, type MascotParts } from './art/mascotPaint';
 
-const RES = 1.5;
-const W = 400;
-const H = 600;
+const RES = MRES;
+const W = MW;
+const H = MH;
 const NECK = { x: 200, y: 262 };
 const SHOULDER = { x: 292, y: 300 };
 const FEET = { x: 200, y: 584 };
 const INHUMAN_SCALE = 1.16;
-
-async function part(svg: string): Promise<Texture> {
-  const img = await loadSvg(svg, W * RES, H * RES);
-  const [c, ctx] = makeCanvas(W * RES, H * RES);
-  ctx.drawImage(img, 0, 0, W * RES, H * RES);
-  return Texture.from(c);
-}
 
 interface FormTextures {
   body: Texture;
@@ -36,17 +27,14 @@ export interface MascotTextures {
 
 export type Form = keyof MascotTextures;
 
-async function form(svgs: string[]): Promise<FormTextures> {
-  const [body, arm, head, jaw, eyes, lids] = await Promise.all(svgs.map(part));
-  return { body, arm, head, jaw, eyes, lids };
+function form(parts: MascotParts): FormTextures {
+  const t = (c: HTMLCanvasElement) => Texture.from(c);
+  return { body: t(parts.body), arm: t(parts.arm), head: t(parts.head), jaw: t(parts.jaw), eyes: t(parts.eyes), lids: t(parts.lids) };
 }
 
 export async function buildMascotTextures(): Promise<MascotTextures> {
-  const [human, inhuman] = await Promise.all([
-    form([Art.HUMAN_BODY, Art.HUMAN_ARM, Art.HUMAN_HEAD, Art.HUMAN_JAW, Art.HUMAN_EYES, Art.HUMAN_LIDS]),
-    form([Art.INHUMAN_BODY, Art.INHUMAN_ARM, Art.INHUMAN_HEAD, Art.INHUMAN_JAW, Art.INHUMAN_EYES, Art.INHUMAN_LIDS]),
-  ]);
-  return { human, inhuman };
+  const painted = paintMascot();
+  return { human: form(painted.human), inhuman: form(painted.inhuman) };
 }
 
 export type Reaction = 'spin' | 'win' | 'big' | 'feature';
