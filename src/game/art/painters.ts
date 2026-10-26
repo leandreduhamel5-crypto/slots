@@ -585,34 +585,6 @@ export function paintWinFrame(w: number, h: number): HTMLCanvasElement {
   return c;
 }
 
-/** One vertical hanging chain strip. */
-export function paintChain(len: number): HTMLCanvasElement {
-  const lw = 26;
-  const lh = 38;
-  const [c, ctx] = makeCanvas(lw + 12, len);
-  for (let y = 0, i = 0; y < len; y += lh - 10, i++) {
-    ctx.save();
-    ctx.translate(lw / 2 + 6, y + lh / 2);
-    if (i % 2) {
-      rrect(ctx, -3, -lh / 2, 6, lh, 3);
-      ctx.fillStyle = '#4b5a66';
-      ctx.fill();
-      ink(ctx, 3);
-    } else {
-      ctx.beginPath();
-      ctx.ellipse(0, 0, lw / 2 - 3, lh / 2 - 2, 0, 0, Math.PI * 2);
-      ink(ctx, 10);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, lw / 2 - 3, lh / 2 - 2, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = '#5d6e7a';
-      ctx.lineWidth = 5;
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-  return c;
-}
-
 /** Colour-preserving blur by stacking offset copies (works without ctx.filter support). */
 export function softGlow(src: HTMLCanvasElement, radius = 12): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(src.width, src.height);

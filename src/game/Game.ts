@@ -112,7 +112,7 @@ export class Game {
     mascotTex: MascotTextures,
     assets: LoadedAssets,
   ) {
-    this.bg = new Background(tex.spore, tex.chain, tex.glow, assets.background);
+    this.bg = new Background(tex.spore, tex.glow, assets.background);
     this.bg.onLightning = () => this.audio.thunder();
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);

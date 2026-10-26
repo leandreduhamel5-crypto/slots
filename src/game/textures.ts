@@ -1,6 +1,6 @@
 import { Texture } from 'pixi.js';
 import { SYMBOLS, Sym } from '../math/config';
-import { SYMBOL_ART, VEINS_SVG } from './art/symbols';
+import { VEINS_SVG } from './art/symbols';
 import {
   INK,
   MATERIALS,
@@ -9,7 +9,6 @@ import {
   render3DText,
   paintShine,
   paintSunburst,
-  paintChain,
   paintDepthShade,
   paintDrop,
   paintFrame,
@@ -22,6 +21,8 @@ import {
 } from './art/painters';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP, reelX } from './layout';
 import { containCanvas } from './assets';
+import { PAINTED } from './art/premium';
+import { downsample } from './art/paint';
 
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
@@ -47,7 +48,6 @@ export interface SymbolTextures {
   reelPanels: Texture[];
   shade: Texture;
   winFrame: Texture;
-  chain: Texture;
   veins: Texture;
   glow: Texture;
   spore: Texture;
@@ -76,13 +76,6 @@ export function loadSvg(svg: string, w: number, h: number): Promise<HTMLImageEle
     img.onerror = reject;
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   });
-}
-
-async function svgCanvas(svg: string, size = TEX_SIZE): Promise<HTMLCanvasElement> {
-  const img = await loadSvg(svg, size, size);
-  const [c, ctx] = makeCanvas(size, size);
-  ctx.drawImage(img, 0, 0, size, size);
-  return c;
 }
 
 /** Glyph mask of a royal letter, used for its glow map. */
@@ -377,27 +370,28 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
   const glowCanvases: HTMLCanvasElement[] = [];
   const rigs = new Map<Sym, SymbolRig>();
   for (const def of SYMBOLS) {
-    const art = SYMBOL_ART[def.key];
     const custom = overrides.get(def.key);
     if (custom) {
       // professional artwork from public/assets: used as-is, no procedural rig
       const c = containCanvas(custom, TEX_SIZE);
       canvases.push(c);
       glowCanvases.push(softGlow(c, 12));
-    } else if (art) {
-      const base = await svgCanvas(art.base);
+    } else if (PAINTED[def.key]) {
+      // hand-painted premium (512 px, downsampled)
+      const painted = PAINTED[def.key]();
+      const aura = PREMIUM_AURA[def.key] ?? '#ff3347';
+      const base = downsample(painted.base, TEX_SIZE);
       const parts: Record<string, Texture> = {};
       const [full, f] = makeCanvas(TEX_SIZE, TEX_SIZE);
       f.drawImage(base, 0, 0);
-      for (const [name, svg] of Object.entries(art.parts)) {
-        const pc = await svgCanvas(svg);
-        parts[name] = Texture.from(pc);
-        if (name !== 'lid') f.drawImage(pc, 0, 0);
+      for (const [name, pc] of Object.entries(painted.parts)) {
+        const small = downsample(pc, TEX_SIZE);
+        parts[name] = Texture.from(small);
+        if (name !== 'lid') f.drawImage(small, 0, 0);
       }
-      const aura = PREMIUM_AURA[def.key] ?? '#ff3347';
       rigs.set(def.id, { base: Texture.from(finishPremium(base, aura)), parts });
       canvases.push(finishPremium(full, aura));
-      glowCanvases.push(softGlow(await svgCanvas(art.glow), 14));
+      glowCanvases.push(softGlow(downsample(painted.glow, TEX_SIZE), 14));
     } else {
       const r = ROYALS[def.key];
       canvases.push(drawRoyal(def.key, def.id * 977 + 13));
@@ -426,7 +420,6 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintReelPanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
     winFrame: Texture.from(paintWinFrame(CELL_W, CELL_H)),
-    chain: Texture.from(paintChain(900)),
     veins: Texture.from(vc),
     glow: Texture.from(radial(256, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
     spore: Texture.from(radial(64, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),
