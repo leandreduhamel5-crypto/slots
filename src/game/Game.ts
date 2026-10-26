@@ -125,7 +125,7 @@ export class Game {
     this.banner = new FeatureBanner(tex);
     this.banner.position.set(BOARD_W / 2, 6);
     this.teaser = this.buildTeaser(tex);
-    this.mascot = new Mascot(mascotTex);
+    this.mascot = new Mascot(mascotTex, assets.mascot);
     this.mascot.scale.set(-1.12, 1.12);
     this.mascot.position.set(BOARD_W + MASCOT_X, BOARD_Y + BOARD_H + 46);
     this.mascotFx = new Particles(tex);

@@ -110,7 +110,10 @@ export class Mascot extends Container {
   /** called at the climax of a transformation (particles, sound…) */
   onTransform: ((to: Form) => void) | null = null;
 
-  constructor(private tex: MascotTextures) {
+  constructor(
+    private tex: MascotTextures,
+    custom: HTMLImageElement | null = null,
+  ) {
     super();
     const k = 1 / SRES;
     const sprite = (t: Texture) => {
@@ -174,6 +177,15 @@ export class Mascot extends Container {
     this.grow.addChild(this.float);
     this.addChild(this.grow);
     this.applyTint();
+    if (custom) {
+      // professional artwork: a still image that keeps the hover, aura, smoke and reactions
+      for (const c of [this.cloak, this.horns, this.faceC, this.handL, this.handR]) c.visible = false;
+      const art = new Sprite(Texture.from(custom));
+      art.anchor.set(0.5, 1);
+      art.position.set(FEET.x, FEET.y);
+      art.scale.set(560 / custom.naturalHeight);
+      this.rig.addChildAt(art, this.rig.getChildIndex(this.cloak));
+    }
 
     gsap.ticker.add(this.tick);
     this.scheduleBlink();

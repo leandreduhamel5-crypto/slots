@@ -7,9 +7,11 @@ export interface AssetManifest {
   symbols: Record<string, string>;
   background: string | null;
   logo: string | null;
+  /** mascot still image (feet at the bottom centre); it keeps the float, smoke and reactions */
+  mascot?: string | null;
 }
 
-const EMPTY: AssetManifest = { symbols: {}, background: null, logo: null };
+const EMPTY: AssetManifest = { symbols: {}, background: null, logo: null, mascot: null };
 
 function loadImage(url: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
@@ -24,6 +26,7 @@ export interface LoadedAssets {
   symbols: Map<string, HTMLImageElement>;
   background: HTMLImageElement | null;
   logo: HTMLImageElement | null;
+  mascot: HTMLImageElement | null;
 }
 
 export async function loadAssets(): Promise<LoadedAssets> {
@@ -41,11 +44,12 @@ export async function loadAssets(): Promise<LoadedAssets> {
       if (img) symbols.set(key, img);
     }),
   );
-  const [background, logo] = await Promise.all([
+  const [background, logo, mascot] = await Promise.all([
     manifest.background ? loadImage(`assets/${manifest.background}`) : null,
     manifest.logo ? loadImage(`assets/${manifest.logo}`) : null,
+    manifest.mascot ? loadImage(`assets/${manifest.mascot}`) : null,
   ]);
-  return { symbols, background, logo };
+  return { symbols, background, logo, mascot };
 }
 
 /** Draws an image centred and contained in a square canvas. */
