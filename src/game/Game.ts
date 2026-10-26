@@ -272,7 +272,7 @@ export class Game {
     const portrait = w < h;
     const bottom = portrait ? WORLD_BOTTOM + 270 : WORLD_BOTTOM;
     const worldH = bottom - WORLD_TOP;
-    const worldW = portrait ? BOARD_W + 70 : WORLD_W;
+    const worldW = portrait ? BOARD_W + 150 : WORLD_W;
     const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
     this.teaser.visible = portrait && !this.inFeature;
     this.logo.scale.set(portrait ? 1.12 : 1);

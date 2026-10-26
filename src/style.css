@@ -152,9 +152,13 @@ button {
   align-items: center;
   gap: 16px;
   padding: 14px 24px calc(14px + var(--safe-b));
-  background: var(--plum);
+  /* riveted dark-metal console */
+  background:
+    radial-gradient(circle at 18px 14px, #8a7a94 0 3px, var(--ink) 3.5px 5px, transparent 5.5px) 0 0 / 120px 100% repeat-x,
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 7px),
+    linear-gradient(180deg, #3d2b48 0%, #2a1a33 40%, #1a0f20 100%);
   border-top: 5px solid var(--ink);
-  box-shadow: inset 0 6px 0 var(--plum-hi);
+  box-shadow: inset 0 5px 0 rgba(255, 255, 255, 0.12), inset 0 -18px 30px rgba(0, 0, 0, 0.45);
 }
 #hud::before {
   content: '';
@@ -190,10 +194,32 @@ button {
   align-items: center;
   min-width: 140px;
   padding: 4px 16px 6px;
-  border-radius: 16px;
-  background: var(--night);
+  border-radius: 14px;
+  /* medical monitor glass with scanlines */
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 4px),
+    radial-gradient(ellipse at 50% 0%, rgba(120, 255, 200, 0.12), transparent 70%),
+    linear-gradient(180deg, #0c1418, #081014);
   border: 4px solid var(--ink);
-  box-shadow: 0 5px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 5px 0 var(--ink),
+    0 0 0 3px #4a3a56,
+    0 0 0 7px var(--ink),
+    inset 0 0 18px rgba(0, 0, 0, 0.8),
+    inset 0 2px 0 rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+.meter::after {
+  /* glass glare */
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 40%;
+  top: 4px;
+  height: 30%;
+  border-radius: 10px 10px 40px 4px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent);
+  pointer-events: none;
 }
 .meter label {
   font-family: var(--ui);
@@ -201,7 +227,9 @@ button {
   font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: #7fe0b8;
+  opacity: 0.8;
+  text-shadow: 0 0 6px rgba(120, 255, 200, 0.5);
 }
 .meter span {
   font-family: var(--display);
@@ -211,13 +239,22 @@ button {
   -webkit-text-stroke: 2px var(--ink);
   paint-order: stroke fill;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(255, 240, 210, 0.35);
 }
 .meter-win.lit {
-  background: #3a1d10;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 4px),
+    radial-gradient(ellipse at 50% 30%, rgba(255, 190, 40, 0.35), transparent 75%),
+    linear-gradient(180deg, #2a1608, #160a04);
   animation: wiggle 0.4s ease;
 }
 .meter-win.lit span {
   color: var(--yellow);
+  text-shadow: 0 0 14px rgba(255, 200, 60, 0.8);
+}
+.meter-win.lit label {
+  color: var(--yellow);
+  text-shadow: 0 0 6px rgba(255, 200, 60, 0.6);
 }
 #hud.feature .meter-win label {
   color: var(--red);
@@ -243,10 +280,11 @@ button {
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: var(--plum-2);
+  /* steel knob */
+  background: radial-gradient(circle at 38% 30%, #8a7f96 0%, #4e4258 45%, #2a2032 100%);
   border: 4px solid var(--ink);
-  box-shadow: 0 5px 0 var(--ink), inset 0 4px 0 var(--plum-hi);
-  transition: transform 0.08s, box-shadow 0.08s, background 0.2s, opacity 0.2s;
+  box-shadow: 0 5px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.28), inset 0 -4px 0 rgba(0, 0, 0, 0.35);
+  transition: transform 0.08s, box-shadow 0.08s, background 0.2s, opacity 0.2s, filter 0.2s;
 }
 .step {
   font-family: var(--display);
@@ -259,12 +297,12 @@ button {
 }
 .step:hover:not(:disabled),
 .icon:hover {
-  background: var(--plum-hi);
+  filter: brightness(1.25);
 }
 .step:active:not(:disabled),
 .icon:active {
   transform: translateY(4px);
-  box-shadow: 0 1px 0 var(--ink), inset 0 4px 0 var(--plum-hi);
+  box-shadow: 0 1px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.28);
 }
 .step:disabled {
   opacity: 0.35;
@@ -280,7 +318,8 @@ button {
   stroke-linejoin: round;
 }
 .icon.active {
-  background: var(--red);
+  background: radial-gradient(circle at 38% 30%, #ff8a96 0%, var(--red) 45%, var(--red-dark) 100%);
+  box-shadow: 0 5px 0 var(--ink), 0 0 16px rgba(255, 51, 71, 0.6), inset 0 3px 0 rgba(255, 255, 255, 0.35);
 }
 .icon.active svg {
   stroke: #fff;
@@ -296,17 +335,34 @@ button {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 50% 38%, #ff5a6a 0 30%, var(--red) 31% 62%, var(--red-dark) 63%);
+  margin: 0 20px;
+  /* glossy red dome in a steel bezel */
+  background:
+    radial-gradient(ellipse 46% 26% at 50% 24%, rgba(255, 255, 255, 0.55), transparent 70%),
+    radial-gradient(circle at 50% 42%, #ff7080 0%, var(--red) 42%, #b0102a 72%, #6a0418 100%);
   border: 6px solid var(--ink);
-  box-shadow: 0 9px 0 var(--ink), inset 0 8px 0 rgba(255, 255, 255, 0.28), inset 0 -10px 0 rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 0 0 6px #8e8698,
+    0 0 0 9px #4a4054,
+    0 0 0 13px var(--ink),
+    0 13px 0 6px var(--ink),
+    0 0 40px 10px rgba(255, 51, 71, 0.35),
+    inset 0 -12px 18px rgba(80, 0, 20, 0.5);
   transition: transform 0.08s, box-shadow 0.08s, filter 0.2s;
+  animation: invite 2.2s ease-in-out infinite;
+}
+@keyframes invite {
+  50% { box-shadow: 0 0 0 6px #8e8698, 0 0 0 9px #4a4054, 0 0 0 13px var(--ink), 0 13px 0 6px var(--ink), 0 0 60px 18px rgba(255, 51, 71, 0.55), inset 0 -12px 18px rgba(80, 0, 20, 0.5); }
+}
+#hud.spinning .spin,
+#hud.locked .spin {
+  animation: none;
 }
 .spin:hover {
   filter: brightness(1.1);
 }
 .spin:active {
   transform: translateY(6px);
-  box-shadow: 0 3px 0 var(--ink), inset 0 8px 0 rgba(255, 255, 255, 0.28), inset 0 -10px 0 rgba(0, 0, 0, 0.25);
 }
 .spin svg {
   width: 58px;
@@ -319,13 +375,17 @@ button {
   filter: drop-shadow(0 3px 0 var(--ink));
 }
 .spin-ring {
+  /* rotating hazard-stripe crown */
   position: absolute;
-  inset: -16px;
+  inset: -27px;
   border-radius: 50%;
-  border: 4px dashed var(--yellow);
+  background: repeating-conic-gradient(var(--yellow) 0 9deg, var(--ink) 9deg 18deg);
+  /* a thin hazard band on the rim of the dome, inside the steel bezel */
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 62%, #000 63% 70%, transparent 71%);
+  mask: radial-gradient(circle closest-side, transparent 0 62%, #000 63% 70%, transparent 71%);
   animation: rotate 16s linear infinite;
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 #hud.spinning .spin svg {
   animation: rotate 0.5s linear infinite;
@@ -441,32 +501,42 @@ button {
     width: 100%;
     justify-content: center;
   }
+  .hud-meters {
+    gap: 18px;
+    padding: 0 8px;
+  }
   .meter {
     min-width: 0;
     flex: 1;
-    max-width: 210px;
+    max-width: 200px;
   }
   .hud-controls {
-    gap: 8px;
+    gap: 6px;
   }
   .hud-side {
     flex-direction: column;
     gap: 10px;
   }
   .bet .meter {
-    min-width: 84px;
+    min-width: 76px;
+    padding: 4px 8px 6px;
   }
   .bet {
     gap: 5px;
   }
   .step,
   .icon {
-    width: 42px;
-    height: 42px;
+    width: 40px;
+    height: 40px;
   }
   .spin {
-    width: 96px;
-    height: 96px;
+    width: 88px;
+    height: 88px;
+    margin: 0 6px;
+  }
+  .spin svg {
+    width: 46px;
+    height: 46px;
   }
   .meter span {
     font-size: 23px;
@@ -723,7 +793,10 @@ button {
   place-items: center;
   padding: 20px;
   overflow-y: auto;
-  background: repeating-conic-gradient(from 0deg at 50% 30%, #2a1030 0 9deg, #1c0b22 9deg 18deg);
+  /* translucent rays over the blurred corridor */
+  background: repeating-conic-gradient(from 0deg at 50% 30%, rgba(60, 16, 60, 0.55) 0 9deg, rgba(28, 11, 34, 0.55) 9deg 18deg);
+  -webkit-backdrop-filter: blur(7px) saturate(1.2);
+  backdrop-filter: blur(7px) saturate(1.2);
   opacity: 0;
   transition: opacity 0.5s ease;
 }
@@ -936,5 +1009,36 @@ button {
   .intro-play {
     padding: 14px 52px 10px;
     font-size: 28px;
+  }
+}
+
+/* very narrow phones */
+@media (max-width: 380px) {
+  .hud-controls {
+    gap: 4px;
+  }
+  .step,
+  .icon {
+    width: 36px;
+    height: 36px;
+  }
+  .icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .step {
+    font-size: 24px;
+  }
+  .bet .meter {
+    min-width: 66px;
+    padding: 4px 6px 6px;
+  }
+  .spin {
+    width: 80px;
+    height: 80px;
+    margin: 0 4px;
+  }
+  .meter span {
+    font-size: 20px;
   }
 }
