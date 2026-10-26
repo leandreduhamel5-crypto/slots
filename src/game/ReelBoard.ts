@@ -452,13 +452,13 @@ export class ReelBoard extends Container {
         tl.to(b, { rotation: 0.16 * amp, duration: 0.12 }, 0.2)
           .to(b, { rotation: -0.12 * amp, duration: 0.16 })
           .to(b, { rotation: 0, duration: 0.2, ease: 'back.out(3)' });
-        once(() => this.fx.burst(pos.x + CELL_W * 0.3, pos.y + CELL_H * 0.32, strong ? 7 : 3, 0.45, true));
+        once(() => this.fx.burst(pos.x + CELL_W * 0.3, pos.y + CELL_H * 0.32, strong ? 4 : 2, 0.3, true));
         break;
       case Sym.BLOOD:
         tl.to(b.scale, { x: s * 1.24, y: s * 1.0, duration: 0.14 }, 0.45)
           .to(b.scale, { x: s * 1.04, y: s * 1.2, duration: 0.14 })
           .to(b.scale, { x: s * 1.12, y: s * 1.12, duration: 0.5, ease: 'elastic.out(1.2, 0.3)' });
-        once(() => this.fx.burst(pos.x, pos.y + CELL_H * 0.4, strong ? 6 : 3, 0.4));
+        once(() => this.fx.burst(pos.x, pos.y + CELL_H * 0.4, strong ? 4 : 2, 0.3));
         break;
       default:
         tl.to(b, { rotation: -0.07, duration: 0.1 }, 0.2)

@@ -209,10 +209,11 @@ export class Game {
     });
   }
 
-  /** Dev console helper: game.debug('feature' | 'big' | 'retrigger' | 'expand'). */
-  debug(kind: 'feature' | 'big' | 'retrigger' | 'expand'): void {
+  /** Dev console helper: game.debug('win' | 'feature' | 'big' | 'retrigger' | 'expand'). */
+  debug(kind: 'win' | 'feature' | 'big' | 'retrigger' | 'expand'): void {
     if (!import.meta.env.DEV) return;
     const preds: Record<string, (r: Round) => boolean> = {
+      win: (r) => !r.feature && r.totalWin >= r.bet * 3 && r.totalWin < r.bet * 15,
       feature: (r) => !!r.feature,
       big: (r) => !r.feature && r.totalWin >= r.bet * 40,
       retrigger: (r) => !!r.feature?.spins.some((s) => s.retrigger?.mutation != null),
