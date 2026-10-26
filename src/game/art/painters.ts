@@ -45,6 +45,213 @@ function rivet(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): 
   ctx.fill();
 }
 
+export interface Material {
+  /** face gradient, top → bottom */
+  face: string[];
+  /** extrusion colour (the letter's side) */
+  depth: string;
+  /** bright rim on the top-left edges */
+  bevel: string;
+  /** dark rim on the bottom-right edges */
+  rim: string;
+}
+
+export const MATERIALS: Record<string, Material> = {
+  blood: { face: ['#ffb3b8', '#ff4458', '#d4102c', '#7a0418'], depth: '#4a0412', bevel: '#ffe0e3', rim: '#5a0010' },
+  steel: { face: ['#ffffff', '#bff4ff', '#3ec9ee', '#0f5f86'], depth: '#0b2f48', bevel: '#ffffff', rim: '#0a3a58' },
+  toxic: { face: ['#fbeaff', '#d39bff', '#9a46f0', '#4a1488'], depth: '#24063f', bevel: '#ffffff', rim: '#2e0a56' },
+  slime: { face: ['#f2ffe2', '#a8f27a', '#4cc236', '#1d6a18'], depth: '#0c3a0c', bevel: '#ffffff', rim: '#134a12' },
+  rust: { face: ['#fff1c8', '#ffc25a', '#f07818', '#8a3606'], depth: '#3f1602', bevel: '#fff6dc', rim: '#5a2204' },
+  bone: { face: ['#ffffff', '#fbf0d8', '#e6c896', '#9c7448'], depth: '#3a1a2a', bevel: '#ffffff', rim: '#6a4a2e' },
+};
+
+/** Canvas holding `text` filled with `fill` at (cx+dx, cy+dy). */
+function glyphLayer(w: number, h: number, text: string, font: string, fill: string | CanvasGradient, cx: number, cy: number, dx = 0, dy = 0): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(w, h);
+  ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = fill;
+  ctx.fillText(text, cx + dx, cy + dy);
+  return c;
+}
+
+/** Inner rim: the text in `color`, minus a copy shifted by (dx, dy). */
+function rimLayer(w: number, h: number, text: string, font: string, color: string, cx: number, cy: number, dx: number, dy: number): HTMLCanvasElement {
+  const c = glyphLayer(w, h, text, font, color, cx, cy);
+  const ctx = c.getContext('2d')!;
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.drawImage(glyphLayer(w, h, text, font, '#000', cx, cy, dx, dy), 0, 0);
+  return c;
+}
+
+/** Grows a silhouette by stamping it around a circle (dilation), tinted `color`. */
+function dilate(src: HTMLCanvasElement, radius: number, color: string): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(src.width, src.height);
+  const steps = Math.max(16, Math.round(radius * 3));
+  for (let r = radius; r > 0; r -= Math.max(1, radius / 3)) {
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      ctx.drawImage(src, Math.cos(a) * r, Math.sin(a) * r);
+    }
+  }
+  ctx.drawImage(src, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+export interface Text3DOptions {
+  size: number;
+  material: Material;
+  /** extrusion length in px (down-right) */
+  depth?: number;
+  ink?: number;
+  font?: string;
+  /** extra canvas margin */
+  pad?: number;
+  /** liquid coating poured over the top of the face (letters "dipped" in blood / slime) */
+  coat?: { colors: [string, string, string]; height: number; seed: number };
+}
+
+/**
+ * Big-slot style 3D lettering: inked silhouette, stepped extrusion, gradient face,
+ * bright top-left bevel, dark bottom-right rim and a glossy highlight band.
+ */
+export function render3DText(text: string, o: Text3DOptions): HTMLCanvasElement {
+  const family = o.font ?? '"Luckiest Guy", sans-serif';
+  const font = `${o.size}px ${family}`;
+  const depth = o.depth ?? Math.round(o.size * 0.07);
+  const inkW = o.ink ?? Math.max(5, Math.round(o.size * 0.065));
+  const [, mctx] = makeCanvas(10, 10);
+  mctx.font = font;
+  const tw = mctx.measureText(text).width;
+  const pad = o.pad ?? inkW + depth + 12;
+  const w = Math.ceil(tw + pad * 2 + depth);
+  const h = Math.ceil(o.size * 1.25 + pad * 2 + depth);
+  const cx = w / 2 - depth / 2;
+  const cy = h / 2 - depth / 2 + o.size * 0.06;
+
+  // full silhouette = face + extrusion
+  const [sil, sctx] = makeCanvas(w, h);
+  for (let i = 0; i <= depth; i++) sctx.drawImage(glyphLayer(w, h, text, font, '#000', cx, cy, i * 0.55, i), 0, 0);
+
+  const [c, ctx] = makeCanvas(w, h);
+  ctx.drawImage(dilate(sil, inkW, INK), 0, inkW * 0.5);
+  ctx.drawImage(dilate(sil, inkW, INK), 0, 0);
+  // extrusion: stepped, darker towards the back
+  for (let i = depth; i >= 1; i--) {
+    ctx.drawImage(glyphLayer(w, h, text, font, o.material.depth, cx, cy, i * 0.55, i), 0, 0);
+  }
+  ctx.globalAlpha = 0.35;
+  ctx.drawImage(glyphLayer(w, h, text, font, '#000', cx, cy, depth * 0.55, depth), 0, 0);
+  ctx.globalAlpha = 1;
+
+  // face
+  const g = ctx.createLinearGradient(0, cy - o.size * 0.45, 0, cy + o.size * 0.45);
+  o.material.face.forEach((col, i) => g.addColorStop(i / (o.material.face.length - 1), col));
+  const face = glyphLayer(w, h, text, font, g, cx, cy);
+  const fctx = face.getContext('2d')!;
+  fctx.globalCompositeOperation = 'source-atop';
+  const bev = Math.max(2, o.size * 0.022);
+  fctx.drawImage(rimLayer(w, h, text, font, o.material.bevel, cx, cy, bev, bev * 1.2), 0, 0);
+  fctx.drawImage(rimLayer(w, h, text, font, o.material.rim, cx, cy, -bev * 1.4, -bev * 1.6), 0, 0);
+  // glossy band across the upper half
+  const gloss = fctx.createLinearGradient(0, cy - o.size * 0.5, 0, cy);
+  gloss.addColorStop(0, 'rgba(255,255,255,0.75)');
+  gloss.addColorStop(0.55, 'rgba(255,255,255,0.18)');
+  gloss.addColorStop(1, 'rgba(255,255,255,0)');
+  fctx.fillStyle = gloss;
+  fctx.beginPath();
+  fctx.ellipse(cx - tw * 0.05, cy - o.size * 0.3, tw * 0.62, o.size * 0.24, -0.06, 0, Math.PI * 2);
+  fctx.fill();
+  if (o.coat) {
+    const rnd = seeded(o.coat.seed);
+    const top = cy - o.size * 0.5;
+    const base = top + o.coat.height;
+    const coat = () => {
+      fctx.beginPath();
+      fctx.moveTo(0, 0);
+      fctx.lineTo(w, 0);
+      fctx.lineTo(w, base);
+      let x = w;
+      while (x > 0) {
+        const step = 18 + rnd() * 26;
+        const drip = rnd() < 0.3 ? o.size * (0.05 + rnd() * 0.12) : rnd() * 6;
+        const dw = Math.min(step * 0.4, 6 + rnd() * 4);
+        fctx.lineTo(x - step / 2 + dw, base);
+        fctx.lineTo(x - step / 2 + dw, base + drip);
+        fctx.arc(x - step / 2, base + drip, dw, 0, Math.PI);
+        fctx.lineTo(x - step / 2 - dw, base);
+        x -= step;
+      }
+      fctx.lineTo(0, base);
+      fctx.closePath();
+    };
+    fctx.globalCompositeOperation = 'source-atop';
+    coat();
+    fctx.lineWidth = Math.max(3, o.size * 0.02);
+    fctx.strokeStyle = INK;
+    fctx.stroke();
+    const cg = fctx.createLinearGradient(0, top, 0, base + o.size * 0.3);
+    cg.addColorStop(0, o.coat.colors[0]);
+    cg.addColorStop(0.35, o.coat.colors[1]);
+    cg.addColorStop(1, o.coat.colors[2]);
+    coat();
+    fctx.fillStyle = cg;
+    fctx.fill();
+    fctx.fillStyle = 'rgba(255,255,255,0.7)';
+    fctx.beginPath();
+    fctx.ellipse(cx - tw * 0.18, top + o.coat.height * 0.45, tw * 0.16, o.coat.height * 0.14, -0.1, 0, Math.PI * 2);
+    fctx.fill();
+    ctx.drawImage(face, 0, 0);
+  } else ctx.drawImage(face, 0, 0);
+  // thin inner ink line between face and extrusion
+  ctx.save();
+  ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(1.5, o.size * 0.012);
+  ctx.strokeStyle = 'rgba(23,11,20,0.55)';
+  ctx.strokeText(text, cx, cy);
+  ctx.restore();
+  return c;
+}
+
+/** Glossy liquid drip (blood, slime…) with ink outline and specular highlights. */
+export function glossyDrip(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, w: number, colors: [string, string, string]): void {
+  const path = () => {
+    ctx.beginPath();
+    ctx.moveTo(x - w * 1.8, y);
+    ctx.quadraticCurveTo(x - w, y + 3, x - w, y + len * 0.45);
+    ctx.lineTo(x - w * 0.95, y + len);
+    ctx.arc(x, y + len, w * 1.05, Math.PI, 0, true);
+    ctx.lineTo(x + w, y + len * 0.45);
+    ctx.quadraticCurveTo(x + w, y + 3, x + w * 1.8, y);
+    ctx.closePath();
+  };
+  path();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = INK;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  const g = ctx.createLinearGradient(x - w, 0, x + w, 0);
+  g.addColorStop(0, colors[0]);
+  g.addColorStop(0.45, colors[1]);
+  g.addColorStop(1, colors[2]);
+  path();
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.beginPath();
+  ctx.ellipse(x - w * 0.4, y + len - w * 0.1, w * 0.28, w * 0.42, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x - w * 0.45, y + len * 0.35, w * 0.16, len * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 /** Cartoon goo drip with ink outline. */
 export function goo(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, w: number, color = '#e0213a', light = '#ff7d8c'): void {
   const path = () => {
