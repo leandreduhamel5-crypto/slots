@@ -47,4 +47,6 @@ scripts/       simulateur Monte Carlo
 - Le serveur calcule le tour entier (jeu de base et tous les tours gratuits) avant toute animation. Le client se contente de mettre en scène un résultat déjà décidé.
 - La partie en cours est sauvegardée : si on recharge la page au milieu des tours gratuits, la partie reprend là où elle s'était arrêtée.
 - Tout le visuel est généré dans le navigateur (SVG, Canvas 2D, PixiJS) et tout le son est synthétisé avec la Web Audio API. Le projet ne contient aucun fichier image ou audio.
+- Des illustrations professionnelles peuvent remplacer les symboles, le décor ou le logo : déposez les fichiers dans `public/assets/` et déclarez-les dans `public/assets/manifest.json` (voir `public/assets/LISEZMOI.md`).
+- `npm run dev` puis http://localhost:5173/gallery.html affiche une planche de tous les visuels (symboles, effets, mascotte) pour la revue artistique.
 - Un gain inférieur ou égal à la mise s'affiche sans célébration. Cela évite les « pertes déguisées en gains ».

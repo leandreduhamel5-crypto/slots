@@ -2,6 +2,7 @@ import { Container, Graphics, Sprite, Text } from 'pixi.js';
 import gsap from 'gsap';
 import { LINES, REELS, ROWS, Sym } from '../math/config';
 import type { Expansion, Grid, LineWin, ScatterWin } from '../math/engine';
+import { Digits } from './Digits';
 import { Particles } from './Particles';
 import { Reel } from './Reel';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, LINE_COLORS, REEL_GAP, SYMBOL_SIZE, cellCenter, reelX } from './layout';
@@ -28,9 +29,25 @@ interface Rig {
   body: Container;
   parts: Record<string, Sprite>;
   glow: Sprite;
+  burst: Sprite;
+  shine: Sprite;
   src: Sprite;
   tweens: gsap.core.Animation[];
 }
+
+/** Tint of the star-burst behind each winning symbol. */
+const SYMBOL_GLOW: Record<number, number> = {
+  [Sym.CODEX]: 0xff3347,
+  [Sym.ZERO]: 0xffb03a,
+  [Sym.MASK]: 0xff3347,
+  [Sym.ANTIDOTE]: 0x38dcff,
+  [Sym.BLOOD]: 0xff3347,
+  [Sym.A]: 0xff3347,
+  [Sym.K]: 0x38dcff,
+  [Sym.Q]: 0xb46bff,
+  [Sym.J]: 0x7be05a,
+  [Sym.TEN]: 0xffa23a,
+};
 
 const LABEL_STYLE = (size: number, fill: number) => ({
   fontFamily: '"Luckiest Guy", sans-serif',
@@ -59,6 +76,9 @@ export class ReelBoard extends Container {
   private anticipationFx: { glow: Sprite; veins: Sprite; mask: Graphics }[] = [];
   private rigs = new Map<string, Rig>();
   private hurried = false;
+  /** camera hooks */
+  onAnticipate: ((on: boolean) => void) | null = null;
+  onImpact: ((power: number) => void) | null = null;
   private ambientIn = 2.5;
   private plaque: Container | null = null;
 
@@ -237,6 +257,7 @@ export class ReelBoard extends Container {
   private setAnticipation(reel: number, on: boolean, dur: number): void {
     const { glow, veins, mask } = this.anticipationFx[reel];
     gsap.killTweensOf([glow, glow.scale, veins, mask.scale]);
+    this.onAnticipate?.(on);
     if (on) {
       glow.alpha = 0;
       gsap.to(glow, { alpha: 0.75, duration: 0.25 });
@@ -279,9 +300,15 @@ export class ReelBoard extends Container {
     const root = new Container();
     const c = cellCenter(reel, row);
     root.position.set(c.x, c.y);
+    const burst = new Sprite(this.tex.sunburst);
+    burst.anchor.set(0.5);
+    burst.width = burst.height = CELL_W * 1.7;
+    burst.blendMode = 'add';
+    burst.tint = SYMBOL_GLOW[sym] ?? COLORS.yellow;
+    burst.alpha = 0;
     const body = new Container();
     body.scale.set(SYMBOL_SIZE / TEX_SIZE);
-    root.addChild(body);
+    root.addChild(burst, body);
     const parts: Record<string, Sprite> = {};
     const r = this.tex.rigs.get(sym);
     const add = (t: import('pixi.js').Texture) => {
@@ -298,16 +325,24 @@ export class ReelBoard extends Container {
     const glow = add(this.tex.glowMaps[sym]);
     glow.blendMode = 'add';
     glow.alpha = 0;
+    const shineMask = add(this.tex.normal[sym]);
+    const shine = add(this.tex.shine);
+    shine.height = 460;
+    shine.width = 150;
+    shine.rotation = 0.38;
+    shine.x = -320;
+    shine.blendMode = 'add';
+    shine.mask = shineMask;
     src.alpha = 0;
     this.rigLayer.addChild(root);
-    const rig: Rig = { key, reel, row, sym, root, body, parts, glow, src, tweens: [] };
+    const rig: Rig = { key, reel, row, sym, root, body, parts, glow, burst, shine, src, tweens: [] };
     this.rigs.set(key, rig);
     return rig;
   }
 
   private dropRig(rig: Rig): void {
     for (const t of rig.tweens) t.kill();
-    gsap.killTweensOf([rig.body, rig.body.scale, rig.glow, ...Object.values(rig.parts), ...Object.values(rig.parts).map((p) => p.scale)]);
+    gsap.killTweensOf([rig.body, rig.body.scale, rig.glow, rig.burst, rig.burst.scale, rig.shine, ...Object.values(rig.parts), ...Object.values(rig.parts).map((p) => p.scale)]);
     rig.src.alpha = 1;
     rig.root.destroy({ children: true });
     this.rigs.delete(rig.key);
@@ -315,6 +350,13 @@ export class ReelBoard extends Container {
 
   private clearRigs(): void {
     for (const r of [...this.rigs.values()]) this.dropRig(r);
+  }
+
+  /** Symbol whose rig animation applies; artwork overrides have no parts, so they use the generic moves. */
+  private motionOf(rig: Rig): Sym | -1 {
+    if (rig.sym === Sym.CODEX && !rig.parts.iris) return -1;
+    if (rig.sym === Sym.ZERO && !rig.parts.jaw) return -1;
+    return rig.sym;
   }
 
   private blink(rig: Rig, delay = 0): gsap.core.Timeline {
@@ -329,7 +371,7 @@ export class ReelBoard extends Container {
     const b = rig.body;
     const s = b.scale.x;
     let tl: gsap.core.Timeline;
-    switch (rig.sym) {
+    switch (this.motionOf(rig)) {
       case Sym.CODEX:
         tl = gsap
           .timeline()
@@ -372,6 +414,13 @@ export class ReelBoard extends Container {
     const amp = strong ? 1 : 0.65;
     const pos = cellCenter(rig.reel, rig.row);
     const tl = gsap.timeline({ delay, repeat: -1, repeatDelay: 0.5 });
+    const bs = rig.burst.scale.x;
+    rig.tweens.push(
+      gsap.fromTo(rig.burst, { alpha: 0 }, { alpha: strong ? 0.75 : 0.4, duration: 0.25, delay }),
+      gsap.fromTo(rig.burst.scale, { x: bs * 0.3, y: bs * 0.3 }, { x: bs, y: bs, duration: 0.5, delay, ease: 'back.out(2)' }),
+      gsap.to(rig.burst, { rotation: Math.PI * 2, duration: 6, repeat: -1, ease: 'none' }),
+    );
+    tl.fromTo(rig.shine, { x: -320 }, { x: 320, duration: 0.55, ease: 'power1.inOut' }, 0.1);
     // one-shot particle effects, so a looping win cycle doesn't flood the screen
     const once = (fn: () => void) => rig.tweens.push(gsap.delayedCall(delay + 0.3, fn));
     // pop out (shared)
@@ -379,7 +428,7 @@ export class ReelBoard extends Container {
       .to(b.scale, { x: s * (1 + 0.12 * amp), y: s * (1 + 0.24 * amp), duration: 0.1 })
       .to(b.scale, { x: s * 1.12, y: s * 1.12, duration: 0.35, ease: 'elastic.out(1.2, 0.4)' })
       .to(rig.glow, { alpha: 1, duration: 0.15 }, 0);
-    switch (rig.sym) {
+    switch (this.motionOf(rig)) {
       case Sym.CODEX:
         tl.to(rig.parts.iris, { x: -12, duration: 0.18 }, 0.2)
           .to(rig.parts.iris, { x: 12, duration: 0.25 })
@@ -431,7 +480,7 @@ export class ReelBoard extends Container {
     flash.width = flash.height = CELL_W * 2;
     this.labelLayer.addChild(flash);
     gsap.fromTo(flash, { alpha: 1 }, { alpha: 0, duration: 0.6, onComplete: () => flash.destroy() });
-    this.fx.impact(c.x, c.y, 0.8);
+    this.fx.impact(c.x, c.y, 0.8, 1);
     const rig = this.rig(reel, row);
     const s = SYMBOL_SIZE / TEX_SIZE;
     const tl = gsap
@@ -564,9 +613,9 @@ export class ReelBoard extends Container {
     });
   }
 
-  private addLabel(text: string, x: number, y: number, color = 0xffffff, scale = 1): Text {
-    const t = new Text({ text, style: LABEL_STYLE(50, color) });
-    t.anchor.set(0.5);
+  private addLabel(text: string, x: number, y: number, _color = 0xffffff, scale = 1): Digits {
+    const t = new Digits(54);
+    t.text = text;
     t.position.set(x, y);
     this.labelLayer.addChild(t);
     gsap.fromTo(t.scale, { x: 0.2 * scale, y: 0.2 * scale }, { x: scale, y: scale, duration: 0.5, ease: 'elastic.out(1.2, 0.45)' });
@@ -636,16 +685,16 @@ export class ReelBoard extends Container {
     const lab = new Text({ text: label, style: LABEL_STYLE(26, 0xffffff) });
     lab.anchor.set(0.5);
     lab.y = -h / 2 - 5;
-    const val = new Text({ text: fmt(0), style: LABEL_STYLE(52, COLORS.yellow) });
-    val.anchor.set(0.5);
-    val.y = 10;
+    const val = new Digits(56);
+    val.value = 0;
+    val.y = 12;
     c.addChild(plate, tab, lab, val);
     c.position.set(BOARD_W / 2, BOARD_H + FRAME_PAD + 26);
     this.labelLayer.parent!.addChild(c);
     this.plaque = c;
     gsap.fromTo(c.scale, { x: 0.3, y: 0.3 }, { x: 1, y: 1, duration: 0.6, ease: 'elastic.out(1.1, 0.45)' });
     const o = { v: 0 };
-    gsap.to(o, { v: amount, duration: 0.9, ease: 'power2.out', onUpdate: () => (val.text = fmt(o.v)) });
+    gsap.to(o, { v: amount, duration: 0.9, ease: 'power2.out', onUpdate: () => (val.value = o.v) });
   }
 
   hidePlaque(): void {
@@ -697,6 +746,7 @@ export class ReelBoard extends Container {
           .add(() => {
             for (const rig of [...this.rigs.values()].filter((g) => g.reel === r)) this.dropRig(rig);
             this.fx.impact(x + CELL_W / 2, BOARD_H / 2, 1.2);
+            this.onImpact?.(0.8);
             for (let row = 0; row < ROWS; row++) this.fx.burst(x + CELL_W / 2, row * CELL_H + CELL_H / 2, 8, 0.7);
           })
           .to(big, { alpha: 1, duration: 0.05 })

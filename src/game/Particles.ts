@@ -8,7 +8,7 @@ export interface ParticleTextures {
   spore: Texture;
 }
 
-type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark';
+type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark' | 'tex';
 
 interface P {
   s: Sprite;
@@ -31,8 +31,16 @@ export class Particles extends Container {
     super();
   }
 
-  private add(kind: Kind, x: number, y: number, vx: number, vy: number, max: number, size: number): void {
-    const t = kind === 'drop' ? this.tex.drop : kind === 'cyan' ? this.tex.dropCyan : kind === 'star' ? this.tex.star : kind === 'puff' ? this.tex.puff : this.tex.spore;
+  private add(kind: Kind, x: number, y: number, vx: number, vy: number, max: number, size: number, custom?: Texture): void {
+    const byKind: Record<Kind, Texture> = {
+      drop: this.tex.drop,
+      cyan: this.tex.dropCyan,
+      star: this.tex.star,
+      puff: this.tex.puff,
+      spark: this.tex.spore,
+      tex: this.tex.spore,
+    };
+    const t = custom ?? byKind[kind];
     const s = new Sprite(t);
     s.anchor.set(0.5, kind === 'drop' || kind === 'cyan' ? 0.65 : 0.5);
     if (kind === 'puff') s.tint = 0xc8ecb4;
@@ -42,7 +50,7 @@ export class Particles extends Container {
     }
     s.position.set(x, y);
     this.addChild(s);
-    const g = kind === 'puff' ? -60 : kind === 'star' ? 300 : 1300;
+    const g = kind === 'puff' ? -60 : kind === 'star' ? 300 : kind === 'tex' ? 700 : 1300;
     this.ps.push({ s, kind, vx, vy, life: 0, max, spin: (Math.random() - 0.5) * 10, g, size });
     this.scaleOf(this.ps[this.ps.length - 1]);
   }
@@ -50,6 +58,10 @@ export class Particles extends Container {
   private scaleOf(p: P): void {
     const k = p.life / p.max;
     let sc = p.size;
+    if (p.kind === 'tex') {
+      p.s.scale.set(sc / p.s.texture.width);
+      return;
+    }
     if (p.kind === 'star') sc *= k < 0.2 ? k / 0.2 : 1 - (k - 0.2) * 0.8;
     if (p.kind === 'puff') sc *= 0.6 + k * 0.8;
     p.s.scale.set(sc / 64);
@@ -68,13 +80,13 @@ export class Particles extends Container {
   }
 
   /** Comic impact: a ring of stars and smoke. */
-  impact(x: number, y: number, power = 1): void {
+  impact(x: number, y: number, power = 1, puffs = 4): void {
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
       const v = 380 * power;
       this.add('star', x, y, Math.cos(a) * v, Math.sin(a) * v, 0.55, 44);
     }
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < puffs; i++) {
       const a = Math.random() * Math.PI * 2;
       const v = 160 * power;
       this.add('puff', x + Math.cos(a) * 30, y + Math.sin(a) * 30, Math.cos(a) * v, Math.sin(a) * v, 0.7, 50 + Math.random() * 30);
@@ -93,6 +105,17 @@ export class Particles extends Container {
       const v = (200 + Math.random() * 400) * power;
       this.add('spark', x, y, Math.cos(a) * v, Math.sin(a) * v - 120, 0.5 + Math.random() * 0.5, 14 + Math.random() * 20);
     }
+  }
+
+  private rainState: { textures: Texture[]; width: number; rate: number; acc: number } | null = null;
+
+  /** Big-win shower: themed mini symbols tumbling from the top of the screen (the slot "coin rain"). */
+  startRain(textures: Texture[], width: number, rate: number): void {
+    this.rainState = { textures, width, rate, acc: 0 };
+  }
+
+  stopRain(): void {
+    this.rainState = null;
   }
 
   startFountain(x: number, y: number, rate: number): void {
@@ -117,6 +140,15 @@ export class Particles extends Container {
         this.add(kind, f.x + (Math.random() - 0.5) * 80, f.y, Math.cos(a) * v, Math.sin(a) * v, 1.5 + Math.random(), kind === 'star' ? 50 : 34 + Math.random() * 20);
       }
     }
+    if (this.rainState) {
+      const r = this.rainState;
+      r.acc += r.rate * dt;
+      while (r.acc >= 1) {
+        r.acc--;
+        const t = r.textures[Math.floor(Math.random() * r.textures.length)];
+        this.add('tex', Math.random() * r.width, -60, (Math.random() - 0.5) * 120, 100 + Math.random() * 200, 2.6, 60 + Math.random() * 50, t);
+      }
+    }
     for (let i = this.ps.length - 1; i >= 0; i--) {
       const p = this.ps[i];
       p.life += dt;
@@ -127,7 +159,7 @@ export class Particles extends Container {
       p.s.x += p.vx * dt;
       p.s.y += p.vy * dt;
       if (p.kind === 'drop' || p.kind === 'cyan') p.s.rotation = Math.atan2(p.vy, p.vx) - Math.PI / 2;
-      else p.s.rotation += p.spin * dt * (p.kind === 'puff' ? 0.1 : 1);
+      else p.s.rotation += p.spin * dt * (p.kind === 'puff' ? 0.1 : p.kind === 'tex' ? 0.35 : 1);
       this.scaleOf(p);
       const k = p.life / p.max;
       p.s.alpha = p.kind === 'puff' ? Math.max(0, 1 - k) * 0.6 : k > 0.7 ? Math.max(0, (1 - k) / 0.3) : 1;

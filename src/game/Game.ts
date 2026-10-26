@@ -9,7 +9,8 @@ import { Paytable } from '../ui/Paytable';
 import { Audio } from './Audio';
 import { Background } from './Background';
 import { BOARD_H, BOARD_W, COLORS } from './layout';
-import { Logo, eyeFromCodex, paintLogo } from './Logo';
+import { Logo, eyeFromCodex, logoCanvas } from './Logo';
+import type { LoadedAssets } from './assets';
 import { Mascot, type MascotTextures } from './Mascot';
 import { Particles } from './Particles';
 import { showIntro } from '../ui/Intro';
@@ -109,12 +110,16 @@ export class Game {
     tex: SymbolTextures,
     codexCanvas: HTMLCanvasElement,
     mascotTex: MascotTextures,
+    assets: LoadedAssets,
   ) {
-    this.bg = new Background(tex.spore, tex.chain, tex.glow);
+    this.bg = new Background(tex.spore, tex.chain, tex.glow, assets.background);
     this.bg.onLightning = () => this.audio.thunder();
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
-    this.logo = new Logo(eyeFromCodex(codexCanvas, codexCanvas.width));
+    this.board.onAnticipate = (on) => this.pushIn(on);
+    this.board.onImpact = (p) => this.punch(p);
+    const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo);
+    this.logo = new Logo(logoArt);
     this.logo.position.set(BOARD_W / 2, -18);
     this.logo.homeX = BOARD_W / 2;
     this.banner = new FeatureBanner(tex);
@@ -139,6 +144,7 @@ export class Game {
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       shake: (p) => this.shake(p),
+      punch: (p) => this.punch(p),
       shockwave: () => this.shockwave(),
       glitch: (p) => this.logo.glitch(p),
       thump: (p) => this.bg.thump(p),
@@ -195,8 +201,7 @@ export class Game {
     this.hud.setTurbo(false);
     this.hud.setSound(true);
 
-    const eye = eyeFromCodex(codexCanvas, codexCanvas.width);
-    showIntro(paintLogo(eye).toDataURL('image/png'), tex.images, () => {
+    showIntro(logoArt.toDataURL('image/png'), tex.images, () => {
       this.audio.unlock();
       this.logo.glitch(2);
       this.bg.flash();
@@ -272,7 +277,8 @@ export class Game {
     this.teaser.visible = portrait && !this.inFeature;
     this.logo.scale.set(portrait ? 1.12 : 1);
     this.logo.y = portrait ? -44 : -18;
-    this.world.scale.set(scale);
+    this.baseScale = scale;
+    this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
     const mascotRight = (BOARD_W + MASCOT_X + 240 - BOARD_W / 2) * scale + w / 2;
@@ -293,6 +299,32 @@ export class Game {
       this.shakePower = 0;
       this.scene.position.set(0, 0);
     }
+  }
+
+  private baseScale = 1;
+  /** camera zoom = slow push (anticipation) × quick kick (impacts) */
+  private cam = { push: 1, kick: 1 };
+  private get zoom(): number {
+    return this.cam.push * this.cam.kick;
+  }
+  private applyZoom = (): void => {
+    this.world.scale.set(this.baseScale * this.zoom);
+  };
+
+  /** Camera: a quick zoom kick that settles back. */
+  private punch(power = 1): void {
+    gsap.killTweensOf(this.cam, 'kick');
+    gsap.fromTo(
+      this.cam,
+      { kick: 1 + 0.045 * power },
+      { kick: 1, duration: 0.7, ease: 'elastic.out(1, 0.45)', onUpdate: this.applyZoom },
+    );
+  }
+
+  /** Camera: slow push-in while the reels build suspense. */
+  private pushIn(on: boolean): void {
+    gsap.killTweensOf(this.cam, 'push');
+    gsap.to(this.cam, { push: on ? 1.03 : 1, duration: on ? 1.2 : 0.4, ease: 'sine.inOut', onUpdate: this.applyZoom });
   }
 
   private shake(power: number): void {

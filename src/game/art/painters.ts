@@ -63,6 +63,7 @@ export const MATERIALS: Record<string, Material> = {
   slime: { face: ['#f2ffe2', '#a8f27a', '#4cc236', '#1d6a18'], depth: '#0c3a0c', bevel: '#ffffff', rim: '#134a12' },
   rust: { face: ['#fff1c8', '#ffc25a', '#f07818', '#8a3606'], depth: '#3f1602', bevel: '#fff6dc', rim: '#5a2204' },
   bone: { face: ['#ffffff', '#fbf0d8', '#e6c896', '#9c7448'], depth: '#3a1a2a', bevel: '#ffffff', rim: '#6a4a2e' },
+  gold: { face: ['#fffbe0', '#ffe066', '#f5a818', '#8a5206'], depth: '#4a2a04', bevel: '#ffffff', rim: '#6a3a04' },
 };
 
 /** Canvas holding `text` filled with `fill` at (cx+dx, cy+dy). */
@@ -694,6 +695,50 @@ export function paintPuff(): HTMLCanvasElement {
   ctx.beginPath();
   ctx.arc(56, 56, 18, 0, Math.PI * 2);
   ctx.arc(72, 52, 14, 0, Math.PI * 2);
+  ctx.fill();
+  return c;
+}
+
+/** Diagonal light band swept across winning symbols. */
+export function paintShine(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(160, 320);
+  const g = ctx.createLinearGradient(0, 0, 160, 0);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.42, 'rgba(255,255,255,0.15)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+  g.addColorStop(0.58, 'rgba(255,255,255,0.15)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 160, 320);
+  return c;
+}
+
+/** Soft rotating star-burst placed behind a winning symbol. */
+export function paintSunburst(size = 256, rays = 14): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(size, size);
+  const r = size / 2;
+  ctx.translate(r, r);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  for (let i = 0; i < rays; i++) {
+    const a0 = (i / rays) * Math.PI * 2;
+    const a1 = a0 + (Math.PI / rays) * 0.55;
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a0) * r, Math.sin(a0) * r);
+    ctx.lineTo(Math.cos(a1) * r, Math.sin(a1) * r);
+    ctx.closePath();
+  }
+  ctx.fill();
+  const core = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.5);
+  core.addColorStop(0, 'rgba(255,255,255,0.8)');
+  core.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
   ctx.fill();
   return c;
 }

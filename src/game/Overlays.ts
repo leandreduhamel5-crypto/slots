@@ -1,4 +1,6 @@
-import { Container, FillGradient, Graphics, Sprite, Text, type TextStyleOptions } from 'pixi.js';
+import { Container, FillGradient, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
+import { MATERIALS, render3DText } from './art/painters';
+import { Digits } from './Digits';
 import gsap from 'gsap';
 import { SYMBOLS, Sym } from '../math/config';
 import { PREMIUM_EXPANDERS } from '../math/engine';
@@ -9,10 +11,10 @@ import type { SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
 export const WIN_TIERS = [
-  { x: 15, name: 'CONTAMINATION', light: '#fff6c0', base: '#ffd23f', ray: 0x3a1640 },
-  { x: 40, name: 'ÉPIDÉMIE', light: '#ffd0a0', base: '#ff8a2a', ray: 0x4a1830 },
-  { x: 100, name: 'PANDÉMIE', light: '#ffb0b8', base: '#ff3347', ray: 0x5a0b22 },
-  { x: 500, name: 'EXTINCTION', light: '#e8d0ff', base: '#b46bff', ray: 0x2a1060 },
+  { x: 15, name: 'CONTAMINATION', material: 'gold', ray: 0x3a1640 },
+  { x: 40, name: 'ÉPIDÉMIE', material: 'rust', ray: 0x4a1830 },
+  { x: 100, name: 'PANDÉMIE', material: 'blood', ray: 0x5a0b22 },
+  { x: 500, name: 'EXTINCTION', material: 'toxic', ray: 0x2a1060 },
 ];
 
 export function winTier(win: number, bet: number): number {
@@ -63,16 +65,33 @@ export interface FxHooks {
   shockwave(): void;
   glitch(power: number): void;
   thump(power: number): void;
+  punch(power: number): void;
 }
 
 export class Overlays extends Container {
   private dim = new Graphics();
+  /** rotating rays live below the particles so the symbol rain falls in front of them */
+  private back = new Container();
   private content = new Container();
   private particles: Particles;
   private w = 1920;
   private h = 1080;
   private skipRequested = false;
   private burstRays: Graphics | null = null;
+  private headCache = new Map<string, Texture>();
+
+  /** Big 3D title rendered once with the lettering engine and cached. */
+  private head3d(text: string, size: number, material = 'gold'): Sprite {
+    const key = `${text}|${size}|${material}`;
+    let t = this.headCache.get(key);
+    if (!t) {
+      t = Texture.from(render3DText(text, { size, material: MATERIALS[material] }));
+      this.headCache.set(key, t);
+    }
+    const s = new Sprite(t);
+    s.anchor.set(0.5);
+    return s;
+  }
 
   constructor(
     private tex: SymbolTextures,
@@ -81,7 +100,9 @@ export class Overlays extends Container {
   ) {
     super();
     this.particles = new Particles(tex);
-    this.addChild(this.dim, this.particles, this.content);
+    for (const t of WIN_TIERS) this.head3d(t.name, 104, t.material);
+    this.head3d('10 TOURS GRATUITS', 88, 'gold');
+    this.addChild(this.dim, this.back, this.particles, this.content);
     this.visible = false;
     this.eventMode = 'static';
     this.on('pointertap', () => (this.skipRequested = true));
@@ -100,6 +121,8 @@ export class Overlays extends Container {
     this.h = h;
     this.content.position.set(w / 2, h / 2);
     this.content.scale.set(Math.min(w / 1300, h / 1000, 1.2));
+    this.back.position.set(w / 2, h / 2);
+    this.back.scale.set(Math.max(w / 1300, h / 1000, 1));
     this.drawDim(this.dim.alpha);
   }
 
@@ -112,8 +135,18 @@ export class Overlays extends Container {
     this.particles.update(dtMs);
   }
 
+  private clearLayers(): void {
+    for (const layer of [this.content, this.back]) {
+      layer.removeChildren().forEach((c) => {
+        gsap.killTweensOf(c);
+        c.destroy({ children: true });
+      });
+      layer.alpha = 1;
+    }
+  }
+
   private open(): void {
-    this.content.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this.clearLayers();
     this.skipRequested = false;
     this.visible = true;
     this.content.alpha = 1;
@@ -123,14 +156,14 @@ export class Overlays extends Container {
 
   private async close(): Promise<void> {
     this.particles.stopFountain();
+    this.particles.stopRain();
     await new Promise<void>((r) =>
       gsap
         .timeline({ onComplete: r })
         .to(this.content.scale, { x: this.content.scale.x * 0.6, y: this.content.scale.y * 0.6, duration: 0.25, ease: 'back.in(2)' })
-        .to([this.content, this.dim], { alpha: 0, duration: 0.25 }, '<'),
+        .to([this.content, this.back, this.dim], { alpha: 0, duration: 0.25 }, '<'),
     );
-    this.content.removeChildren().forEach((c) => c.destroy({ children: true }));
-    this.content.alpha = 1;
+    this.clearLayers();
     this.resize(this.w, this.h);
     this.visible = false;
   }
@@ -165,6 +198,7 @@ export class Overlays extends Container {
     g.alpha = 0;
     gsap.to(g, { alpha: 0.95, duration: 0.3 });
     gsap.to(g, { rotation: Math.PI * 2, duration: 40, repeat: -1, ease: 'none' });
+    this.back.addChild(g);
     return g;
   }
 
@@ -214,20 +248,19 @@ export class Overlays extends Container {
     eye.y = -40;
     eye.alpha = 0.9;
     gsap.to(eye, { rotation: 0.06, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    const ribbon = this.ribbon(860, 150, 0x8a0f26);
+    const ribbon = this.ribbon(860, 150, 0x2a1530);
     ribbon.y = -150;
-    const heading = new Text({ text: t0.name, style: title(104, t0.light, t0.base) });
-    heading.anchor.set(0.5);
+    const heading = this.head3d(t0.name, 104, t0.material);
     heading.y = -160;
     const plate = this.plate(620, 170);
     plate.y = 150;
-    const amount = new Text({ text: fmt(0), style: title(128, '#ffffff', '#ffd23f') });
-    amount.anchor.set(0.5);
-    amount.y = 146;
+    const amount = new Digits(118);
+    amount.value = 0;
+    amount.y = 150;
     const sub = new Text({ text: 'touchez pour passer', style: body(24, 0xb8a8c8) });
     sub.anchor.set(0.5);
     sub.y = 290;
-    this.content.addChild(rays, eye, ribbon, heading, plate, amount, sub);
+    this.content.addChild(eye, ribbon, heading, plate, amount, sub);
     this.popIn(eye, 0, 0.1);
     this.popIn(ribbon, 0.1);
     this.popIn(heading, 0.15);
@@ -238,7 +271,9 @@ export class Overlays extends Container {
     this.fx.shake(10);
     this.fx.thump(0.35);
     this.particles.impact(this.w / 2, this.h / 2, 1.6);
-    this.particles.startFountain(this.w / 2, this.h * 0.7, 40);
+    this.particles.startFountain(this.w / 2, this.h * 0.7, 30);
+    this.particles.startRain([Sym.CODEX, Sym.ANTIDOTE, Sym.BLOOD, Sym.ZERO].map((s) => this.tex.normal[s]), this.w, 6);
+    this.fx.punch(1);
 
     const duration = 2.1 * (top + 1);
     const counter = { v: 0 };
@@ -249,7 +284,7 @@ export class Overlays extends Container {
       duration,
       ease: 'power1.inOut',
       onUpdate: () => {
-        amount.text = fmt(counter.v);
+        amount.value = counter.v;
         onTick?.(counter.v);
         const now = performance.now();
         if (now - lastTick > 70) {
@@ -275,10 +310,9 @@ export class Overlays extends Container {
     await this.close();
   }
 
-  private upgrade(heading: Text, tier: number): void {
+  private upgrade(heading: Sprite, tier: number): void {
     const t = WIN_TIERS[tier];
-    heading.text = t.name;
-    heading.style.fill = cel(t.light, t.base);
+    heading.texture = this.head3d(t.name, 104, t.material).texture;
     gsap.fromTo(heading.scale, { x: 1.7, y: 0.6 }, { x: 1, y: 1, duration: 0.6, ease: 'elastic.out(1.2, 0.4)' });
     if (this.burstRays) gsap.to(this.burstRays, { tint: t.ray, duration: 0.3 });
     this.audio.stinger(tier);
@@ -288,6 +322,8 @@ export class Overlays extends Container {
     this.fx.thump(0.3 + tier * 0.1);
     this.particles.impact(this.w / 2, this.h * 0.38, 1.2 + tier * 0.3);
     this.particles.burst(this.w / 2, this.h * 0.45, 30 + tier * 20, 1 + tier * 0.2);
+    this.particles.startRain([Sym.CODEX, Sym.ANTIDOTE, Sym.BLOOD, Sym.ZERO].map((s) => this.tex.normal[s]), this.w, 6 + tier * 6);
+    this.fx.punch(1 + tier * 0.3);
   }
 
   /** Cartoon slot-window roulette that lands on the chosen strain. */
@@ -351,17 +387,16 @@ export class Overlays extends Container {
     this.audio.featureStart();
     this.fx.shake(16);
     this.fx.glitch(3);
-    const rays = this.sunburst(0x5a0b22);
+    this.sunburst(0x5a0b22);
     const book = new Sprite(this.tex.normal[Sym.CODEX]);
     book.anchor.set(0.5);
     book.width = book.height = 440;
     book.y = 10;
     const ribbon = this.ribbon(900, 150, 0x8a0f26);
     ribbon.y = -300;
-    const head = new Text({ text: `${spins} TOURS GRATUITS`, style: title(92) });
-    head.anchor.set(0.5);
-    head.y = -310;
-    this.content.addChild(rays, book, ribbon, head);
+    const head = this.head3d(`${spins} TOURS GRATUITS`, 88, 'gold');
+    head.y = -312;
+    this.content.addChild(book, ribbon, head);
     gsap.fromTo(book, { y: -700 }, { y: 10, duration: 0.45, ease: 'power3.in' });
     gsap.delayedCall(0.45, () => {
       this.fx.shake(22);
@@ -380,9 +415,11 @@ export class Overlays extends Container {
     this.content.addChild(caption);
     this.popIn(caption);
     await this.roulette(-20, special);
-    caption.text = `SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`;
-    caption.style = title(54);
-    this.popIn(caption);
+    caption.destroy();
+    const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 54, 'blood');
+    strain.y = 228;
+    this.content.addChild(strain);
+    this.popIn(strain);
     const rule = new Text({ text: 'elle envahit tout le rouleau et paie sur les 10 lignes', style: body(30, 0xe8dcf0) });
     rule.anchor.set(0.5);
     rule.y = 295;
@@ -400,13 +437,12 @@ export class Overlays extends Container {
     this.audio.stinger(1);
     this.fx.shake(14);
     this.fx.glitch(2);
-    const rays = this.sunburst(0x4a1830);
+    this.sunburst(0x4a1830);
     const ribbon = this.ribbon(820, 150, 0x8a0f26);
     ribbon.y = mutation !== null ? -290 : -20;
-    const head = new Text({ text: `+${spins} TOURS GRATUITS`, style: title(88) });
-    head.anchor.set(0.5);
+    const head = this.head3d(`+${spins} TOURS GRATUITS`, 84, 'gold');
     head.y = ribbon.y - 10;
-    this.content.addChild(rays, ribbon, head);
+    this.content.addChild(ribbon, head);
     this.popIn(ribbon);
     this.popIn(head, 0.05);
     this.particles.impact(this.w / 2, this.h / 2, 1.4);
@@ -417,8 +453,7 @@ export class Overlays extends Container {
       this.content.addChild(sub);
       this.popIn(sub, 0.2);
       await this.roulette(40, mutation, active);
-      const name = new Text({ text: SYMBOLS[mutation].name.toUpperCase(), style: title(56) });
-      name.anchor.set(0.5);
+      const name = this.head3d(SYMBOLS[mutation].name.toUpperCase(), 56, 'blood');
       name.y = 250;
       this.content.addChild(name);
       this.popIn(name);
@@ -430,21 +465,20 @@ export class Overlays extends Container {
   async featureOutro(total: number, spins: number, bet: number, onTick?: (v: number) => void): Promise<void> {
     this.open();
     this.audio.stinger(1);
-    const rays = this.sunburst(0x3a1640);
+    this.sunburst(0x3a1640);
     const ribbon = this.ribbon(900, 150, 0x2a1530);
     ribbon.y = -200;
-    const head = new Text({ text: 'INFECTION TERMINÉE', style: title(84) });
-    head.anchor.set(0.5);
+    const head = this.head3d('INFECTION TERMINÉE', 80, 'bone');
     head.y = -210;
     const plate = this.plate(620, 180);
     plate.y = 20;
-    const amount = new Text({ text: fmt(0), style: title(124, '#ffffff', '#ffd23f') });
-    amount.anchor.set(0.5);
-    amount.y = 16;
+    const amount = new Digits(114);
+    amount.value = 0;
+    amount.y = 20;
     const sub = new Text({ text: `${spins} tours gratuits · ${fmt(total / bet)}× la mise`, style: body(32, 0xe8dcf0) });
     sub.anchor.set(0.5);
     sub.y = 170;
-    this.content.addChild(rays, ribbon, head, plate, amount, sub);
+    this.content.addChild(ribbon, head, plate, amount, sub);
     this.popIn(ribbon);
     this.popIn(head, 0.05);
     this.popIn(plate, 0.15);
@@ -456,7 +490,7 @@ export class Overlays extends Container {
       duration: Math.min(4, 1 + total / bet / 40),
       ease: 'power2.out',
       onUpdate: () => {
-        amount.text = fmt(counter.v);
+        amount.value = counter.v;
         onTick?.(counter.v);
       },
     });
@@ -470,8 +504,7 @@ export class Overlays extends Container {
   async message(text: string, ms = 1600): Promise<void> {
     this.open();
     const ribbon = this.ribbon(900, 150, 0x2a1530);
-    const t = new Text({ text, style: title(64) });
-    t.anchor.set(0.5);
+    const t = this.head3d(text, 62, 'bone');
     t.y = -8;
     this.content.addChild(ribbon, t);
     this.popIn(ribbon);

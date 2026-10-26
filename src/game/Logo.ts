@@ -76,7 +76,7 @@ export function paintLogo(eye: HTMLCanvasElement): HTMLCanvasElement {
   const letters = [...word].map((ch, i) =>
     render3DText(ch, { size, material: MATERIALS.bone, depth: 16, ink: 13, coat: { colors: ['#ff6a7a', '#d4102c', '#7a0418'], height: size * 0.17, seed: 31 + i * 7 } }),
   );
-  const advance = letters.map((l) => l.width - 44);
+  const advance = letters.map((l) => l.width - 54);
   const total = advance.reduce((a, b) => a + b, 0);
   let x = w / 2 - total / 2;
   letters.forEach((l, i) => {
@@ -156,13 +156,24 @@ export function paintLogo(eye: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
+/** Logo canvas: professional artwork from public/assets if provided, else the painted one. */
+export function logoCanvas(eye: HTMLCanvasElement, custom: HTMLImageElement | null): HTMLCanvasElement {
+  if (!custom) return paintLogo(eye);
+  const [c, ctx] = makeCanvas(1100, 360);
+  const k = Math.min(1100 / custom.naturalWidth, 360 / custom.naturalHeight);
+  const w = custom.naturalWidth * k;
+  const h = custom.naturalHeight * k;
+  ctx.drawImage(custom, (1100 - w) / 2, (360 - h) / 2, w, h);
+  return c;
+}
+
 export class Logo extends Container {
   private split = new RGBSplitFilter({ red: { x: 0, y: 0 }, green: { x: 0, y: 0 }, blue: { x: 0, y: 0 } });
   private sprite: Sprite;
 
-  constructor(eye: HTMLCanvasElement) {
+  constructor(art: HTMLCanvasElement) {
     super();
-    this.sprite = new Sprite(Texture.from(paintLogo(eye)));
+    this.sprite = new Sprite(Texture.from(art));
     this.sprite.anchor.set(0.5, 0.45);
     this.sprite.scale.set(0.78);
     this.addChild(this.sprite);

@@ -7,6 +7,8 @@ import {
   glossyDrip,
   makeCanvas,
   render3DText,
+  paintShine,
+  paintSunburst,
   paintChain,
   paintDepthShade,
   paintDrop,
@@ -19,6 +21,7 @@ import {
   softGlow,
 } from './art/painters';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP, reelX } from './layout';
+import { containCanvas } from './assets';
 
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
@@ -52,6 +55,8 @@ export interface SymbolTextures {
   dropCyan: Texture;
   star: Texture;
   puff: Texture;
+  shine: Texture;
+  sunburst: Texture;
 }
 
 type Deco = 'blood' | 'steel' | 'toxic' | 'slime' | 'rust';
@@ -367,13 +372,19 @@ function radial(size: number, stops: [number, string][]): HTMLCanvasElement {
   return c;
 }
 
-export async function buildSymbolTextures(): Promise<SymbolTextures> {
+export async function buildSymbolTextures(overrides: Map<string, HTMLImageElement> = new Map()): Promise<SymbolTextures> {
   const canvases: HTMLCanvasElement[] = [];
   const glowCanvases: HTMLCanvasElement[] = [];
   const rigs = new Map<Sym, SymbolRig>();
   for (const def of SYMBOLS) {
     const art = SYMBOL_ART[def.key];
-    if (art) {
+    const custom = overrides.get(def.key);
+    if (custom) {
+      // professional artwork from public/assets: used as-is, no procedural rig
+      const c = containCanvas(custom, TEX_SIZE);
+      canvases.push(c);
+      glowCanvases.push(softGlow(c, 12));
+    } else if (art) {
       const base = await svgCanvas(art.base);
       const parts: Record<string, Texture> = {};
       const [full, f] = makeCanvas(TEX_SIZE, TEX_SIZE);
@@ -383,8 +394,9 @@ export async function buildSymbolTextures(): Promise<SymbolTextures> {
         parts[name] = Texture.from(pc);
         if (name !== 'lid') f.drawImage(pc, 0, 0);
       }
-      rigs.set(def.id, { base: Texture.from(base), parts });
-      canvases.push(finishPremium(full, PREMIUM_AURA[def.key] ?? '#ff3347'));
+      const aura = PREMIUM_AURA[def.key] ?? '#ff3347';
+      rigs.set(def.id, { base: Texture.from(finishPremium(base, aura)), parts });
+      canvases.push(finishPremium(full, aura));
       glowCanvases.push(softGlow(await svgCanvas(art.glow), 14));
     } else {
       const r = ROYALS[def.key];
@@ -422,5 +434,7 @@ export async function buildSymbolTextures(): Promise<SymbolTextures> {
     dropCyan: Texture.from(paintDrop('#38dcff', '#c8fbff')),
     star: Texture.from(paintStar()),
     puff: Texture.from(paintPuff()),
+    shine: Texture.from(paintShine()),
+    sunburst: Texture.from(paintSunburst()),
   };
 }

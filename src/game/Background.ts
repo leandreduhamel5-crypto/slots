@@ -1,3 +1,4 @@
+import { coverCanvas } from './assets';
 import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import gsap from 'gsap';
 import { INK, goo, makeCanvas, seeded } from './art/painters';
@@ -392,9 +393,10 @@ export class Background extends Container {
     private sporeTex: Texture,
     chainTex: Texture,
     glowTex: Texture,
+    custom: HTMLImageElement | null = null,
   ) {
     super();
-    this.scene = new Sprite(Texture.from(paintScene()));
+    this.scene = new Sprite(Texture.from(custom ? coverCanvas(custom, W, H) : paintScene()));
     this.scene.anchor.set(0.5);
     this.sceneC.addChild(this.scene);
     const coneTex = Texture.from(paintCone());
@@ -411,6 +413,7 @@ export class Background extends Container {
       g.width = g.height = 220;
       g.tint = 0xfff1b0;
       g.blendMode = 'add';
+      cone.visible = g.visible = !custom;
       this.lampGlows.push(g);
       this.sceneC.addChild(cone, g);
     }
@@ -421,6 +424,7 @@ export class Background extends Container {
       g.width = g.height = 170;
       g.tint = COLORS.infection;
       g.blendMode = 'add';
+      g.visible = !custom;
       this.portholes.push(g);
       this.sceneC.addChild(g);
     }

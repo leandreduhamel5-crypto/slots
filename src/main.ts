@@ -8,6 +8,8 @@ import gsap from 'gsap';
 import { Game } from './game/Game';
 import { buildSymbolTextures } from './game/textures';
 import { buildMascotTextures } from './game/Mascot';
+import { warmDigits } from './game/Digits';
+import { loadAssets } from './game/assets';
 
 async function boot(): Promise<void> {
   const progress = document.getElementById('loader-bar');
@@ -32,10 +34,12 @@ async function boot(): Promise<void> {
   document.getElementById('stage')!.appendChild(app.canvas);
   setProgress(0.55);
 
-  const [tex, mascot] = await Promise.all([buildSymbolTextures(), buildMascotTextures()]);
+  const assets = await loadAssets();
+  const [tex, mascot] = await Promise.all([buildSymbolTextures(assets.symbols), buildMascotTextures()]);
+  warmDigits([118, 114, 56, 54]);
   setProgress(1);
 
-  const game = new Game(app, tex, tex.canvases[0], mascot);
+  const game = new Game(app, tex, tex.canvases[0], mascot, assets);
   if (import.meta.env.DEV) Object.assign(window, { game, app, gsap });
 
   const loader = document.getElementById('loader');
