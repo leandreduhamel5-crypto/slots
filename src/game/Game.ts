@@ -22,6 +22,8 @@ const BOARD_Y = 152;
 const WORLD_TOP = -140;
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
 const MASCOT_X = 250;
+/** the cartoon wraith doesn't fit the painted Book of Infection art direction; kept for later */
+const SHOW_MASCOT = false;
 const WORLD_W = BOARD_W + 200;
 
 class FeatureBanner extends Container {
@@ -32,7 +34,7 @@ class FeatureBanner extends Container {
     super();
     const ink = COLORS.ink;
     const cartoon = (size: number, fill: number) => ({
-      fontFamily: '"Luckiest Guy", sans-serif',
+      fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
       fontSize: size,
       fill,
       stroke: { color: ink, width: size * 0.2, join: 'round' as const },
@@ -245,7 +247,7 @@ export class Game {
     const t = new Text({
       text: '10 TOURS GRATUITS',
       style: {
-        fontFamily: '"Luckiest Guy", sans-serif',
+        fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
         fontSize: 64,
         fill: COLORS.yellow,
         stroke: { color: COLORS.ink, width: 12, join: 'round' },
@@ -256,7 +258,7 @@ export class Game {
     t.position.set(0, 100);
     const sub = new Text({
       text: 'la souche envahit tout le rouleau',
-      style: { fontFamily: 'Nunito, sans-serif', fontWeight: '900', fontSize: 34, fill: 0xffffff, stroke: { color: COLORS.ink, width: 7, join: 'round' } },
+      style: { fontFamily: 'Nunito, sans-serif', fontWeight: '900' as const, fontSize: 34, fill: 0xffffff, stroke: { color: COLORS.ink, width: 7, join: 'round' } },
     });
     sub.anchor.set(0.5);
     sub.position.set(0, 154);
@@ -286,7 +288,7 @@ export class Game {
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
     const mascotRight = (BOARD_W + MASCOT_X + 240 - BOARD_W / 2) * scale + w / 2;
-    this.mascot.visible = !portrait && mascotRight < w;
+    this.mascot.visible = SHOW_MASCOT && !portrait && mascotRight < w;
     this.bg.resize(w, h);
     this.overlays.resize(w, h);
   }

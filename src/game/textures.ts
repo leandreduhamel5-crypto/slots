@@ -8,19 +8,17 @@ import {
   paintSunburst,
   paintDepthShade,
   paintDrop,
-  paintFrame,
   paintPuff,
-  paintReelPanel,
   paintStar,
   paintWinFrame,
   softGlow,
 } from './art/painters';
-import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP, reelX } from './layout';
+import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP } from './layout';
 import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { decorateFrame } from './art/frameDeco';
+import { paintEgyptFrame, paintStonePanel } from './art/egyptFrame';
 
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
@@ -198,11 +196,7 @@ function radial(size: number, stops: [number, string][]): HTMLCanvasElement {
 
 /** Steel cabinet frame plus its painted ornaments (brass eye brackets, veins, gauge, hazard lamp). */
 function framed(): HTMLCanvasElement {
-  const c = paintFrame({ boardW: BOARD_W, boardH: BOARD_H, pad: FRAME_PAD, bleed: FRAME_BLEED, reelX, cellW: CELL_W, reels: 5 });
-  const ctx = c.getContext('2d')!;
-  ctx.setTransform(1, 0, 0, 1, 0, 0); // paintFrame leaves its bleed translation applied
-  decorateFrame(ctx, FRAME_BLEED, FRAME_BLEED, BOARD_W + FRAME_PAD * 2, BOARD_H + FRAME_PAD * 2);
-  return c;
+  return paintEgyptFrame({ boardW: BOARD_W, boardH: BOARD_H, pad: FRAME_PAD, bleed: FRAME_BLEED });
 }
 
 export async function buildSymbolTextures(overrides: Map<string, HTMLImageElement> = new Map()): Promise<SymbolTextures> {
@@ -268,7 +262,7 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     expanded,
     glowMaps: glowCanvases.map((c) => Texture.from(c)),
     frame: Texture.from(framed()),
-    reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintReelPanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
+    reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
     winFrame: Texture.from(paintWinFrame(CELL_W, CELL_H)),
     veins: Texture.from(vc),

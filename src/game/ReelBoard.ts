@@ -50,7 +50,7 @@ const SYMBOL_GLOW: Record<number, number> = {
 };
 
 const LABEL_STYLE = (size: number, fill: number) => ({
-  fontFamily: '"Luckiest Guy", sans-serif',
+  fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
   fontSize: size,
   fill,
   stroke: { color: COLORS.ink, width: size * 0.22, join: 'round' as const },
@@ -155,15 +155,17 @@ export class ReelBoard extends Container {
       this.frameLayer.addChild(g);
       return g;
     };
-    const beacon = light(BOARD_W + FRAME_PAD - 8, BOARD_H / 2 - 8, 130, 0xff8a2a);
-    gsap.to(beacon, { alpha: 0.15, duration: 0.45, yoyo: true, repeat: -1, ease: 'steps(1)' });
+    // red gems on the frame (corner bosses, winged suns) pulse with the infection
     [
-      [-FRAME_PAD + 16, -FRAME_PAD + 16],
-      [BOARD_W + FRAME_PAD - 16, -FRAME_PAD + 16],
-      [-FRAME_PAD + 16, BOARD_H + FRAME_PAD - 16],
-      [BOARD_W + FRAME_PAD - 16, BOARD_H + FRAME_PAD - 16],
+      [-FRAME_PAD / 2 - 2, -FRAME_PAD / 2 - 2],
+      [BOARD_W + FRAME_PAD / 2 + 2, -FRAME_PAD / 2 - 2],
+      [-FRAME_PAD / 2 - 2, BOARD_H + FRAME_PAD / 2 + 2],
+      [BOARD_W + FRAME_PAD / 2 + 2, BOARD_H + FRAME_PAD / 2 + 2],
+      [-FRAME_PAD / 2 - 2, BOARD_H / 2],
+      [BOARD_W + FRAME_PAD / 2 + 2, BOARD_H / 2],
+      [BOARD_W / 2, BOARD_H + FRAME_PAD / 2 + 2],
     ].forEach(([x, y], i) => {
-      const eye = light(x, y, 70, COLORS.infection);
+      const eye = light(x, y, 80, COLORS.infection);
       gsap.fromTo(eye, { alpha: 0.2 }, { alpha: 0.7, duration: 1.1 + i * 0.17, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
     });
 
@@ -701,11 +703,13 @@ export class ReelBoard extends Container {
       .roundRect(-w / 2, -h / 2 + 8, w, h, 22)
       .fill(COLORS.ink)
       .roundRect(-w / 2, -h / 2, w, h, 22)
-      .fill(0x2a1530)
+      .fill(0x160806)
       .stroke({ width: 8, color: COLORS.ink })
-      .roundRect(-w / 2 + 10, -h / 2 + 8, w - 20, 10, 5)
-      .fill(0x4a2a55);
-    const tab = new Graphics().roundRect(-90, -h / 2 - 22, 180, 34, 12).fill(COLORS.infection).stroke({ width: 6, color: COLORS.ink });
+      .roundRect(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 19)
+      .stroke({ width: 3, color: 0xc48a2a })
+      .roundRect(-w / 2 + 12, -h / 2 + 9, w - 24, 8, 4)
+      .fill({ color: 0xffe2a0, alpha: 0.12 });
+    const tab = new Graphics().roundRect(-90, -h / 2 - 22, 180, 34, 12).fill(0xb00c20).stroke({ width: 6, color: COLORS.ink }).roundRect(-87, -h / 2 - 19, 174, 28, 10).stroke({ width: 2, color: 0xf2c25a });
     const lab = new Text({ text: label, style: LABEL_STYLE(26, 0xffffff) });
     lab.anchor.set(0.5);
     lab.y = -h / 2 - 5;

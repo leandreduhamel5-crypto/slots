@@ -21,12 +21,12 @@ export function showIntro(logo: string, images: string[], onStart: () => void): 
   el.id = 'intro';
   el.innerHTML = `
     <div class="intro-inner">
-      <img class="intro-logo" src="${logo}" alt="Codex Infecta">
+      <img class="intro-logo" src="${logo}" alt="Book of Infection">
       <div class="intro-cards">
         <div class="intro-card">
           <div class="intro-art"><img src="${images[Sym.CODEX]}" alt=""><img src="${images[Sym.CODEX]}" alt=""><img src="${images[Sym.CODEX]}" alt=""></div>
-          <h3>3 Codex</h3>
-          <p>déclenchent <b>10 tours gratuits</b>. Le Codex est aussi joker.</p>
+          <h3>3 Livres</h3>
+          <p>déclenchent <b>10 tours gratuits</b>. Le Livre est aussi joker.</p>
         </div>
         <div class="intro-card featured">
           <div class="intro-art expand"><img src="${images[Sym.ZERO]}" alt=""><img src="${images[Sym.ZERO]}" alt=""><img src="${images[Sym.ZERO]}" alt=""></div>

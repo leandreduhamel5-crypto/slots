@@ -3,7 +3,7 @@ import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { GodrayFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { makeCanvas, seeded } from './art/painters';
-import { H, W, paintScene } from './art/scene';
+import { H, W, paintScene } from './art/temple';
 import { COLORS } from './layout';
 
 /** Light cone under a hanging lamp. */
@@ -102,9 +102,9 @@ export class Background extends Container {
       // the infection's heart pulsing at the end of the corridor
       this.heart = new Sprite(glowTex);
       this.heart.anchor.set(0.5);
-      this.heart.position.set(painted.heart[0] - W / 2, painted.heart[1] - H / 2 - 120);
-      this.heart.width = 760;
-      this.heart.height = 560;
+      this.heart.position.set(painted.heart[0] - W / 2, painted.heart[1] - H / 2);
+      this.heart.width = 520;
+      this.heart.height = 520;
       this.heart.tint = COLORS.infection;
       this.heart.blendMode = 'add';
       this.sceneC.addChild(this.heart);
@@ -116,12 +116,13 @@ export class Background extends Container {
         cone.scale.set(0.85);
         cone.blendMode = 'add';
         cone.alpha = 0.3;
+        cone.visible = false; // braziers light all around, no downward cone
         this.cones.push(cone);
         const g = new Sprite(glowTex);
         g.anchor.set(0.5);
         g.position.set(lx - W / 2, ly - H / 2);
-        g.width = g.height = 200;
-        g.tint = 0xfff1b0;
+        g.width = g.height = 260;
+        g.tint = 0xff8a2a;
         g.blendMode = 'add';
         this.lampGlows.push(g);
         this.sceneC.addChild(cone, g);
@@ -147,7 +148,7 @@ export class Background extends Container {
     this.redWash.blendMode = 'add';
     this.redWash.alpha = 0;
     this.fog = new TilingSprite({ texture: Texture.from(paintFog()), width: W, height: H });
-    this.fog.tint = 0x9a7aa8;
+    this.fog.tint = 0xa02030;
     this.fog.alpha = 0.1;
 
     this.addChild(this.sceneC, this.redWash, this.fog, this.sporeLayer, this.pulse);
@@ -172,7 +173,9 @@ export class Background extends Container {
     this.h = h;
     const scale = Math.max(w / W, h / H);
     this.sceneC.scale.set(scale);
-    this.sceneC.position.set(w / 2, h / 2);
+    // portrait screens only see a narrow slice: frame the great pyramid and its beam instead of the plain centre
+    const focus = h > w ? Math.min((W / 2 - 400) * scale, (W * scale) / 2 - w / 2) : 0;
+    this.sceneC.position.set(w / 2 + focus, h / 2);
     this.redWash.position.set(w / 2, h * 0.45);
     this.redWash.width = w * 1.2;
     this.redWash.height = h * 1.2;
@@ -216,9 +219,11 @@ export class Background extends Container {
     this.redWash.alpha = this.feature * (0.14 + beat * 0.12);
     this.blackout.alpha = this.dark * 0.9;
     this.lampGlows.forEach((g, i) => {
-      const flick = Math.sin(this.t * (13 + i * 3)) * Math.sin(this.t * (3.1 + i)) > 0.92 ? 0.25 : 1;
-      const on = (1 - this.dark) * flick;
-      g.alpha = 0.55 * on;
+      // fire flicker
+      const flick = 0.75 + 0.25 * Math.sin(this.t * (11 + i * 2.3)) * Math.sin(this.t * (4.7 + i));
+      const on = (1 - this.dark * 0.8) * flick;
+      g.alpha = 0.7 * on;
+      g.scale.y = g.scale.x * (1 + 0.08 * Math.sin(this.t * 9 + i));
       this.cones[i].alpha = (0.4 + this.feature * 0.05) * on;
       this.cones[i].tint = this.feature > 0.5 ? 0xff9aa4 : 0xffffff;
     });

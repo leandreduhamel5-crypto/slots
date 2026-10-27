@@ -1,17 +1,19 @@
 :root {
   --ink: #170b14;
-  --night: #120a18;
-  --plum: #2a1530;
-  --plum-2: #3a1d42;
-  --plum-hi: #5a3366;
+  --night: #0c0507;
+  --plum: #1e0c0e;
+  --plum-2: #2c1214;
+  --plum-hi: #5a3418;
+  --gold: #f2c25a;
+  --gold-dk: #7a4a10;
   --red: #ff3347;
   --red-dark: #a3102a;
   --yellow: #ffd23f;
   --cyan: #38dcff;
   --bone: #f6ead0;
-  --text-dim: #b8a8c8;
+  --text-dim: #c8aa80;
   --safe-b: env(safe-area-inset-bottom, 0px);
-  --display: 'Luckiest Guy', system-ui, sans-serif;
+  --display: 'Cinzel', 'Luckiest Guy', serif;
   --ui: Nunito, system-ui, sans-serif;
   color-scheme: dark;
 }
@@ -66,7 +68,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 18px;
-  background: radial-gradient(circle at 50% 45%, #3a1040 0%, var(--night) 65%);
+  background: radial-gradient(circle at 50% 45%, #3a0a10 0%, var(--night) 65%);
   transition: opacity 0.8s ease, visibility 0.8s;
 }
 #loader.done {
@@ -1041,4 +1043,129 @@ button {
   .meter span {
     font-size: 20px;
   }
+}
+
+/* =====================================================================
+   Book of Infection theme: black lacquer, antique gold, infected red
+   ===================================================================== */
+#hud {
+  background:
+    radial-gradient(circle at 18px 14px, #ffe2a0 0 2.5px, #6a3a08 3px 4.5px, transparent 5px) 0 0 / 120px 100% repeat-x,
+    repeating-linear-gradient(90deg, rgba(255, 220, 160, 0.02) 0 2px, transparent 2px 7px),
+    linear-gradient(180deg, #2a1410 0%, #170a09 45%, #0a0405 100%);
+  border-top: 3px solid #0a0405;
+  box-shadow: inset 0 3px 0 rgba(242, 194, 90, 0.35), inset 0 -18px 30px rgba(0, 0, 0, 0.5);
+}
+#hud::before {
+  /* gold Egyptian frieze instead of hazard tape */
+  top: -12px;
+  height: 9px;
+  border-top: 2px solid #0a0405;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 14px, #3a1c04 14px 16px, transparent 16px 30px),
+    linear-gradient(180deg, #fff1b8 0%, #f2c25a 35%, #9a5e14 70%, #5a3008 100%);
+  box-shadow: 0 -4px 14px rgba(255, 60, 40, 0.35);
+}
+.meter {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 60, 40, 0.14), transparent 70%),
+    linear-gradient(180deg, #120607, #070203);
+  border: 2px solid #0a0405;
+  box-shadow:
+    0 4px 0 #050202,
+    0 0 0 2px #c48a2a,
+    0 0 0 4px #3a1c04,
+    inset 0 0 16px rgba(0, 0, 0, 0.8);
+}
+.meter label {
+  color: var(--gold);
+  opacity: 0.85;
+  text-shadow: 0 0 6px rgba(242, 194, 90, 0.45);
+}
+.meter span {
+  color: #fff4dc;
+  -webkit-text-stroke: 1.5px #1a0806;
+  text-shadow: 0 0 12px rgba(255, 210, 140, 0.35);
+}
+.meter-win.lit {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(255, 190, 60, 0.32), transparent 75%),
+    linear-gradient(180deg, #2a1406, #120804);
+}
+.step,
+.icon {
+  background: radial-gradient(circle at 38% 30%, #4a2a1c 0%, #24120c 55%, #120806 100%);
+  border: 2px solid #0a0405;
+  box-shadow: 0 4px 0 #050202, 0 0 0 2px #b07a22, inset 0 2px 0 rgba(255, 220, 160, 0.2);
+}
+.step:active:not(:disabled),
+.icon:active {
+  box-shadow: 0 1px 0 #050202, 0 0 0 2px #b07a22, inset 0 2px 0 rgba(255, 220, 160, 0.2);
+}
+.step {
+  color: var(--gold);
+  -webkit-text-stroke: 1.5px #1a0806;
+}
+.icon svg {
+  stroke: var(--gold);
+}
+.icon.active {
+  background: radial-gradient(circle at 38% 30%, #ff7a7a 0%, #c8102c 50%, #5a0010 100%);
+  box-shadow: 0 4px 0 #050202, 0 0 0 2px #f2c25a, 0 0 16px rgba(255, 51, 71, 0.6);
+}
+.icon.active svg {
+  stroke: #fff;
+}
+.spin {
+  background:
+    radial-gradient(ellipse 46% 26% at 50% 24%, rgba(255, 255, 255, 0.5), transparent 70%),
+    radial-gradient(circle at 50% 42%, #ff6a6a 0%, #e01020 42%, #8a0414 75%, #3a0006 100%);
+  border: 4px solid #0a0405;
+  box-shadow:
+    0 0 0 5px #f2c25a,
+    0 0 0 8px #8a5612,
+    0 0 0 11px #0a0405,
+    0 10px 0 6px #050202,
+    0 0 44px 12px rgba(255, 40, 40, 0.4),
+    inset 0 -12px 18px rgba(60, 0, 10, 0.55);
+  animation: invite-egypt 2.2s ease-in-out infinite;
+}
+@keyframes invite-egypt {
+  50% {
+    box-shadow:
+      0 0 0 5px #fff1b8,
+      0 0 0 8px #8a5612,
+      0 0 0 11px #0a0405,
+      0 10px 0 6px #050202,
+      0 0 66px 20px rgba(255, 40, 40, 0.6),
+      inset 0 -12px 18px rgba(60, 0, 10, 0.55);
+  }
+}
+.spin-ring {
+  background: repeating-conic-gradient(#f2c25a 0 6deg, #3a1c04 6deg 12deg);
+  opacity: 0.85;
+}
+.auto-menu,
+.pt-panel,
+.intro-card {
+  background: linear-gradient(180deg, #24100e, #120706);
+  border-color: #0a0405;
+  box-shadow: 0 10px 0 #050202, 0 0 0 3px #b07a22, inset 0 3px 0 rgba(255, 220, 160, 0.15);
+}
+.auto-menu p {
+  color: var(--gold);
+}
+.auto-menu button {
+  background: #2c1214;
+  color: #fff4dc;
+}
+.refill {
+  background: linear-gradient(180deg, #fff1b8, #f2c25a 45%, #b07a22);
+}
+.intro-play {
+  background: linear-gradient(180deg, #ff4a4a, #c8102c 60%, #7a0414);
+  box-shadow: 0 10px 0 #050202, 0 0 0 4px #f2c25a, 0 0 30px rgba(255, 40, 40, 0.5), inset 0 6px 0 rgba(255, 255, 255, 0.25);
+}
+#paytable {
+  background: rgba(8, 2, 3, 0.85);
 }

@@ -1,158 +1,105 @@
 import { Container, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
-import { INK, MATERIALS, makeCanvas, paintDrop, paintShine, render3DText, seeded, softGlow } from './art/painters';
+import { INK, MATERIALS, makeCanvas, paintDrop, paintShine, render3DText, softGlow } from './art/painters';
+import { goldGrad } from './art/egyptFrame';
 
-/** Jagged blood splash behind the title, with a glossy gradient and ink rim. */
-function splash(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, seed: number): void {
-  const rnd = seeded(seed);
-  const pts: [number, number][] = [];
-  const n = 30;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const spike = i % 2 ? 0.74 + rnd() * 0.12 : 1 + rnd() * 0.26;
-    pts.push([cx + Math.cos(a) * rx * spike, cy + Math.sin(a) * ry * spike]);
-  }
-  const path = () => {
+/** Eye medallion that replaces an "O" in BOOK: gold ring, red reptile eye. */
+function eyeMedallion(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = ctx.createRadialGradient(x, y, r * 0.4, x, y, r * 1.9);
+  halo.addColorStop(0, 'rgba(255,40,40,0.75)');
+  halo.addColorStop(1, 'rgba(255,40,40,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(x - r * 2, y - r * 2, r * 4, r * 4);
+  ctx.restore();
+  // ring (with ink edge, matching the 3D letters)
+  ctx.beginPath();
+  ctx.arc(x, y, r + 10, 0, Math.PI * 2);
+  ctx.fillStyle = INK;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = goldGrad(ctx, x - r, y - r, x + r, y + r);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.74, 0, Math.PI * 2);
+  ctx.fillStyle = '#1a0306';
+  ctx.fill();
+  // almond
+  const almond = () => {
     ctx.beginPath();
-    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.moveTo(x - r * 0.66, y);
+    ctx.quadraticCurveTo(x, y - r * 0.7, x + r * 0.66, y);
+    ctx.quadraticCurveTo(x, y + r * 0.7, x - r * 0.66, y);
     ctx.closePath();
   };
-  path();
-  ctx.lineWidth = 22;
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#d4102c';
-  ctx.stroke();
-  ctx.lineWidth = 10;
+  almond();
+  const ig = ctx.createRadialGradient(x, y, 1, x, y, r * 0.6);
+  ig.addColorStop(0, '#ffe8a0');
+  ig.addColorStop(0.35, '#ff7a1a');
+  ig.addColorStop(0.75, '#e01020');
+  ig.addColorStop(1, '#5a0008');
+  ctx.fillStyle = ig;
+  ctx.fill();
+  ctx.lineWidth = 4;
   ctx.strokeStyle = INK;
   ctx.stroke();
-  const g = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
-  g.addColorStop(0, '#5a2a66');
-  g.addColorStop(0.5, '#2e1538');
-  g.addColorStop(1, '#170b1c');
-  path();
-  ctx.fillStyle = g;
-  ctx.fill();
-  ctx.save();
-  path();
-  ctx.clip();
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
   ctx.beginPath();
-  ctx.ellipse(cx - rx * 0.2, cy - ry * 0.55, rx * 0.7, ry * 0.3, -0.05, 0, Math.PI * 2);
+  ctx.ellipse(x, y, r * 0.09, r * 0.4, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#0a0002';
   ctx.fill();
-  ctx.restore();
-  for (let i = 0; i < 10; i++) {
-    const a = rnd() * Math.PI * 2;
-    const d = 1.15 + rnd() * 0.3;
-    const r = 6 + rnd() * 12;
-    const x = cx + Math.cos(a) * rx * d;
-    const y = cy + Math.sin(a) * ry * d;
-    ctx.beginPath();
-    ctx.arc(x, y, r + 4, 0, Math.PI * 2);
-    ctx.fillStyle = INK;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = '#d4102c';
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.beginPath();
-    ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.beginPath();
+  ctx.ellipse(x + r * 0.2, y - r * 0.2, r * 0.12, r * 0.07, -0.5, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-export function paintLogo(eye: HTMLCanvasElement): HTMLCanvasElement {
+/** "BOOK OF INFECTION": antique-gold engraved capitals with an eye in the O, blood-brush INFECTION. */
+export function paintLogo(_eye?: HTMLCanvasElement): HTMLCanvasElement {
   const w = 1100;
-  const h = 360;
+  const h = 380;
   const [c, ctx] = makeCanvas(w, h);
-  splash(ctx, w / 2, 126, 345, 100, 11);
+  const serif = '"Cinzel Decorative", Cinzel, serif';
+  const gold = MATERIALS.pharaoh;
 
-  // CODEX — big bone 3D letters, each tilted and bounced
-  const word = 'CODEX';
-  const size = 182;
-  const rot = [-0.08, 0.05, -0.03, 0.06, -0.06];
-  const dy = [10, -8, 4, -10, 8];
-  const letters = [...word].map((ch, i) =>
-    render3DText(ch, { size, material: MATERIALS.bone, depth: 16, ink: 13, coat: { colors: ['#ff6a7a', '#d4102c', '#7a0418'], height: size * 0.17, seed: 31 + i * 7 } }),
-  );
-  const advance = letters.map((l) => l.width - 54);
-  const total = advance.reduce((a, b) => a + b, 0);
-  let x = w / 2 - total / 2;
-  letters.forEach((l, i) => {
-    const cx = x + advance[i] / 2;
-    const cy = 128 + dy[i];
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(rot[i]);
-    ctx.drawImage(l, -l.width / 2, -l.height / 2);
-    ctx.restore();
-    x += advance[i];
-  });
-
-  // ribbon with INFECTA
-  const rw = 560;
-  const ry = 286;
-  const rh = 74;
-  const ribbonEnd = (dir: number) => {
-    const x0 = w / 2 + dir * (rw / 2 - 24);
-    ctx.beginPath();
-    ctx.moveTo(x0, ry - rh / 2 + 14);
-    ctx.lineTo(x0 + dir * 80, ry - rh / 2 + 14);
-    ctx.lineTo(x0 + dir * 52, ry + 10);
-    ctx.lineTo(x0 + dir * 80, ry + rh / 2 + 14);
-    ctx.lineTo(x0, ry + rh / 2 + 14);
-    ctx.closePath();
-    ctx.lineWidth = 9;
-    ctx.strokeStyle = INK;
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-    ctx.fillStyle = '#4a0718';
-    ctx.fill();
-  };
-  ribbonEnd(-1);
-  ribbonEnd(1);
-  const band = () => {
-    ctx.beginPath();
-    ctx.moveTo(w / 2 - rw / 2, ry - rh / 2);
-    ctx.quadraticCurveTo(w / 2, ry - rh / 2 - 16, w / 2 + rw / 2, ry - rh / 2);
-    ctx.lineTo(w / 2 + rw / 2, ry + rh / 2);
-    ctx.quadraticCurveTo(w / 2, ry + rh / 2 - 16, w / 2 - rw / 2, ry + rh / 2);
-    ctx.closePath();
-  };
-  band();
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = INK;
-  ctx.stroke();
-  const bg = ctx.createLinearGradient(0, ry - rh / 2, 0, ry + rh / 2);
-  bg.addColorStop(0, '#4a2a55');
-  bg.addColorStop(0.5, '#2a1530');
-  bg.addColorStop(1, '#180a1c');
-  band();
-  ctx.fillStyle = bg;
+  // dark red smoke behind the title so it reads over anything
+  ctx.save();
+  ctx.filter = 'blur(28px)';
+  ctx.fillStyle = 'rgba(30,0,4,0.75)';
+  ctx.beginPath();
+  ctx.ellipse(w / 2, h / 2, w * 0.42, h * 0.34, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(w / 2 - rw / 2 + 14, ry - rh / 2 + 10);
-  ctx.quadraticCurveTo(w / 2, ry - rh / 2 - 4, w / 2 + rw / 2 - 14, ry - rh / 2 + 10);
-  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-  ctx.lineWidth = 4;
-  ctx.stroke();
-  // stitches along the ribbon
-  ctx.setLineDash([10, 9]);
-  ctx.strokeStyle = 'rgba(255,210,63,0.55)';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(w / 2 - rw / 2 + 16, ry + rh / 2 - 10);
-  ctx.quadraticCurveTo(w / 2, ry + rh / 2 - 24, w / 2 + rw / 2 - 16, ry + rh / 2 - 10);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  ctx.restore();
 
-  const sub = render3DText('INFECTA', { size: 60, material: MATERIALS.blood, depth: 6, ink: 7 });
-  ctx.drawImage(sub, w / 2 - sub.width / 2, ry - sub.height / 2 - 4);
-  for (const dir of [-1, 1]) {
-    const ex = w / 2 + dir * (sub.width / 2 + 18);
-    ctx.drawImage(eye, ex - 32, ry - 34, 64, 64);
-  }
+  // ---- BOOK OF (letters placed one by one so an eye can replace the second O)
+  const size = 150;
+  const parts: { ch: string; eye?: boolean }[] = [{ ch: 'B' }, { ch: 'O' }, { ch: 'O', eye: true }, { ch: 'K' }];
+  const glyphs = parts.map((p) => (p.eye ? null : render3DText(p.ch, { size, material: gold, font: serif, depth: 12, ink: 9 })));
+  const eyeW = size * 0.95;
+  const adv = glyphs.map((g) => (g ? g.width - 44 : eyeW));
+  const of = render3DText('OF', { size: 74, material: gold, font: serif, depth: 7, ink: 6 });
+  const total = adv.reduce((a, b) => a + b, 0) + of.width - 24;
+  let x = w / 2 - total / 2;
+  const baseY = 112;
+  parts.forEach((_p, i) => {
+    const g = glyphs[i];
+    if (g) ctx.drawImage(g, x + adv[i] / 2 - g.width / 2, baseY - g.height / 2);
+    else eyeMedallion(ctx, x + adv[i] / 2, baseY + 6, size * 0.36);
+    x += adv[i];
+  });
+  ctx.drawImage(of, x - 14, baseY - of.height / 2 - 26);
+
+  // ---- INFECTION in dripping blood brush, slanted
+  const inf = render3DText('INFECTION', { size: 168, material: MATERIALS.infection, font: 'Creepster, serif', depth: 10, ink: 9 });
+  ctx.save();
+  ctx.translate(w / 2, 272);
+  ctx.transform(1, 0, -0.14, 1, 0, 0);
+  const k = Math.min(1, (w - 40) / inf.width);
+  ctx.scale(k, k);
+  ctx.drawImage(inf, -inf.width / 2, -inf.height / 2);
+  ctx.restore();
   return c;
 }
 

@@ -1,6 +1,6 @@
-# Codex Infecta
+# Book of Infection
 
-Machine à sous vidéo de démonstration (crédits fictifs, aucune valeur réelle). Elle reprend la mécanique « Book » : 5 rouleaux × 3 rangées, 10 lignes et un symbole qui s'étend pendant les tours gratuits. L'univers est une horreur gothique « infectée ».
+Machine à sous vidéo de démonstration (crédits fictifs, aucune valeur réelle). Elle reprend la mécanique « Book » : 5 rouleaux × 3 rangées, 10 lignes et un symbole qui s'étend pendant les tours gratuits. L'univers est un temple égyptien dévoré par une infection : noir, or antique et rouge sang. Les icônes peintes (pharaon, Anubis, scarabée, œil d'Horus, lettres A à 10) viennent de la planche de direction artistique et sont détourées dans `src/game/art/egypt/` ; le livre, le décor, le cadre et le logo sont dessinés par le code dans le même style.
 
 ## Lancer
 
@@ -11,12 +11,12 @@ npm run build      # build de production dans dist/
 npm run sim        # simulation Monte Carlo du modèle mathématique
 ```
 
-En mode dev, la console permet de forcer une situation : `game.debug('feature' | 'big' | 'retrigger' | 'expand')`.
+En mode dev, la console permet de forcer une situation : `game.debug('win' | 'feature' | 'big' | 'retrigger' | 'expand')`.
 
 ## Règles
 
-- **Codex (joker + scatter)** : il remplace tous les symboles sur une ligne. 3, 4 ou 5 Codex n'importe où paient 2×, 20× ou 200× la mise totale.
-- **3 Codex ou plus** déclenchent **10 tours gratuits**. Le Codex tire alors une **souche** : un symbole qui s'étend sur tout le rouleau et paie sur les 10 lignes, même si les rouleaux ne sont pas côte à côte.
+- **Livre (joker + scatter)** : il remplace tous les symboles sur une ligne. 3, 4 ou 5 Livres n'importe où paient 2×, 20× ou 200× la mise totale.
+- **3 Livres ou plus** déclenchent **10 tours gratuits**. Le Livre tire alors une **souche** : un symbole qui s'étend sur tout le rouleau et paie sur les 10 lignes, même si les rouleaux ne sont pas côte à côte.
 - **Mutation** : chaque re-déclenchement donne +10 tours et ajoute une souche (3 souches actives au maximum).
 - Gain maximal plafonné à **5 000×** la mise.
 

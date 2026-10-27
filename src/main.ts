@@ -2,6 +2,9 @@ import '@fontsource/luckiest-guy/400.css';
 import '@fontsource/nunito/700.css';
 import '@fontsource/nunito/800.css';
 import '@fontsource/nunito/900.css';
+import '@fontsource/cinzel/900.css';
+import '@fontsource/cinzel-decorative/900.css';
+import '@fontsource/creepster/400.css';
 import './style.css';
 import { Application } from 'pixi.js';
 import gsap from 'gsap';
@@ -10,6 +13,7 @@ import { buildSymbolTextures } from './game/textures';
 import { buildMascotTextures } from './game/Mascot';
 import { warmDigits } from './game/Digits';
 import { loadAssets } from './game/assets';
+import { loadEgyptArt } from './game/art/egypt';
 
 async function boot(): Promise<void> {
   const progress = document.getElementById('loader-bar');
@@ -20,6 +24,9 @@ async function boot(): Promise<void> {
     document.fonts.load('700 64px Nunito'),
     document.fonts.load('800 64px Nunito'),
     document.fonts.load('900 64px Nunito'),
+    document.fonts.load('900 64px Cinzel'),
+    document.fonts.load('900 64px "Cinzel Decorative"'),
+    document.fonts.load('400 64px Creepster'),
   ]);
   setProgress(0.3);
 
@@ -34,8 +41,10 @@ async function boot(): Promise<void> {
   document.getElementById('stage')!.appendChild(app.canvas);
   setProgress(0.55);
 
-  const assets = await loadAssets();
-  const [tex, mascot] = await Promise.all([buildSymbolTextures(assets.symbols), buildMascotTextures()]);
+  const [assets, egypt] = await Promise.all([loadAssets(), loadEgyptArt()]);
+  // built-in painted art first, then anything the user dropped into public/assets wins
+  const symbolArt = new Map([...egypt.symbols, ...assets.symbols]);
+  const [tex, mascot] = await Promise.all([buildSymbolTextures(symbolArt), buildMascotTextures()]);
   warmDigits([118, 114, 56, 54]);
   setProgress(1);
 

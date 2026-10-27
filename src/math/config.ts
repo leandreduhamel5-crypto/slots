@@ -25,11 +25,11 @@ export interface SymbolDef {
 }
 
 export const SYMBOLS: SymbolDef[] = [
-  { id: Sym.CODEX, key: 'codex', name: 'Codex Infecta', pays: [0, 0, 0, 2, 20, 200] },
-  { id: Sym.ZERO, key: 'zero', name: "L'Infecté", pays: [0, 0, 10, 100, 1000, 5000] },
-  { id: Sym.MASK, key: 'mask', name: 'Masque à gaz', pays: [0, 0, 5, 40, 400, 2000] },
-  { id: Sym.ANTIDOTE, key: 'antidote', name: 'Antidote', pays: [0, 0, 0, 30, 100, 750] },
-  { id: Sym.BLOOD, key: 'blood', name: 'Poche de sang', pays: [0, 0, 0, 30, 100, 750] },
+  { id: Sym.CODEX, key: 'codex', name: "Livre de l'Infection", pays: [0, 0, 0, 2, 20, 200] },
+  { id: Sym.ZERO, key: 'zero', name: 'Pharaon', pays: [0, 0, 10, 100, 1000, 5000] },
+  { id: Sym.MASK, key: 'mask', name: 'Anubis', pays: [0, 0, 5, 40, 400, 2000] },
+  { id: Sym.ANTIDOTE, key: 'antidote', name: 'Scarabée', pays: [0, 0, 0, 30, 100, 750] },
+  { id: Sym.BLOOD, key: 'blood', name: "Œil d'Horus", pays: [0, 0, 0, 30, 100, 750] },
   { id: Sym.A, key: 'a', name: 'As', pays: [0, 0, 0, 5, 40, 150] },
   { id: Sym.K, key: 'k', name: 'Roi', pays: [0, 0, 0, 5, 40, 150] },
   { id: Sym.Q, key: 'q', name: 'Dame', pays: [0, 0, 0, 5, 25, 100] },

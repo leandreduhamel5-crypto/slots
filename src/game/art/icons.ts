@@ -1,4 +1,5 @@
-import { INK } from './painters';
+import { INK, seeded } from './painters';
+import { goldGrad, redCrack } from './egyptFrame';
 import { layer, lin, path, piece, rad } from './paint';
 
 /** Painted premium symbol: base layer, animated parts (same frame), and the emissive bits for the glow. */
@@ -79,84 +80,190 @@ export function iconCodex(): PaintedSymbol {
   const [g, gctx] = layer();
   const [irisC, ictx] = layer();
   const [lidC, lctx] = layer();
-  for (const x of [ctx, gctx]) {
+  const T = (x: CanvasRenderingContext2D) => {
     x.translate(256, 256);
     x.rotate(-0.07);
     x.translate(-256, -256);
-  }
+  };
+  T(ctx);
+  T(gctx);
+  const EDGE = 5;
 
-  const book = (dx: number, dy: number) => path((q) => q.roundRect(96 + dx, 52 + dy, 316, 408, [18, 30, 30, 18]));
-  // back cover, then the page block peeking out on the right and bottom
-  vol(ctx, book(26, 20), { c: ['#8a1030', '#5a0820', '#2e0410'], g: [100, 60, 440, 480] });
-  vol(ctx, path((q) => q.roundRect(110, 66, 312, 404, [14, 26, 26, 14])), { c: ['#fff6da', '#f0d9a0', '#c49a52'], g: [200, 66, 430, 470], ink: 8 });
-  // front cover
-  vol(ctx, book(0, 0), { c: ['#ff4a5e', '#b81030', '#4a0214'], g: [140, 60, 380, 470], rim: '#ff7a8e', rimW: 8, hi: 0.7, ao: 0.45 });
-  // spine
-  vol(ctx, path((q) => q.roundRect(96, 52, 52, 408, [18, 0, 0, 18])), { c: ['#7a0820', '#5a0418', '#2a000a'], g: [96, 0, 148, 0], ink: 9 });
-  for (const y of [116, 396]) {
-    vol(ctx, path((q) => q.roundRect(88, y - 15, 68, 30, 12)), { c: ['#fff4b8', '#ffc23a', '#a8680a'], g: [0, y - 15, 0, y + 15], rim: '#ffe8a0', rimW: 4, ink: 8 });
-  }
-  // gold corners
-  for (const [x, y, sx, sy] of [[412, 52, -1, 1], [412, 460, -1, -1]] as const) {
-    const corner = path((q) => {
-      q.moveTo(x, y + sy * 18);
-      q.quadraticCurveTo(x, y, x + sx * 18, y);
-      q.lineTo(x + sx * 92, y);
-      q.quadraticCurveTo(x + sx * 40, y + sy * 40, x, y + sy * 92);
-      q.closePath();
-    });
-    vol(ctx, corner, { c: ['#fff4b8', '#ffc23a', '#a8680a'], g: [x + sx * 90, y, x, y + sy * 90], rim: '#fff0b0', rimW: 5, ink: 9 });
-  }
-  // gold medallion around the eye
-  vol(ctx, circle(256, 256, 104), { c: ['#fff4b8', '#ffc23a', '#a8680a'], g: [170, 160, 340, 360], rim: '#ffe8a0', rimW: 6 });
-  vol(ctx, circle(256, 256, 84), { c: ['#2a0410', '#4a0818', '#1a0208'], g: [0, 172, 0, 340], ink: 8 });
-  // eye white
-  const almond = (k: number) =>
-    path((q) => {
-      q.moveTo(256 - 76 * k, 256);
-      q.bezierCurveTo(256 - 36 * k, 256 - 58 * k, 256 + 36 * k, 256 - 58 * k, 256 + 76 * k, 256);
-      q.bezierCurveTo(256 + 36 * k, 256 + 58 * k, 256 - 36 * k, 256 + 58 * k, 256 - 76 * k, 256);
-      q.closePath();
-    });
-  vol(ctx, almond(1), { c: ['#ffffff', '#f6e6e0', '#d8a8a8'], g: [0, 210, 0, 300], ink: 8 });
-  // shine across the cover
+  // red infection halo behind the book
   ctx.save();
-  ctx.clip(book(0, 0));
-  spec(ctx, path((q) => { q.moveTo(160, 80); q.lineTo(330, 74); }), 12, 0.7);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.filter = 'blur(26px)';
+  ctx.fillStyle = 'rgba(255,30,40,0.55)';
+  ctx.beginPath();
+  ctx.roundRect(110, 70, 300, 390, 30);
+  ctx.fill();
   ctx.restore();
 
-  // iris part: big, glowing, slit pupil, one highlight
-  const iris = circle(256, 256, 44);
-  glowBlob(ictx, iris, 'rgba(255,140,30,1)', 14, 0.7);
-  vol(ictx, iris, { c: ['#fff3a0', '#ff8a1a', '#c4100e'], g: [256, 214, 256, 300], ink: 6 });
-  ictx.fillStyle = rad(ictx, 256, 256, 2, 30, [[0, 'rgba(255,255,220,0.9)'], [1, 'rgba(255,200,80,0)']]);
-  ictx.fill(iris);
-  vol(ictx, path((q) => { q.moveTo(256, 220); q.quadraticCurveTo(242, 256, 256, 292); q.quadraticCurveTo(270, 256, 256, 220); q.closePath(); }), {
+  const book = (dx: number, dy: number) => path((q) => q.roundRect(96 + dx, 52 + dy, 316, 408, [14, 26, 26, 14]));
+  // back board and gilded page block
+  vol(ctx, book(24, 18), { c: ['#5a0814', '#3a040c', '#160004'], g: [100, 60, 440, 480], ink: EDGE });
+  ctx.save();
+  ctx.fillStyle = goldGrad(ctx, 400, 70, 440, 470);
+  ctx.beginPath();
+  ctx.roundRect(112, 66, 310, 402, [12, 24, 24, 12]);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(70,36,4,0.6)';
+  ctx.lineWidth = 1.2;
+  for (let k = 0; k < 8; k++) {
+    ctx.beginPath();
+    ctx.moveTo(414 + k * 1.2, 80);
+    ctx.lineTo(414 + k * 1.2, 460);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // front cover: deep blood-red leather, cracked, with glowing veins in the cracks
+  const cover = book(0, 0);
+  vol(ctx, cover, { c: ['#c81a30', '#7a0618', '#2a0006'], g: [140, 60, 380, 470], rim: '#ff4a5a', rimW: 6, hi: 0.45, ao: 0.55, ink: EDGE });
+  ctx.save();
+  ctx.clip(cover);
+  const rnd = seeded(17);
+  for (let i = 0; i < 260; i++) {
+    ctx.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.18)' : 'rgba(255,170,170,0.06)';
+    ctx.beginPath();
+    ctx.ellipse(96 + rnd() * 316, 52 + rnd() * 408, 1 + rnd() * 4, 1 + rnd() * 2.5, rnd() * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.3;
+    redCrack(ctx, 256 + Math.cos(a) * 112, 256 + Math.sin(a) * 112, a, 70 + rnd() * 70, 3, 60 + i * 9);
+  }
+  ctx.restore();
+  // gold tooled border
+  ctx.save();
+  ctx.strokeStyle = goldGrad(ctx, 130, 80, 400, 440);
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.roundRect(150, 78, 236, 356, 8);
+  ctx.stroke();
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(162, 90, 212, 332, 6);
+  ctx.stroke();
+  ctx.restore();
+
+  // spine with gold bands
+  vol(ctx, path((q) => q.roundRect(96, 52, 50, 408, [14, 0, 0, 14])), { c: ['#8a0c20', '#5a0414', '#240006'], g: [96, 0, 146, 0], ink: EDGE });
+  for (const y of [110, 402]) {
+    const band = path((q) => q.roundRect(88, y - 14, 66, 28, 8));
+    ctx.fillStyle = goldGrad(ctx, 88, y - 14, 154, y + 14);
+    ctx.fill(band);
+    ctx.strokeStyle = 'rgba(40,18,2,0.9)';
+    ctx.lineWidth = 3;
+    ctx.stroke(band);
+  }
+  // gold corners with a red gem
+  for (const [x, y, sx, sy] of [[412, 52, -1, 1], [412, 460, -1, -1]] as const) {
+    const corner = path((q) => {
+      q.moveTo(x, y + sy * 14);
+      q.quadraticCurveTo(x, y, x + sx * 14, y);
+      q.lineTo(x + sx * 86, y);
+      q.quadraticCurveTo(x + sx * 38, y + sy * 38, x, y + sy * 86);
+      q.closePath();
+    });
+    ctx.fillStyle = goldGrad(ctx, x + sx * 86, y, x, y + sy * 86);
+    ctx.fill(corner);
+    ctx.strokeStyle = 'rgba(40,18,2,0.9)';
+    ctx.lineWidth = 3;
+    ctx.stroke(corner);
+    const gx = x + sx * 24;
+    const gy = y + sy * 24;
+    ctx.fillStyle = rad(ctx, gx - 3, gy - 3, 1, 9, [[0, '#ffd0c8'], [0.4, '#ff2a36'], [1, '#5a0008']]);
+    ctx.beginPath();
+    ctx.arc(gx, gy, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // gold medallion holding the eye
+  ctx.fillStyle = goldGrad(ctx, 160, 160, 352, 352);
+  ctx.beginPath();
+  ctx.arc(256, 256, 100, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(40,18,2,0.95)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  // engraved ticks round the medallion
+  ctx.strokeStyle = 'rgba(70,36,4,0.7)';
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 36; k++) {
+    const a = (k / 36) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(256 + Math.cos(a) * 88, 256 + Math.sin(a) * 88);
+    ctx.lineTo(256 + Math.cos(a) * 96, 256 + Math.sin(a) * 96);
+    ctx.stroke();
+  }
+  vol(ctx, circle(256, 256, 82), { c: ['#3a0610', '#1a0206', '#080002'], g: [0, 174, 0, 338], ink: 4 });
+  const almond = (k: number) =>
+    path((q) => {
+      q.moveTo(256 - 72 * k, 256);
+      q.bezierCurveTo(256 - 34 * k, 256 - 56 * k, 256 + 34 * k, 256 - 56 * k, 256 + 72 * k, 256);
+      q.bezierCurveTo(256 + 34 * k, 256 + 54 * k, 256 - 34 * k, 256 + 54 * k, 256 - 72 * k, 256);
+      q.closePath();
+    });
+  vol(ctx, almond(1), { c: ['#fff6ee', '#f0d0c8', '#b87070'], g: [0, 212, 0, 300], ink: 4 });
+  ctx.save();
+  ctx.clip(almond(1));
+  ctx.strokeStyle = 'rgba(220,30,50,0.75)';
+  ctx.lineWidth = 1.5;
+  for (const [x0, y0, x1, y1] of [[186, 256, 214, 248], [326, 256, 298, 262], [196, 240, 220, 244], [316, 270, 292, 266]]) {
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.quadraticCurveTo((x0 + x1) / 2, y0 - 6, x1, y1);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // cover sheen
+  ctx.save();
+  ctx.clip(cover);
+  spec(ctx, path((q) => { q.moveTo(160, 66); q.lineTo(330, 62); }), 8, 0.45);
+  ctx.restore();
+
+  // iris part
+  const iris = circle(256, 256, 42);
+  glowBlob(ictx, iris, 'rgba(255,120,20,1)', 14, 0.7);
+  vol(ictx, iris, { c: ['#fff0a0', '#ff7a14', '#b80a10'], g: [256, 214, 256, 300], ink: 4 });
+  ictx.save();
+  ictx.clip(iris);
+  ictx.strokeStyle = 'rgba(120,0,10,0.4)';
+  ictx.lineWidth = 1.3;
+  for (let k = 0; k < 40; k++) {
+    const a = (k / 40) * Math.PI * 2;
+    ictx.beginPath();
+    ictx.moveTo(256 + Math.cos(a) * 12, 256 + Math.sin(a) * 12);
+    ictx.lineTo(256 + Math.cos(a) * 40, 256 + Math.sin(a) * 40);
+    ictx.stroke();
+  }
+  ictx.restore();
+  vol(ictx, path((q) => { q.moveTo(256, 220); q.quadraticCurveTo(243, 256, 256, 292); q.quadraticCurveTo(269, 256, 256, 220); q.closePath(); }), {
     c: ['#3a0008', '#1a0004', '#0a0002'],
     g: [0, 220, 0, 292],
     ink: 0,
   });
   ictx.fillStyle = 'rgba(255,255,255,0.95)';
-  ictx.fill(ellipse(274, 236, 12, 8, -0.5));
+  ictx.fill(ellipse(273, 237, 11, 7, -0.5));
 
-  // lid part (closed eye)
-  vol(lctx, almond(1.05), { c: ['#ff6a8a', '#c4143e', '#6a0424'], g: [0, 196, 0, 316], ink: 8 });
+  // lid part
+  vol(lctx, almond(1.05), { c: ['#c81a30', '#7a0618', '#3a0008'], g: [0, 196, 0, 316], ink: 4 });
   lctx.save();
-  lctx.strokeStyle = INK;
-  lctx.lineWidth = 7;
+  lctx.strokeStyle = '#1a0004';
+  lctx.lineWidth = 5;
   lctx.lineCap = 'round';
   lctx.beginPath();
-  lctx.moveTo(184, 258);
-  lctx.quadraticCurveTo(256, 290, 328, 258);
+  lctx.moveTo(186, 258);
+  lctx.quadraticCurveTo(256, 288, 326, 258);
   lctx.stroke();
   lctx.restore();
 
   // emissive
-  gctx.fillStyle = '#ff8a1a';
-  gctx.fill(circle(256, 256, 44));
-  gctx.strokeStyle = '#ffc23a';
-  gctx.lineWidth = 8;
-  gctx.stroke(circle(256, 256, 104));
+  gctx.fillStyle = '#ff7a14';
+  gctx.fill(circle(256, 256, 42));
+  gctx.strokeStyle = '#f2c25a';
+  gctx.lineWidth = 6;
+  gctx.stroke(circle(256, 256, 100));
   return { base: c, parts: { iris: irisC, lid: lidC }, glow: g };
 }
 

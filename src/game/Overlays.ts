@@ -11,10 +11,10 @@ import type { SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
 export const WIN_TIERS = [
-  { x: 15, name: 'CONTAMINATION', material: 'gold', ray: 0x3a1640 },
-  { x: 40, name: 'ÉPIDÉMIE', material: 'rust', ray: 0x4a1830 },
-  { x: 100, name: 'PANDÉMIE', material: 'blood', ray: 0x5a0b22 },
-  { x: 500, name: 'EXTINCTION', material: 'toxic', ray: 0x2a1060 },
+  { x: 15, name: 'CONTAMINATION', material: 'pharaoh', ray: 0x3a2408 },
+  { x: 40, name: 'ÉPIDÉMIE', material: 'gold', ray: 0x3e1806 },
+  { x: 100, name: 'PANDÉMIE', material: 'infection', ray: 0x46060c },
+  { x: 500, name: 'EXTINCTION', material: 'infection', ray: 0x5a0410 },
 ];
 
 export function winTier(win: number, bet: number): number {
@@ -42,7 +42,7 @@ function cel(light: string, base: string): FillGradient {
 }
 
 const title = (size: number, light = '#fff6c0', base = '#ffd23f'): TextStyleOptions => ({
-  fontFamily: '"Luckiest Guy", sans-serif',
+  fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
   fontSize: size,
   fill: cel(light, base),
   stroke: { color: COLORS.ink, width: Math.max(8, size * 0.16), join: 'round' },
@@ -350,7 +350,7 @@ export class Overlays extends Container {
     eye.y = -40;
     eye.alpha = 0.9;
     gsap.to(eye, { rotation: 0.06, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    const ribbon = this.ribbon(860, 150, 0x2a1530);
+    const ribbon = this.ribbon(860, 150, 0x1e0a08);
     ribbon.y = -150;
     const heading = this.head3d(t0.name, 104, t0.material);
     heading.y = -160;
@@ -489,7 +489,7 @@ export class Overlays extends Container {
     this.audio.featureStart();
     this.fx.shake(16);
     this.fx.glitch(3);
-    this.sunburst(0x5a0b22);
+    this.sunburst(0x46060c);
     const book = new Sprite(this.tex.normal[Sym.CODEX]);
     book.anchor.set(0.5);
     book.width = book.height = 440;
@@ -511,7 +511,7 @@ export class Overlays extends Container {
     await this.waitOrSkip(1700);
 
     gsap.to(book, { alpha: 0, duration: 0.3 });
-    const caption = new Text({ text: 'LE CODEX CHOISIT UNE SOUCHE…', style: title(42, '#ffb0b8', '#ff3347') });
+    const caption = new Text({ text: 'LE LIVRE CHOISIT UNE SOUCHE…', style: title(42, '#ffb0b8', '#ff3347') });
     caption.anchor.set(0.5);
     caption.y = 230;
     this.content.addChild(caption);
@@ -539,7 +539,7 @@ export class Overlays extends Container {
     this.audio.stinger(1);
     this.fx.shake(14);
     this.fx.glitch(2);
-    this.sunburst(0x4a1830);
+    this.sunburst(0x3e1806);
     const ribbon = this.ribbon(820, 150, 0x8a0f26);
     ribbon.y = mutation !== null ? -290 : -20;
     const head = this.head3d(`+${spins} TOURS GRATUITS`, 84, 'gold');
@@ -567,8 +567,8 @@ export class Overlays extends Container {
   async featureOutro(total: number, spins: number, bet: number, onTick?: (v: number) => void): Promise<void> {
     this.open();
     this.audio.stinger(1);
-    this.sunburst(0x3a1640);
-    const ribbon = this.ribbon(900, 150, 0x2a1530);
+    this.sunburst(0x3a2408);
+    const ribbon = this.ribbon(900, 150, 0x1e0a08);
     ribbon.y = -200;
     const head = this.head3d('INFECTION TERMINÉE', 80, 'bone');
     head.y = -210;
@@ -605,7 +605,7 @@ export class Overlays extends Container {
 
   async message(text: string, ms = 1600): Promise<void> {
     this.open();
-    const ribbon = this.ribbon(900, 150, 0x2a1530);
+    const ribbon = this.ribbon(900, 150, 0x1e0a08);
     const t = this.head3d(text, 62, 'bone');
     t.y = -8;
     this.content.addChild(ribbon, t);
