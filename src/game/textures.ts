@@ -17,7 +17,7 @@ import {
 } from './art/painters';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP, reelX } from './layout';
 import { containCanvas } from './assets';
-import { PAINTED } from './art/premium';
+import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
 import { decorateFrame } from './art/frameDeco';
@@ -103,7 +103,7 @@ function drawRoyal(key: string): HTMLCanvasElement {
   return c;
 }
 
-const PREMIUM_ZOOM: Record<string, number> = { codex: 1.17, zero: 1.08, antidote: 1.1, mask: 1.04 };
+const PREMIUM_ZOOM: Record<string, number> = { codex: 1.1, zero: 1.12, mask: 1.12, antidote: 1.08, blood: 1.08 };
 
 const PREMIUM_AURA: Record<string, string> = {
   codex: '#ff3347',

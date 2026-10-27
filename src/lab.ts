@@ -1,6 +1,6 @@
 import '@fontsource/luckiest-guy/400.css';
 import '@fontsource/nunito/900.css';
-import { PAINTED } from './game/art/premium';
+import { ICONS as PAINTED } from './game/art/icons';
 import { downsample } from './game/art/paint';
 import { ORB, SRES, paintSpectre } from './game/art/spectre';
 import { paintRoyal } from './game/art/royals';

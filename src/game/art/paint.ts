@@ -58,10 +58,13 @@ export function piece(ctx: CanvasRenderingContext2D, path: Path2D, o: Piece): vo
     sc.fill(path);
     sc.globalCompositeOperation = 'destination-out';
     const [dx, dy] = o.shadowOff ?? [-16, -16];
-    if (o.shadowSoft) sc.filter = `blur(${o.shadowSoft}px)`;
+    sc.fillStyle = '#000';
     sc.translate(dx, dy);
     sc.fill(path);
+    tc.save();
+    if (o.shadowSoft) tc.filter = `blur(${o.shadowSoft}px)`;
     blit(tc, s);
+    tc.restore();
   }
   if (o.light) {
     const [s, sc] = scratch(ctx);
@@ -69,10 +72,14 @@ export function piece(ctx: CanvasRenderingContext2D, path: Path2D, o: Piece): vo
     sc.fill(path);
     sc.globalCompositeOperation = 'destination-out';
     const [dx, dy] = o.lightOff ?? [10, 12];
-    sc.filter = 'blur(1.5px)';
+    sc.fillStyle = '#000'; // the cutter must be opaque, whatever the light's alpha
+    // cut crisply, then soften the crescent while compositing (blurring the cutter left a veil)
     sc.translate(dx, dy);
     sc.fill(path);
+    tc.save();
+    tc.filter = 'blur(1.5px)';
     blit(tc, s);
+    tc.restore();
   }
   if (o.ao) {
     tc.save();
