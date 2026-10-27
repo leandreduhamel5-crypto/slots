@@ -144,6 +144,28 @@ export class ReelBoard extends Container {
     this.infectionGlow.blendMode = 'add';
     this.infectionGlow.alpha = 0;
     this.frameLayer.addChild(this.infectionGlow, frame);
+    // live lights on the frame ornaments: the hazard beacon and the four corner eyes
+    const light = (x: number, y: number, size: number, tint: number) => {
+      const g = new Sprite(tex.glow);
+      g.anchor.set(0.5);
+      g.position.set(x, y);
+      g.width = g.height = size;
+      g.tint = tint;
+      g.blendMode = 'add';
+      this.frameLayer.addChild(g);
+      return g;
+    };
+    const beacon = light(BOARD_W + FRAME_PAD - 8, BOARD_H / 2 - 8, 130, 0xff8a2a);
+    gsap.to(beacon, { alpha: 0.15, duration: 0.45, yoyo: true, repeat: -1, ease: 'steps(1)' });
+    [
+      [-FRAME_PAD + 16, -FRAME_PAD + 16],
+      [BOARD_W + FRAME_PAD - 16, -FRAME_PAD + 16],
+      [-FRAME_PAD + 16, BOARD_H + FRAME_PAD - 16],
+      [BOARD_W + FRAME_PAD - 16, BOARD_H + FRAME_PAD - 16],
+    ].forEach(([x, y], i) => {
+      const eye = light(x, y, 70, COLORS.infection);
+      gsap.fromTo(eye, { alpha: 0.2 }, { alpha: 0.7, duration: 1.1 + i * 0.17, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
+    });
 
     this.addChild(
       this.panels,
