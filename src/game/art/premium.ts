@@ -1,5 +1,5 @@
 import { INK, makeCanvas, seeded } from './painters';
-import { paintCodex as paintCodex2, paintInfected as paintInfected2 } from './premium2';
+import { paintAntidote as paintAntidote2, paintBloodBag as paintBloodBag2, paintCodex as paintCodex2, paintGasMask as paintGasMask2, paintInfected as paintInfected2 } from './premium2';
 import { P, dot, drip, gloss, grunge, groundShadow, layer, lin, line, path, piece, rad } from './paint';
 
 /** Painted premium symbol: base layer, animated parts (same frame), and the emissive bits for the glow. */
@@ -1243,8 +1243,8 @@ function rivetBrass(ctx: CanvasRenderingContext2D, x: number, y: number, r: numb
 export const PAINTED: Record<string, () => PaintedSymbol> = {
   codex: paintCodex2,
   zero: paintInfected2,
-  antidote: paintAntidote,
-  blood: paintBloodBag,
-  mask: paintGasMask,
+  antidote: paintAntidote2,
+  blood: paintBloodBag2,
+  mask: paintGasMask2,
 };
 

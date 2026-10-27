@@ -844,3 +844,818 @@ export function paintInfected(): PaintedSymbol {
   void INK;
   return { base: c, parts: { jaw: jawC }, glow: g };
 }
+
+/* ================================================================== shared: volumetric toxic smoke */
+
+function toxicSmoke(ctx: CanvasRenderingContext2D, puffs: [number, number, number][], col: [string, string, string], glow: string): void {
+  const blob = path((q) => {
+    for (const [x, y, r] of puffs) {
+      q.moveTo(x + r, y);
+      q.arc(x, y, r, 0, Math.PI * 2);
+    }
+  });
+  ctx.save();
+  ctx.filter = 'blur(14px)';
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = glow;
+  ctx.fill(blob);
+  ctx.restore();
+  line(ctx, blob, 13);
+  piece(ctx, blob, {
+    fill: col[1],
+    shadow: col[2],
+    shadowOff: [-10, -12],
+    shadowSoft: 2,
+    light: col[0],
+    lightOff: [8, 9],
+    ink: 0,
+    detail: (d) => {
+      for (const [x, y, r] of puffs) dot(d, x - r * 0.38, y - r * 0.42, r * 0.18, 'rgba(255,255,255,0.55)');
+    },
+  });
+}
+
+/* ================================================================== MASQUE À GAZ */
+
+export function paintGasMask(): PaintedSymbol {
+  const [c, ctx] = layer();
+  const [g, gctx] = layer();
+  groundShadow(ctx, 256, 488, 150, 14, 0.5);
+  ctx.save();
+  ctx.translate(256, 256);
+  ctx.rotate(-0.06);
+  ctx.translate(-256, -256);
+  gctx.setTransform(ctx.getTransform());
+
+  // ---- head harness straps leaving the frame
+  const strapCol = (x0: number, y0: number, x1: number, y1: number) => lin(ctx, x0, y0, x1, y1, [[0, '#4a3a30'], [1, '#2a1e18']]);
+  for (const [d, x0, y0, x1, y1] of [
+    ['M108 176 C70 160 40 162 8 178 L8 214 C40 200 70 200 104 214 Z', 8, 170, 108, 214],
+    ['M404 176 C442 160 472 162 504 178 L504 214 C472 200 442 200 408 214 Z', 404, 170, 504, 214],
+    ['M226 70 C224 44 228 20 236 0 L276 0 C284 20 288 44 286 70 Z', 226, 0, 286, 70],
+  ] as const) {
+    piece(ctx, new Path2D(d), {
+      fill: strapCol(x0, y0, x1, y1),
+      ink: 7,
+      detail: (q) => {
+        q.save();
+        q.setLineDash([5, 6]);
+        q.strokeStyle = 'rgba(220,190,150,0.55)';
+        q.lineWidth = 2;
+        q.stroke(new Path2D(d));
+        q.restore();
+        grunge(q, 101, { color: '#120a06', count: 50, size: [0.6, 1.8], alpha: 0.5, area: [0, 0, 512, 220] });
+      },
+    });
+  }
+  for (const [x, y] of [[44, 190], [468, 190]] as const) {
+    piece(ctx, path((q) => q.roundRect(x - 14, y - 22, 28, 44, 6)), {
+      fill: lin(ctx, x - 14, y - 22, x + 14, y + 22, [[0, '#fff1b0'], [0.4, '#f2b642'], [1, '#6e4608']]),
+      shadow: 'rgba(90,50,0,0.6)',
+      shadowOff: [-5, -5],
+      ink: 5,
+    });
+    piece(ctx, path((q) => q.roundRect(x - 6, y - 13, 12, 26, 3)), { fill: '#1a0e08', ink: 0 });
+  }
+
+  // ---- rubber face piece
+  const face = path((q) => {
+    q.moveTo(256, 58);
+    q.bezierCurveTo(344, 58, 410, 112, 414, 200);
+    q.bezierCurveTo(418, 276, 392, 336, 346, 380);
+    q.bezierCurveTo(318, 408, 290, 420, 256, 420);
+    q.bezierCurveTo(222, 420, 194, 408, 166, 380);
+    q.bezierCurveTo(120, 336, 94, 276, 98, 200);
+    q.bezierCurveTo(102, 112, 168, 58, 256, 58);
+    q.closePath();
+  });
+  piece(ctx, face, {
+    fill: rad(ctx, 210, 150, 20, 300, [[0, '#a8bc86'], [0.35, '#728a58'], [0.75, '#46583a'], [1, '#26321e']]),
+    shadow: 'rgba(16,24,10,0.6)',
+    shadowOff: [-40, -30],
+    shadowSoft: 8,
+    ao: 0.5,
+    aoColor: '#0c1208',
+    ink: 0,
+    detail: (d) => {
+      grunge(d, 102, { color: '#141c0c', count: 500, size: [0.5, 2.2], alpha: 0.4, area: [96, 56, 320, 366], scratches: 26 });
+      grunge(d, 103, { color: '#dcecc0', count: 180, size: [0.4, 1.3], alpha: 0.3, area: [96, 56, 320, 366], scratches: 10 });
+      // moulded seams: centre ridge and cheek panels
+      for (const s of ['M256 66 C254 120 252 160 252 268', 'M128 270 C160 300 196 316 220 318', 'M384 270 C352 300 316 316 292 318', 'M150 104 C200 84 312 84 362 104']) {
+        const p = new Path2D(s);
+        line(d, p, 6, 'rgba(14,20,8,0.55)');
+        d.save();
+        d.translate(-3, -2);
+        line(d, p, 2.5, 'rgba(210,230,180,0.5)');
+        d.restore();
+      }
+      // rubber sheen
+      d.save();
+      d.globalCompositeOperation = 'screen';
+      d.filter = 'blur(6px)';
+      line(d, new Path2D('M130 180 C134 130 166 96 214 80'), 16, 'rgba(230,255,200,0.35)');
+      d.restore();
+      // blood splatter on the forehead
+      const rnd = seeded(104);
+      d.fillStyle = '#8e0f26';
+      for (let i = 0; i < 9; i++) {
+        d.beginPath();
+        d.arc(310 + (rnd() - 0.5) * 70, 96 + (rnd() - 0.5) * 34, 2 + rnd() * (i ? 7 : 14), 0, Math.PI * 2);
+        d.fill();
+      }
+      d.fillStyle = 'rgba(255,120,130,0.8)';
+      d.beginPath();
+      d.arc(306, 92, 4, 0, Math.PI * 2);
+      d.fill();
+    },
+  });
+  line(ctx, face, 10);
+
+  // ---- lenses: moulded rubber rings, brass rims with rivets, glass with glowing infected eyes
+  const eyes: Path2D[] = [];
+  for (const [cx, cy, s, cracked] of [[178, 202, 0.96, false], [330, 198, 1.04, true]] as const) {
+    const R = 63 * s;
+    piece(ctx, path((q) => q.arc(cx, cy, R + 12, 0, Math.PI * 2)), {
+      fill: rad(ctx, cx - 18, cy - 18, 10, R + 14, [[0, '#8aa06a'], [1, '#2e3c22']]),
+      shadow: 'rgba(10,16,6,0.6)',
+      shadowOff: [-10, -10],
+      ink: 7,
+    });
+    piece(ctx, path((q) => q.arc(cx, cy, R, 0, Math.PI * 2)), {
+      fill: lin(ctx, cx - R, cy - R, cx + R, cy + R, [[0, '#fff4c0'], [0.25, '#f2c04a'], [0.6, '#b07a1e'], [1, '#5a3804']]),
+      shadow: 'rgba(80,44,0,0.6)',
+      shadowOff: [-9, -9],
+      light: 'rgba(255,250,220,0.95)',
+      lightOff: [5, 5],
+      ink: 7,
+    });
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + 0.2;
+      const rx = cx + Math.cos(a) * (R - 8);
+      const ry = cy + Math.sin(a) * (R - 8);
+      piece(ctx, path((q) => q.arc(rx, ry, 4.5, 0, Math.PI * 2)), { fill: lin(ctx, rx - 4, ry - 4, rx + 4, ry + 4, [[0, '#ffffff'], [1, '#6e4608']]), ink: 2.5 });
+    }
+    const gR = R - 18;
+    const glass = path((q) => q.arc(cx, cy, gR, 0, Math.PI * 2));
+    piece(ctx, glass, {
+      fill: rad(ctx, cx, cy + 6, 4, gR, [[0, '#4a0a1a'], [0.7, '#1a0410'], [1, '#08020a']]),
+      ink: 6,
+    });
+    // the glowing eye behind the glass
+    const eye = path((q) => {
+      q.moveTo(cx - 30 * s, cy + 2);
+      q.quadraticCurveTo(cx, cy - 22 * s, cx + 26 * s, cy + 8);
+      q.quadraticCurveTo(cx - 4, cy + 19 * s, cx - 30 * s, cy + 2);
+      q.closePath();
+    });
+    eyes.push(eye);
+    ctx.save();
+    ctx.clip(glass);
+    ctx.save();
+    ctx.filter = 'blur(12px)';
+    ctx.fillStyle = 'rgba(255,40,60,0.95)';
+    ctx.fill(eye);
+    ctx.restore();
+    piece(ctx, eye, { fill: rad(ctx, cx - 2, cy + 4, 1, 34 * s, [[0, '#ffffff'], [0.3, '#ffb8b0'], [0.7, '#ff3347'], [1, '#a0081e']]), ink: 0 });
+    piece(ctx, path((q) => q.ellipse(cx - 2, cy + 4, 3, 13 * s, 0.15, 0, Math.PI * 2)), { fill: '#2a0004', ink: 0 });
+    // fogged glass: condensation at the bottom
+    ctx.fillStyle = lin(ctx, 0, cy + gR * 0.2, 0, cy + gR, [[0, 'rgba(200,220,230,0)'], [1, 'rgba(200,220,230,0.28)']]);
+    ctx.fillRect(cx - gR, cy - gR, gR * 2, gR * 2);
+    // reflections
+    gloss(ctx, path((q) => q.arc(cx, cy, gR - 9, Math.PI * 1.08, Math.PI * 1.5)), 7, 0.85);
+    piece(ctx, path((q) => q.roundRect(cx + gR * 0.25, cy - gR * 0.62, gR * 0.32, gR * 0.2, 4)), { fill: 'rgba(255,255,255,0.55)', ink: 0 });
+    if (cracked) {
+      const ix = cx + 18;
+      const iy = cy - 20;
+      const crk = path((q) => {
+        for (const [a, l] of [[-2.6, 50], [-1.4, 46], [-0.3, 40], [0.9, 52], [2.0, 44], [2.9, 30]] as const) {
+          q.moveTo(ix, iy);
+          let x = ix;
+          let y = iy;
+          for (let k = 1; k <= 3; k++) {
+            x += Math.cos(a + (k % 2 ? 0.25 : -0.2)) * (l / 3);
+            y += Math.sin(a + (k % 2 ? 0.25 : -0.2)) * (l / 3);
+            q.lineTo(x, y);
+          }
+        }
+        q.moveTo(ix + 14, iy);
+        q.arc(ix, iy, 14, 0, Math.PI * 2);
+      });
+      line(ctx, crk, 4, 'rgba(6,2,6,0.85)');
+      line(ctx, crk, 1.6, 'rgba(255,255,255,0.95)');
+    }
+    ctx.restore();
+    // eye light spilling on the brass and rubber
+    spill(ctx, cx, cy, R + 40, 'rgba(255,40,60,1)', 0.18);
+  }
+
+  // ---- exhale valve between the lenses
+  piece(ctx, path((q) => q.roundRect(228, 270, 56, 40, 12)), {
+    fill: lin(ctx, 228, 270, 284, 310, [[0, '#e0e6ea'], [0.4, '#9aa6b0'], [1, '#3a4450']]),
+    shadow: 'rgba(20,24,30,0.6)',
+    shadowOff: [-6, -6],
+    ink: 6,
+    detail: (d) => {
+      d.fillStyle = '#1a1e24';
+      for (let k = 0; k < 4; k++) d.fillRect(238 + k * 10, 280, 5, 20);
+    },
+  });
+
+  // ---- filter canister: a cylinder pointing at the viewer, chipped olive paint, hazard band
+  ctx.save();
+  ctx.translate(262, 318);
+  ctx.rotate(0.18);
+  const bodyW = 74;
+  const body = path((q) => q.rect(-bodyW, 0, bodyW * 2, 92));
+  // threaded collar
+  piece(ctx, path((q) => q.roundRect(-44, -22, 88, 30, 8)), {
+    fill: lin(ctx, -44, 0, 44, 0, [[0, '#3a4450'], [0.3, '#c9d3dc'], [0.6, '#7d8a95'], [1, '#2a3038']]),
+    ink: 6,
+    detail: (d) => {
+      d.strokeStyle = 'rgba(20,24,30,0.6)';
+      d.lineWidth = 2;
+      for (let x = -40; x < 44; x += 7) {
+        d.beginPath();
+        d.moveTo(x, -20);
+        d.lineTo(x + 3, 6);
+        d.stroke();
+      }
+    },
+  });
+  piece(ctx, body, {
+    fill: lin(ctx, -bodyW, 0, bodyW, 0, [[0, '#2a3220'], [0.22, '#7a8a58'], [0.42, '#b8c494'], [0.62, '#5a6a40'], [1, '#1e2616']]),
+    ink: 0,
+    detail: (d) => {
+      // chipped paint showing bare steel
+      const rnd = seeded(105);
+      for (let i = 0; i < 12; i++) {
+        const x = (rnd() - 0.5) * bodyW * 1.8;
+        const y = 8 + rnd() * 78;
+        d.fillStyle = 'rgba(200,210,220,0.75)';
+        d.beginPath();
+        d.ellipse(x, y, 3 + rnd() * 6, 2 + rnd() * 4, rnd() * 3, 0, Math.PI * 2);
+        d.fill();
+      }
+      grunge(d, 106, { color: '#10140a', count: 120, size: [0.5, 2], alpha: 0.5, area: [-bodyW, 0, bodyW * 2, 92], scratches: 12 });
+      // hazard band wrapping round the cylinder
+      d.save();
+      d.beginPath();
+      d.rect(-bodyW, 34, bodyW * 2, 26);
+      d.clip();
+      d.fillStyle = '#ffcf33';
+      d.fillRect(-bodyW, 34, bodyW * 2, 26);
+      d.fillStyle = INK;
+      for (let x = -bodyW - 30; x < bodyW + 30; x += 22) {
+        // stripes compress toward the cylinder sides
+        const k = (v: number) => Math.sin((v / (bodyW + 30)) * (Math.PI / 2)) * bodyW;
+        d.beginPath();
+        d.moveTo(k(x), 60);
+        d.lineTo(k(x + 11), 60);
+        d.lineTo(k(x + 22), 34);
+        d.lineTo(k(x + 11), 34);
+        d.closePath();
+        d.fill();
+      }
+      d.restore();
+      d.fillStyle = 'rgba(0,0,0,0.35)';
+      d.fillRect(-bodyW, 60, bodyW * 2, 3);
+      // cylinder shading
+      d.fillStyle = lin(d, -bodyW, 0, bodyW, 0, [[0, 'rgba(0,0,0,0.45)'], [0.35, 'rgba(0,0,0,0)'], [0.75, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0.55)']]);
+      d.fillRect(-bodyW, 0, bodyW * 2, 92);
+    },
+  });
+  line(ctx, path((q) => { q.moveTo(-bodyW, 0); q.lineTo(-bodyW, 92); q.moveTo(bodyW, 0); q.lineTo(bodyW, 92); }), 7);
+  // front face (ellipse) with perforated grille
+  const front = path((q) => q.ellipse(0, 92, bodyW, 28, 0, 0, Math.PI * 2));
+  piece(ctx, front, {
+    fill: rad(ctx, -18, 84, 4, bodyW, [[0, '#f0f4f6'], [0.5, '#a8b2ba'], [1, '#4a5560']]),
+    ink: 7,
+    detail: (d) => {
+      d.fillStyle = '#1a1e24';
+      for (let r = 0; r < 4; r++) {
+        const n = 8 + r * 6;
+        for (let k = 0; k < n; k++) {
+          const a = (k / n) * Math.PI * 2;
+          const rr = 12 + r * 14;
+          d.beginPath();
+          d.ellipse(Math.cos(a) * rr, 92 + Math.sin(a) * rr * 0.38, 2.8, 1.4, 0, 0, Math.PI * 2);
+          d.fill();
+        }
+      }
+    },
+  });
+  piece(ctx, path((q) => q.ellipse(0, 92, 10, 4, 0, 0, Math.PI * 2)), { fill: '#3a4450', ink: 3 });
+  gloss(ctx, path((q) => { q.moveTo(-bodyW + 16, 8); q.lineTo(-bodyW + 16, 84); }), 5, 0.6);
+  ctx.restore();
+  ctx.restore();
+
+  // ---- toxic smoke leaking from the canister (screen space)
+  const puffs: [number, number, number][] = [
+    [336, 432, 18], [362, 420, 22], [380, 396, 26], [366, 372, 20], [400, 370, 22], [420, 346, 18], [404, 328, 14], [432, 322, 12],
+  ];
+  toxicSmoke(ctx, puffs, ['#e6ffc8', '#8ee66a', '#3f9a2c'], 'rgba(120,255,80,1)');
+
+  // ---- emissive
+  gctx.fillStyle = '#ff2a44';
+  for (const e of eyes) gctx.fill(e);
+  gctx.setTransform(1, 0, 0, 1, 0, 0);
+  gctx.fillStyle = '#7dff5a';
+  for (const [x, y, r] of puffs) {
+    gctx.beginPath();
+    gctx.arc(x, y, r * 0.8, 0, Math.PI * 2);
+    gctx.fill();
+  }
+  return { base: c, parts: {}, glow: g };
+}
+
+/* ================================================================== ANTIDOTE (injector) */
+
+function sparkle4(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
+  const p = path((q) => {
+    q.moveTo(x, y - r);
+    q.quadraticCurveTo(x + r * 0.14, y - r * 0.14, x + r, y);
+    q.quadraticCurveTo(x + r * 0.14, y + r * 0.14, x, y + r);
+    q.quadraticCurveTo(x - r * 0.14, y + r * 0.14, x - r, y);
+    q.quadraticCurveTo(x - r * 0.14, y - r * 0.14, x, y - r);
+    q.closePath();
+  });
+  ctx.save();
+  ctx.filter = 'blur(6px)';
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = color;
+  ctx.fill(p);
+  ctx.restore();
+  line(ctx, p, 6);
+  piece(ctx, p, { fill: rad(ctx, x, y, 1, r, [[0, '#ffffff'], [0.5, '#d8fbff'], [1, '#7ae8ff']]), ink: 0 });
+}
+
+export function paintAntidote(): PaintedSymbol {
+  const [c, ctx] = layer();
+  const [g, gctx] = layer();
+  groundShadow(ctx, 270, 490, 120, 12, 0.45);
+  ctx.save();
+  ctx.translate(250, 262);
+  ctx.rotate(-0.72);
+  gctx.setTransform(ctx.getTransform());
+  const steel = (x0: number, x1: number) =>
+    lin(ctx, x0, 0, x1, 0, [[0, '#4a5560'], [0.2, '#f4f8fa'], [0.45, '#aab6c0'], [0.7, '#6a7682'], [1, '#2a3038']]);
+  const HW = 60;
+
+  // cyan aura behind everything
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.filter = 'blur(34px)';
+  ctx.fillStyle = 'rgba(40,200,255,0.9)';
+  ctx.fillRect(-HW - 20, -80, HW * 2 + 40, 210);
+  ctx.restore();
+
+  // ---- needle and hub
+  piece(ctx, path((q) => { q.moveTo(-4, 140); q.lineTo(4, 140); q.lineTo(2.5, 198); q.lineTo(0, 210); q.lineTo(-2.5, 198); q.closePath(); }), { fill: steel(-4, 4), ink: 4 });
+  piece(ctx, path((q) => { q.moveTo(-40, 112); q.lineTo(40, 112); q.lineTo(16, 146); q.lineTo(-16, 146); q.closePath(); }), {
+    fill: steel(-40, 40),
+    shadow: 'rgba(20,24,30,0.5)',
+    shadowOff: [-10, 0],
+    ink: 6,
+  });
+  // ---- plunger rod and thumb ring
+  piece(ctx, path((q) => q.rect(-13, -196, 26, 100)), {
+    fill: steel(-13, 13),
+    ink: 5,
+    detail: (d) => {
+      d.fillStyle = 'rgba(30,36,44,0.5)';
+      for (let y = -186; y < -110; y += 9) d.fillRect(-13, y, 26, 3);
+    },
+  });
+  const ring = path((q) => {
+    q.arc(0, -218, 34, 0, Math.PI * 2);
+    q.moveTo(19, -218);
+    q.arc(0, -218, 19, 0, Math.PI * 2, true);
+  });
+  piece(ctx, ring, {
+    fill: lin(ctx, -34, -252, 34, -184, [[0, '#ffffff'], [0.35, '#c4ced6'], [0.7, '#6a7682'], [1, '#2a3038']]),
+    shadow: 'rgba(20,24,30,0.55)',
+    shadowOff: [-7, -7],
+    ink: 6,
+  });
+
+  // ---- glass barrel (back), liquid, stopper
+  const barrel = path((q) => q.roundRect(-HW, -108, HW * 2, 222, 22));
+  piece(ctx, barrel, {
+    fill: lin(ctx, -HW, 0, HW, 0, [[0, 'rgba(150,210,235,0.45)'], [0.5, 'rgba(220,245,255,0.18)'], [1, 'rgba(80,130,160,0.55)']]),
+    ink: 0,
+  });
+  const liquid = path((q) => q.roundRect(-HW + 9, -58, HW * 2 - 18, 164, [6, 6, 18, 18]));
+  piece(ctx, liquid, {
+    fill: lin(ctx, -HW, 0, HW, 0, [[0, '#6ff0ff'], [0.35, '#14c8ff'], [0.75, '#0670b0'], [1, '#033a66']]),
+    ink: 0,
+    detail: (d) => {
+      // inner light core
+      d.fillStyle = rad(d, -8, 30, 2, 70, [[0, 'rgba(220,255,255,0.5)'], [1, 'rgba(120,240,255,0)']]);
+      d.fillRect(-HW, -60, HW * 2, 170);
+      // swirling cure
+      d.strokeStyle = 'rgba(200,250,255,0.35)';
+      d.lineWidth = 3;
+      d.lineCap = 'round';
+      for (let k = 0; k < 2; k++) {
+        d.beginPath();
+        for (let y = -50; y <= 100; y += 5) {
+          const x = Math.sin(y * 0.06 + k * Math.PI) * 26;
+          if (y === -50) d.moveTo(x, y);
+          else d.lineTo(x, y);
+        }
+        d.stroke();
+      }
+      const rnd = seeded(121);
+      for (let i = 0; i < 10; i++) {
+        const x = (rnd() - 0.5) * (HW * 2 - 30);
+        const y = -46 + rnd() * 146;
+        const r = 2.5 + rnd() * 7;
+        d.strokeStyle = 'rgba(235,255,255,0.9)';
+        d.lineWidth = 2.2;
+        d.beginPath();
+        d.arc(x, y, r, 0, Math.PI * 2);
+        d.stroke();
+        dot(d, x - r * 0.35, y - r * 0.35, r * 0.32, '#fff', 0.95);
+      }
+    },
+  });
+  // meniscus
+  line(ctx, path((q) => { q.moveTo(-HW + 10, -58); q.quadraticCurveTo(0, -50, HW - 10, -58); }), 3, 'rgba(230,255,255,0.9)');
+  piece(ctx, path((q) => q.roundRect(-HW + 6, -84, HW * 2 - 12, 28, 8)), {
+    fill: lin(ctx, 0, -84, 0, -56, [[0, '#4a5560'], [0.5, '#2a3038'], [1, '#14181e']]),
+    ink: 5,
+    detail: (d) => {
+      d.fillStyle = 'rgba(255,255,255,0.18)';
+      d.fillRect(-HW + 6, -80, HW * 2 - 12, 4);
+      d.fillStyle = 'rgba(0,0,0,0.35)';
+      for (const y of [-74, -66]) d.fillRect(-HW + 6, y, HW * 2 - 12, 2);
+    },
+  });
+  // label band wrapping the barrel
+  piece(ctx, path((q) => q.rect(-HW, 18, HW * 2, 46)), {
+    fill: lin(ctx, -HW, 0, HW, 0, [[0, '#b8a888'], [0.35, '#fff8ec'], [0.7, '#e8dcc4'], [1, '#8a7a5a']]),
+    ink: 5,
+    detail: (d) => {
+      d.fillStyle = '#1599c2';
+      d.fillRect(-HW, 18, HW * 2, 8);
+      d.fillRect(-HW, 56, HW * 2, 8);
+      d.save();
+      d.font = '900 15px Nunito, sans-serif';
+      d.textAlign = 'center';
+      d.textBaseline = 'middle';
+      d.fillStyle = '#0a5a7a';
+      d.fillText('ANTIDOTE', 10, 41);
+      d.restore();
+    },
+  });
+  piece(ctx, path((q) => { q.roundRect(-44, 31, 8, 20, 2); q.roundRect(-50, 37, 20, 8, 2); }), { fill: '#e0213a', ink: 0 });
+  // tick marks
+  const ticks = path((q) => {
+    for (let y = -40; y <= 100; y += 14) {
+      if (y > 10 && y < 70) continue;
+      q.moveTo(HW - 6, y);
+      q.lineTo(HW - (((y + 40) / 14) % 2 ? 16 : 26), y);
+    }
+  });
+  line(ctx, ticks, 3, 'rgba(10,30,40,0.85)');
+  // glass front: refraction edges, highlights, outline
+  ctx.save();
+  ctx.clip(barrel);
+  line(ctx, path((q) => { q.moveTo(-HW + 7, -100); q.lineTo(-HW + 7, 106); }), 3, 'rgba(255,255,255,0.75)');
+  line(ctx, path((q) => { q.moveTo(HW - 7, -100); q.lineTo(HW - 7, 106); }), 2, 'rgba(200,240,255,0.5)');
+  gloss(ctx, path((q) => { q.moveTo(-HW + 22, -96); q.lineTo(-HW + 22, 100); }), 9, 0.8);
+  gloss(ctx, path((q) => { q.moveTo(HW - 22, -60); q.lineTo(HW - 22, -10); }), 4, 0.6);
+  ctx.restore();
+  line(ctx, barrel, 8);
+
+  // ---- finger flange
+  piece(ctx, path((q) => q.roundRect(-112, -126, 224, 26, 13)), {
+    fill: lin(ctx, 0, -126, 0, -100, [[0, '#ffffff'], [0.4, '#b8c4ce'], [1, '#4a5662']]),
+    shadow: 'rgba(20,24,30,0.5)',
+    shadowOff: [-16, -4],
+    ink: 7,
+  });
+  // ---- steel cage rails with clamps
+  for (const sx of [-1, 1]) {
+    piece(ctx, path((q) => q.roundRect(sx * (HW + 4) - 7, -104, 14, 214, 7)), { fill: steel(sx * (HW + 4) - 7, sx * (HW + 4) + 7), ink: 5 });
+  }
+  for (const y of [-92, 96]) {
+    piece(ctx, path((q) => q.roundRect(-HW - 16, y - 7, HW * 2 + 32, 14, 7)), {
+      fill: lin(ctx, 0, y - 7, 0, y + 7, [[0, '#e9eef2'], [1, '#5a6672']]),
+      ink: 5,
+    });
+    for (const sx of [-1, 1]) {
+      piece(ctx, path((q) => q.arc(sx * (HW + 4), y, 6, 0, Math.PI * 2)), { fill: lin(ctx, sx * (HW + 4) - 6, y - 6, sx * (HW + 4) + 6, y + 6, [[0, '#ffffff'], [1, '#3a4450']]), ink: 3 });
+    }
+  }
+
+  // ---- droplet at the tip
+  const drop = path((q) => {
+    q.moveTo(0, 212);
+    q.bezierCurveTo(-7, 222, -12, 228, -12, 236);
+    q.arc(0, 236, 12, Math.PI, 0, true);
+    q.bezierCurveTo(12, 228, 7, 222, 0, 212);
+    q.closePath();
+  });
+  piece(ctx, drop, { fill: lin(ctx, -12, 0, 12, 0, [[0, '#d8ffff'], [0.5, '#38dcff'], [1, '#0a7aa8']]), ink: 4 });
+  dot(ctx, -4, 232, 3, '#fff');
+  ctx.restore();
+
+  const sparks: [number, number, number][] = [[90, 130, 22], [430, 318, 16], [118, 408, 12], [400, 120, 10]];
+  for (const [x, y, r] of sparks) sparkle4(ctx, x, y, r, 'rgba(120,240,255,1)');
+
+  // ---- emissive
+  gctx.fillStyle = '#38dcff';
+  gctx.fill(liquid);
+  gctx.fill(drop);
+  gctx.setTransform(1, 0, 0, 1, 0, 0);
+  for (const [x, y, r] of sparks) {
+    gctx.beginPath();
+    gctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
+    gctx.fill();
+  }
+  return { base: c, parts: {}, glow: g };
+}
+
+/* ================================================================== POCHE DE SANG INFECTÉ */
+
+export function paintBloodBag(): PaintedSymbol {
+  const [c, ctx] = layer();
+  const [g, gctx] = layer();
+  groundShadow(ctx, 262, 490, 150, 14, 0.5);
+  ctx.save();
+  ctx.translate(256, 256);
+  ctx.rotate(-0.07);
+  ctx.translate(-256, -256);
+  gctx.setTransform(ctx.getTransform());
+
+  // ---- hanger tab
+  const tab = path((q) => q.roundRect(198, 18, 116, 84, 22));
+  piece(ctx, tab, {
+    fill: lin(ctx, 0, 18, 0, 102, [[0, '#f6fafc'], [1, '#aebcc6']]),
+    shadow: 'rgba(80,96,110,0.55)',
+    shadowOff: [-12, -10],
+    ink: 8,
+  });
+  piece(ctx, path((q) => q.roundRect(228, 38, 56, 26, 13)), { fill: '#1e1018', ink: 6 });
+
+  // ---- bottom ports and IV line (behind the bag)
+  piece(ctx, path((q) => q.roundRect(174, 410, 40, 52, 8)), {
+    fill: lin(ctx, 174, 0, 214, 0, [[0, '#f4f8fa'], [1, '#98a6b0']]),
+    ink: 6,
+  });
+  piece(ctx, path((q) => q.roundRect(168, 450, 52, 26, 8)), {
+    fill: lin(ctx, 0, 450, 0, 476, [[0, '#7ae0ff'], [1, '#1580b0']]),
+    shadow: 'rgba(10,60,90,0.5)',
+    shadowOff: [-8, -6],
+    ink: 6,
+  });
+  line(ctx, path((q) => { q.moveTo(312, 420); q.lineTo(312, 432); }), 16);
+  line(ctx, path((q) => { q.moveTo(312, 420); q.lineTo(312, 432); }), 8, '#b5122f');
+  // drip chamber
+  const chamber = path((q) => q.roundRect(290, 428, 44, 58, 12));
+  piece(ctx, chamber, {
+    fill: lin(ctx, 286, 0, 332, 0, [[0, 'rgba(220,235,245,0.75)'], [0.5, 'rgba(255,255,255,0.35)'], [1, 'rgba(160,180,200,0.75)']]),
+    ink: 6,
+    detail: (d) => {
+      d.fillStyle = lin(d, 0, 446, 0, 474, [[0, '#ff4a5e'], [1, '#6a0418']]);
+      d.fillRect(290, 462, 44, 26);
+      piece(d, path((q) => { q.moveTo(312, 438); q.bezierCurveTo(306, 446, 305, 450, 305, 453); q.arc(312, 453, 7, Math.PI, 0, true); q.bezierCurveTo(319, 450, 318, 446, 312, 438); }), { fill: '#e0213a', ink: 2.5 });
+    },
+  });
+  gloss(ctx, path((q) => { q.moveTo(298, 436); q.lineTo(298, 478); }), 3, 0.8);
+  const tube = path((q) => {
+    q.moveTo(312, 486);
+    q.bezierCurveTo(314, 506, 350, 508, 378, 490);
+    q.bezierCurveTo(404, 472, 430, 476, 440, 500);
+  });
+  line(ctx, tube, 22);
+  line(ctx, tube, 13, '#b5122f');
+  ctx.save();
+  ctx.translate(-3, -3);
+  line(ctx, tube, 3.5, 'rgba(255,190,200,0.9)');
+  ctx.restore();
+
+  // ---- the bag
+  const bag = path((q) => {
+    q.moveTo(140, 92);
+    q.lineTo(372, 92);
+    q.bezierCurveTo(410, 94, 426, 116, 428, 156);
+    q.bezierCurveTo(440, 240, 436, 330, 420, 382);
+    q.bezierCurveTo(404, 424, 360, 432, 256, 432);
+    q.bezierCurveTo(152, 432, 108, 424, 92, 382);
+    q.bezierCurveTo(76, 330, 72, 240, 84, 156);
+    q.bezierCurveTo(86, 116, 102, 94, 140, 92);
+    q.closePath();
+  });
+  const surface = (q: Path2D) => {
+    q.moveTo(70, 186);
+    q.bezierCurveTo(150, 160, 210, 202, 268, 186);
+    q.bezierCurveTo(330, 170, 380, 150, 450, 176);
+  };
+  const blood = path((q) => {
+    surface(q);
+    q.lineTo(450, 450);
+    q.lineTo(70, 450);
+    q.closePath();
+  });
+  // cloudy plastic (air pocket)
+  piece(ctx, bag, { fill: lin(ctx, 0, 92, 0, 220, [[0, '#f4f8fa'], [1, '#c4d0d8']]), ink: 0 });
+  ctx.save();
+  ctx.clip(bag);
+  piece(ctx, blood, {
+    fill: lin(ctx, 0, 170, 0, 432, [[0, '#e8283e'], [0.22, '#a00c26'], [0.6, '#5e0214'], [1, '#2a0006']]),
+    ink: 0,
+    detail: (d) => {
+      // back-light: the blood glows where it is thin, near the bag's edges
+      d.save();
+      d.clip(bag);
+      d.globalCompositeOperation = 'lighter';
+      d.filter = 'blur(16px)';
+      d.strokeStyle = 'rgba(255,60,80,0.32)';
+      d.lineWidth = 40;
+      d.stroke(bag);
+      d.restore();
+      // black infection tendrils and clots
+      const rnd = seeded(131);
+      for (let i = 0; i < 6; i++) {
+        const x0 = i % 2 ? 110 + rnd() * 60 : 340 + rnd() * 60;
+        const y0 = 210 + rnd() * 200;
+        const a = rnd() * Math.PI * 2;
+        const pts = branch(x0, y0, a, 60 + rnd() * 70, 140 + i, 8);
+        d.save();
+        d.filter = 'blur(1px)';
+        d.strokeStyle = 'rgba(20,0,6,0.85)';
+        d.lineCap = 'round';
+        for (let k = 0; k < pts.length - 1; k++) {
+          d.lineWidth = 7 * (1 - k / pts.length) + 1;
+          d.beginPath();
+          d.moveTo(pts[k][0], pts[k][1]);
+          d.lineTo(pts[k + 1][0], pts[k + 1][1]);
+          d.stroke();
+        }
+        d.restore();
+      }
+      for (let i = 0; i < 7; i++) {
+        const x = 120 + rnd() * 280;
+        const y = 240 + rnd() * 170;
+        const r = 6 + rnd() * 14;
+        piece(d, path((q) => q.ellipse(x, y, r * 1.3, r, rnd() * 3, 0, Math.PI * 2)), {
+          fill: rad(d, x - r * 0.3, y - r * 0.3, 1, r * 1.3, [[0, '#5a0a18'], [1, '#14000a']]),
+          ink: 0,
+        });
+      }
+      // rising bubbles
+      for (let i = 0; i < 10; i++) {
+        const x = 110 + rnd() * 290;
+        const y = 210 + rnd() * 200;
+        const r = 3 + rnd() * 7;
+        d.strokeStyle = 'rgba(255,200,210,0.85)';
+        d.lineWidth = 2.2;
+        d.beginPath();
+        d.arc(x, y, r, 0, Math.PI * 2);
+        d.stroke();
+        dot(d, x - r * 0.35, y - r * 0.35, r * 0.3, '#fff', 0.95);
+      }
+    },
+  });
+  // meniscus
+  line(ctx, path(surface), 9, '#ff8a9a');
+  ctx.save();
+  ctx.translate(0, 6);
+  line(ctx, path(surface), 4, 'rgba(60,0,14,0.9)');
+  ctx.restore();
+  // plastic volume: soft shade on the right, creases near the top corners
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = lin(ctx, 260, 0, 440, 0, [[0, 'rgba(255,255,255,1)'], [1, 'rgba(150,140,180,1)']]);
+  ctx.fillRect(0, 0, P_, P_);
+  ctx.restore();
+  for (const d of ['M110 118 C130 140 136 170 132 196', 'M402 118 C382 140 376 170 380 196', 'M150 400 C190 412 230 416 270 414']) {
+    const p = new Path2D(d);
+    line(ctx, p, 4, 'rgba(60,40,60,0.35)');
+    ctx.save();
+    ctx.translate(-3, -1);
+    line(ctx, p, 2.5, 'rgba(255,255,255,0.7)');
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // welded seam with perforations, and outline
+  ctx.save();
+  ctx.clip(bag);
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 30;
+  ctx.stroke(bag);
+  ctx.setLineDash([3, 8]);
+  ctx.strokeStyle = 'rgba(100,120,140,0.6)';
+  ctx.lineWidth = 26;
+  ctx.stroke(bag);
+  ctx.restore();
+  piece(ctx, path((q) => q.rect(110, 92, 292, 22)), {
+    fill: 'rgba(235,242,246,0.9)',
+    ink: 0,
+    detail: (d) => {
+      d.fillStyle = 'rgba(120,140,160,0.55)';
+      for (let x = 118; x < 400; x += 9) d.fillRect(x, 100, 4, 6);
+    },
+  });
+  line(ctx, bag, 12);
+
+  // ---- label
+  ctx.save();
+  ctx.translate(256, 300);
+  ctx.rotate(0.03);
+  const label = path((q) => q.roundRect(-100, -62, 200, 132, 14));
+  piece(ctx, label, {
+    fill: lin(ctx, 0, -62, 0, 70, [[0, '#fffaf0'], [1, '#e6d8bc']]),
+    shadow: 'rgba(150,120,80,0.6)',
+    shadowOff: [-10, -8],
+    ink: 8,
+    detail: (d) => {
+      d.fillStyle = '#c8102c';
+      d.fillRect(-100, -62, 200, 32);
+      grunge(d, 132, { color: '#8a6a4a', count: 40, size: [0.6, 3], alpha: 0.35, area: [-100, -62, 200, 132] });
+      // blood smear across the corner
+      d.fillStyle = 'rgba(160,10,34,0.75)';
+      d.beginPath();
+      d.ellipse(84, 54, 30, 12, -0.6, 0, Math.PI * 2);
+      d.fill();
+      const rnd = seeded(133);
+      let x = 20;
+      while (x < 86) {
+        const w = 2 + Math.floor(rnd() * 4);
+        d.fillStyle = INK;
+        d.fillRect(x, 16, w, 36);
+        x += w + 2 + Math.floor(rnd() * 3);
+      }
+    },
+  });
+  line(ctx, path((q) => { q.moveTo(-100, -30); q.lineTo(100, -30); }), 5);
+  ctx.font = '900 21px Nunito, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.fillText('SANG INFECTÉ', 0, -46);
+  biohazardMark(ctx, -50, 22, 40);
+  ctx.restore();
+
+  // ---- plastic highlights
+  gloss(ctx, path((q) => { q.moveTo(108, 150); q.bezierCurveTo(98, 230, 100, 310, 116, 384); }), 14, 0.9);
+  gloss(ctx, path((q) => { q.moveTo(150, 124); q.lineTo(250, 120); }), 7, 0.8);
+  gloss(ctx, path((q) => { q.moveTo(408, 220); q.bezierCurveTo(414, 260, 412, 300, 404, 330); }), 6, 0.5);
+  dot(ctx, 396, 140, 8, '#fff', 0.95);
+  dot(ctx, 124, 406, 5, '#fff', 0.8);
+  ctx.restore();
+
+  // ---- blood dripping from the blue-capped port (screen space)
+  drip(ctx, 196, 476, 22, 14);
+
+  // ---- emissive
+  gctx.save();
+  gctx.clip(bag);
+  gctx.fillStyle = '#ff2a44';
+  gctx.fill(blood);
+  gctx.restore();
+  return { base: c, parts: {}, glow: g };
+}
+
+const P_ = 512;
+
+/** Compact biohazard trefoil, ink outlined. */
+function biohazardMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, R: number): void {
+  const t = path((q) => {
+    for (let i = 0; i < 3; i++) {
+      const a = (i * 2 * Math.PI) / 3 - Math.PI / 2;
+      const x = cx + Math.cos(a) * R * 0.42;
+      const y = cy + Math.sin(a) * R * 0.42;
+      q.moveTo(x + R * 0.5, y);
+      q.arc(x, y, R * 0.5, 0, Math.PI * 2);
+    }
+  });
+  const holes = path((q) => {
+    for (let i = 0; i < 3; i++) {
+      const a = (i * 2 * Math.PI) / 3 - Math.PI / 2;
+      const x = cx + Math.cos(a) * R * 0.6;
+      const y = cy + Math.sin(a) * R * 0.6;
+      q.moveTo(x + R * 0.34, y);
+      q.arc(x, y, R * 0.34, 0, Math.PI * 2);
+    }
+    q.moveTo(cx + R * 0.15, cy);
+    q.arc(cx, cy, R * 0.15, 0, Math.PI * 2);
+  });
+  ctx.save();
+  ctx.fillStyle = '#c8102c';
+  ctx.fill(t);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fill(holes);
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = '#c8102c';
+  ctx.lineWidth = R * 0.12;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * 0.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}

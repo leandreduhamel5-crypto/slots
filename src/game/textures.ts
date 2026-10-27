@@ -103,7 +103,7 @@ function drawRoyal(key: string): HTMLCanvasElement {
   return c;
 }
 
-const PREMIUM_ZOOM: Record<string, number> = { codex: 1.17, zero: 1.08 };
+const PREMIUM_ZOOM: Record<string, number> = { codex: 1.17, zero: 1.08, antidote: 1.1, mask: 1.04 };
 
 const PREMIUM_AURA: Record<string, string> = {
   codex: '#ff3347',
