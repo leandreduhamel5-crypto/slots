@@ -77,7 +77,8 @@ export class Overlays extends Container {
   private w = 1920;
   private h = 1080;
   private skipRequested = false;
-  private burstRays: Graphics | null = null;
+  private burstRays: Container | null = null;
+  private emberLayer = new Container();
   private headCache = new Map<string, Texture>();
 
   /** Big 3D title rendered once with the lettering engine and cached. */
@@ -102,7 +103,7 @@ export class Overlays extends Container {
     this.particles = new Particles(tex);
     for (const t of WIN_TIERS) this.head3d(t.name, 104, t.material);
     this.head3d('10 TOURS GRATUITS', 88, 'gold');
-    this.addChild(this.dim, this.back, this.particles, this.content);
+    this.addChild(this.dim, this.back, this.emberLayer, this.particles, this.content);
     this.visible = false;
     this.eventMode = 'static';
     this.on('pointertap', () => (this.skipRequested = true));
@@ -133,12 +134,19 @@ export class Overlays extends Container {
 
   update(dtMs: number): void {
     this.particles.update(dtMs);
+    this.updateEmbers(dtMs / 1000);
   }
 
   private clearLayers(): void {
     for (const layer of [this.content, this.back]) {
       layer.removeChildren().forEach((c) => {
-        gsap.killTweensOf(c);
+        // stop every tween on the node and its descendants (rays and glows loop forever)
+        const kill = (n: Container) => {
+          gsap.killTweensOf(n);
+          gsap.killTweensOf(n.scale);
+          for (const ch of n.children) kill(ch as Container);
+        };
+        kill(c);
         c.destroy({ children: true });
       });
       layer.alpha = 1;
@@ -157,6 +165,7 @@ export class Overlays extends Container {
   private async close(): Promise<void> {
     this.particles.stopFountain();
     this.particles.stopRain();
+    this.emberOn = false;
     await new Promise<void>((r) =>
       gsap
         .timeline({ onComplete: r })
@@ -183,24 +192,117 @@ export class Overlays extends Container {
   }
 
   /** Classic cartoon sunburst: alternating wedges, slowly turning. */
-  private sunburst(color: number): Graphics {
-    const g = new Graphics();
-    const n = 20;
-    const r = 1400;
-    g.circle(0, 0, r).fill(0x14081a);
+  /**
+   * Light composition behind every overlay: soft rays brightest at the centre, a second ray set
+   * turning the other way for depth, and a pulsing core glow. Tinted per screen.
+   */
+  private sunburst(color: number): Container {
+    const c = new Container();
+    const base = new Sprite(this.raysTex());
+    base.anchor.set(0.5);
+    base.width = base.height = 2600;
+    const counter = new Sprite(this.raysTex());
+    counter.anchor.set(0.5);
+    counter.width = counter.height = 2200;
+    counter.alpha = 0.45;
+    counter.rotation = 0.08;
+    const core = new Sprite(this.tex.glow);
+    core.anchor.set(0.5);
+    core.width = core.height = 900;
+    core.blendMode = 'add';
+    core.alpha = 0.55;
+    c.addChild(base, counter, core);
+    const lighten = (col: number, k: number) => {
+      const ch = (sh: number) => Math.min(255, Math.round(((col >> sh) & 255) * k + 18));
+      return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+    };
+    base.tint = counter.tint = lighten(color, 2.1);
+    core.tint = lighten(color, 3.4);
+    c.alpha = 0;
+    gsap.to(c, { alpha: 1, duration: 0.3 });
+    gsap.to(base, { rotation: Math.PI * 2, duration: 46, repeat: -1, ease: 'none' });
+    gsap.to(counter, { rotation: 0.08 - Math.PI * 2, duration: 70, repeat: -1, ease: 'none' });
+    gsap.to(core.scale, { x: core.scale.x * 1.15, y: core.scale.y * 1.15, duration: 1.2, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.back.addChild(c);
+    this.startEmbers();
+    return c;
+  }
+
+  private retint(c: Container, color: number): void {
+    const [base, counter, core] = c.children as Sprite[];
+    const lighten = (col: number, k: number) => {
+      const ch = (sh: number) => Math.min(255, Math.round(((col >> sh) & 255) * k + 18));
+      return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+    };
+    base.tint = counter.tint = lighten(color, 2.1);
+    core.tint = lighten(color, 3.4);
+  }
+
+  private rays: Texture | null = null;
+  private raysTex(): Texture {
+    if (this.rays) return this.rays;
+    const S = 1024;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = S;
+    const ctx = cv.getContext('2d')!;
+    ctx.fillStyle = '#1a0a1e';
+    ctx.fillRect(0, 0, S, S);
+    const n = 22;
     for (let i = 0; i < n; i++) {
       const a0 = (i / n) * Math.PI * 2;
-      const a1 = a0 + Math.PI / n;
-      g.moveTo(0, 0).lineTo(Math.cos(a0) * r, Math.sin(a0) * r).lineTo(Math.cos(a1) * r, Math.sin(a1) * r).closePath();
+      const a1 = a0 + (Math.PI / n) * (0.75 + (i % 3) * 0.2);
+      const g = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+      g.addColorStop(1, 'rgba(255,255,255,0.08)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(S / 2, S / 2);
+      ctx.arc(S / 2, S / 2, S * 0.75, a0, a1);
+      ctx.closePath();
+      ctx.fill();
     }
-    g.fill(0xffffff);
-    g.tint = color;
-    g.alpha = 0;
-    gsap.to(g, { alpha: 0.95, duration: 0.3 });
-    gsap.to(g, { rotation: Math.PI * 2, duration: 40, repeat: -1, ease: 'none' });
-    this.back.addChild(g);
-    return g;
+    // vignette darkening toward the edges
+    const v = ctx.createRadialGradient(S / 2, S / 2, S * 0.1, S / 2, S / 2, S * 0.5);
+    v.addColorStop(0, 'rgba(0,0,0,0)');
+    v.addColorStop(1, 'rgba(8,2,10,0.75)');
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, S, S);
+    this.rays = Texture.from(cv);
+    return this.rays;
   }
+
+  /** Embers drifting up through the overlay while it is open. */
+  private embers: { s: Sprite; vy: number; vx: number; life: number; age: number }[] = [];
+  private emberOn = false;
+  private startEmbers(): void {
+    this.emberOn = true;
+  }
+
+  private updateEmbers(dt: number): void {
+    if (this.emberOn && this.visible && Math.random() < dt * 18) {
+      const s = new Sprite(this.tex.glow);
+      s.anchor.set(0.5);
+      s.blendMode = 'add';
+      s.tint = Math.random() < 0.6 ? 0xff5a2a : 0xffd23f;
+      s.width = s.height = 8 + Math.random() * 14;
+      s.position.set(Math.random() * this.w, this.h + 10);
+      this.emberLayer.addChild(s);
+      this.embers.push({ s, vy: -(60 + Math.random() * 120), vx: (Math.random() - 0.5) * 40, life: 3 + Math.random() * 2, age: 0 });
+    }
+    for (let i = this.embers.length - 1; i >= 0; i--) {
+      const e = this.embers[i];
+      e.age += dt;
+      e.s.x += (e.vx + Math.sin(e.age * 3 + i) * 20) * dt;
+      e.s.y += e.vy * dt;
+      e.s.alpha = Math.min(1, e.age * 2) * Math.max(0, 1 - e.age / e.life);
+      if (e.age > e.life) {
+        e.s.destroy();
+        this.embers.splice(i, 1);
+      }
+    }
+  }
+
 
   /** Ink-outlined ribbon banner. */
   private ribbon(width: number, height: number, color: number): Graphics {
@@ -314,7 +416,7 @@ export class Overlays extends Container {
     const t = WIN_TIERS[tier];
     heading.texture = this.head3d(t.name, 104, t.material).texture;
     gsap.fromTo(heading.scale, { x: 1.7, y: 0.6 }, { x: 1, y: 1, duration: 0.6, ease: 'elastic.out(1.2, 0.4)' });
-    if (this.burstRays) gsap.to(this.burstRays, { tint: t.ray, duration: 0.3 });
+    if (this.burstRays) this.retint(this.burstRays, t.ray);
     this.audio.stinger(tier);
     this.fx.shockwave();
     this.fx.shake(10 + tier * 6);
