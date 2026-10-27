@@ -1,6 +1,6 @@
 import { INK, makeCanvas, seeded } from './painters';
 import { dot, gloss, grunge, groundShadow, lin, line, piece, rad } from './paint';
-import { paintCodex } from './premium';
+import { paintCodex } from './premium2';
 
 /**
  * "Le Gardien du Codex": a floating hooded wraith, the game's mascot.

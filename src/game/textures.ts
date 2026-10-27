@@ -103,6 +103,8 @@ function drawRoyal(key: string): HTMLCanvasElement {
   return c;
 }
 
+const PREMIUM_ZOOM: Record<string, number> = { codex: 1.17, zero: 1.08 };
+
 const PREMIUM_AURA: Record<string, string> = {
   codex: '#ff3347',
   zero: '#ffb03a',
@@ -218,6 +220,19 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
       // hand-painted premium (512 px, downsampled)
       const painted = PAINTED[def.key]();
       const aura = PREMIUM_AURA[def.key] ?? '#ff3347';
+      // premiums are framed tighter than the royals so they dominate the reels
+      const k = PREMIUM_ZOOM[def.key] ?? 1;
+      const zoom = (src: HTMLCanvasElement) => {
+        if (k === 1) return src;
+        const [z, zc] = makeCanvas(src.width, src.height);
+        zc.translate(src.width / 2, src.height / 2);
+        zc.scale(k, k);
+        zc.drawImage(src, -src.width / 2, -src.height / 2);
+        return z;
+      };
+      painted.base = zoom(painted.base);
+      painted.glow = zoom(painted.glow);
+      for (const name of Object.keys(painted.parts)) painted.parts[name] = zoom(painted.parts[name]);
       const base = downsample(painted.base, TEX_SIZE);
       const parts: Record<string, Texture> = {};
       const [full, f] = makeCanvas(TEX_SIZE, TEX_SIZE);
