@@ -387,7 +387,7 @@ export class Background extends Container {
     const f = this.feature;
     const beat = Math.pow(Math.max(0, Math.sin(this.t * (2.6 + f * 1.6))), 12);
     this.rays.time += dt * 0.25;
-    this.rays.alpha = Math.min(0.75, 0.28 + f * 0.12 + this.flareV * 0.35 + this.boltLight * 0.3);
+    this.rays.alpha = Math.min(0.48, 0.26 + f * 0.1 + this.flareV * 0.15 + this.boltLight * 0.2);
     this.fog.tilePosition.x += dt * 12;
     this.fog.tilePosition.y += dt * 3;
     this.fog.tint = f > 0.5 ? 0xa02030 : 0x6a5070;

@@ -439,3 +439,228 @@ export function paintGoldWinFrame(w: number, h: number): HTMLCanvasElement {
   }
   return c;
 }
+
+/**
+ * Title banner for the big screens: a black-lacquer band with rounded cartouche ends, polished
+ * gold rails, a thin lapis/gold/carnelian block border, and a winged sun spreading over the top.
+ * Returns the canvas and the y of the band's centre within it (the sprite's anchor).
+ */
+export function paintBanner(width: number, height: number, tone: 'dark' | 'red'): { canvas: HTMLCanvasElement; cy: number } {
+  const S = 2;
+  const top = height * 0.55;
+  const W = width + 40;
+  const H = height + top + 20;
+  const [c, ctx] = makeCanvas(W * S, H * S);
+  ctx.scale(S, S);
+  const x0 = 20;
+  const y0 = top;
+  const r = height / 2;
+  // soft drop shadow
+  ctx.save();
+  ctx.filter = 'blur(10px)';
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  rr(ctx, x0 + 6, y0 + 12, width - 12, height, r);
+  ctx.fill();
+  ctx.restore();
+  // gold rim
+  rr(ctx, x0, y0, width, height, r);
+  ctx.fillStyle = goldGrad(ctx, 0, y0, 0, y0 + height);
+  ctx.fill();
+  // lacquer body
+  const inset = 7;
+  rr(ctx, x0 + inset, y0 + inset, width - inset * 2, height - inset * 2, r - inset);
+  const body = ctx.createLinearGradient(0, y0, 0, y0 + height);
+  if (tone === 'red') {
+    body.addColorStop(0, '#5a0a10');
+    body.addColorStop(0.5, '#2a0306');
+    body.addColorStop(1, '#120103');
+  } else {
+    body.addColorStop(0, '#2a1610');
+    body.addColorStop(0.5, '#120807');
+    body.addColorStop(1, '#060203');
+  }
+  ctx.fillStyle = body;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  // inner glow from the centre, glossy top and a block border along the bottom
+  const glow = ctx.createRadialGradient(x0 + width / 2, y0 + height / 2, 0, x0 + width / 2, y0 + height / 2, width * 0.5);
+  glow.addColorStop(0, tone === 'red' ? 'rgba(255,60,40,0.28)' : 'rgba(255,190,90,0.16)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x0, y0, width, height);
+  const gl = ctx.createLinearGradient(0, y0, 0, y0 + height * 0.45);
+  gl.addColorStop(0, 'rgba(255,240,210,0.22)');
+  gl.addColorStop(1, 'rgba(255,240,210,0)');
+  ctx.fillStyle = gl;
+  ctx.fillRect(x0, y0, width, height * 0.45);
+  const by = y0 + height - inset - 12;
+  const colors = ['#1f42a8', '#f2c25a', '#c92a1c', '#f2c25a'];
+  for (let x = x0 + r * 0.6, k = 0; x < x0 + width - r * 0.6; x += 10, k++) {
+    ctx.fillStyle = colors[k % 4];
+    ctx.fillRect(x, by, 9, 6);
+  }
+  ctx.restore();
+  // fine gold inner line
+  rr(ctx, x0 + inset + 5, y0 + inset + 5, width - (inset + 5) * 2, height - (inset + 5) * 2, r - inset - 5);
+  ctx.strokeStyle = 'rgba(242,194,90,0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // highlight along the top rail
+  ctx.strokeStyle = 'rgba(255,250,225,0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x0 + r, y0 + 1.5);
+  ctx.lineTo(x0 + width - r, y0 + 1.5);
+  ctx.stroke();
+  // winged sun crowning the banner
+  wingedSun(ctx, x0 + width / 2, y0 - 2, Math.min(width * 0.32, height * 2.1));
+  return { canvas: c, cy: (y0 + height / 2) / H };
+}
+
+/** Gold cartouche for amounts: pill with a polished rim and a lacquer face. */
+export function paintCartouche(width: number, height: number): HTMLCanvasElement {
+  const S = 2;
+  const W = width + 40;
+  const H = height + 40;
+  const [c, ctx] = makeCanvas(W * S, H * S);
+  ctx.scale(S, S);
+  const x0 = 20;
+  const y0 = 16;
+  const r = height / 2;
+  ctx.save();
+  ctx.filter = 'blur(10px)';
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  rr(ctx, x0 + 4, y0 + 10, width - 8, height, r);
+  ctx.fill();
+  ctx.restore();
+  rr(ctx, x0, y0, width, height, r);
+  ctx.fillStyle = goldGrad(ctx, 0, y0, 0, y0 + height);
+  ctx.fill();
+  rr(ctx, x0 + 5, y0 + 5, width - 10, height - 10, r - 5);
+  ctx.fillStyle = '#0a0405';
+  ctx.fill();
+  rr(ctx, x0 + 9, y0 + 9, width - 18, height - 18, r - 9);
+  const face = ctx.createLinearGradient(0, y0, 0, y0 + height);
+  face.addColorStop(0, '#24110b');
+  face.addColorStop(0.55, '#0e0605');
+  face.addColorStop(1, '#050202');
+  ctx.fillStyle = face;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(242,194,90,0.6)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.save();
+  ctx.clip();
+  const gl = ctx.createLinearGradient(0, y0, 0, y0 + height * 0.5);
+  gl.addColorStop(0, 'rgba(255,230,190,0.16)');
+  gl.addColorStop(1, 'rgba(255,230,190,0)');
+  ctx.fillStyle = gl;
+  ctx.fillRect(x0, y0, width, height * 0.5);
+  ctx.restore();
+  return c;
+}
+
+/** Soft volumetric light rays (white, transparent background) for the big screens. */
+export function paintSoftRays(size = 1024): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(size, size);
+  const cx = size / 2;
+  const n = 30;
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  ctx.filter = 'blur(10px)';
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rnd() * 0.08;
+    const wdt = 0.025 + rnd() * 0.07;
+    const g = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx);
+    const k = 0.35 + rnd() * 0.65;
+    g.addColorStop(0, `rgba(255,255,255,${0.9 * k})`);
+    g.addColorStop(0.3, `rgba(255,255,255,${0.45 * k})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(cx, cx);
+    ctx.arc(cx, cx, cx, a - wdt, a + wdt);
+    ctx.closePath();
+    ctx.fill();
+  }
+  return c;
+}
+
+/** Reliquary frame for the "the Book picks a strain" draw: polished gold, lacquer well, gems. */
+export function paintShrineFrame(w: number, h: number): HTMLCanvasElement {
+  const S = 2;
+  const pad = 24;
+  const [c, ctx] = makeCanvas((w + pad * 2) * S, (h + pad * 2) * S);
+  ctx.scale(S, S);
+  ctx.translate(pad, pad);
+  ctx.save();
+  ctx.filter = 'blur(12px)';
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  rr(ctx, 4, 12, w - 8, h, 30);
+  ctx.fill();
+  ctx.restore();
+  rr(ctx, 0, 0, w, h, 30);
+  ctx.fillStyle = goldGrad(ctx, 0, 0, w * 0.3, h);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(60,30,4,0.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // engraved groove
+  rr(ctx, 9, 9, w - 18, h - 18, 24);
+  ctx.strokeStyle = 'rgba(70,36,4,0.8)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  rr(ctx, 11, 11, w - 22, h - 22, 22);
+  ctx.strokeStyle = 'rgba(255,245,210,0.55)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // lacquer well
+  const m = 22;
+  rr(ctx, m, m, w - m * 2, h - m * 2, 16);
+  const well = ctx.createRadialGradient(w / 2, h * 0.45, 10, w / 2, h / 2, w * 0.6);
+  well.addColorStop(0, '#2a0c08');
+  well.addColorStop(1, '#070203');
+  ctx.fillStyle = well;
+  ctx.fill();
+  ctx.strokeStyle = '#0a0405';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  rr(ctx, m + 5, m + 5, w - (m + 5) * 2, h - (m + 5) * 2, 12);
+  ctx.strokeStyle = 'rgba(242,194,90,0.65)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // top sheen on the gold
+  ctx.save();
+  rr(ctx, 0, 0, w, h, 30);
+  ctx.clip();
+  const sh = ctx.createLinearGradient(0, 0, w, h);
+  sh.addColorStop(0, 'rgba(255,255,255,0)');
+  sh.addColorStop(0.3, 'rgba(255,250,225,0.35)');
+  sh.addColorStop(0.38, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(0, 0, w, m + 4);
+  ctx.fillRect(0, 0, m + 4, h);
+  ctx.restore();
+  for (const [x, y] of [[m * 0.5, m * 0.5], [w - m * 0.5, m * 0.5], [m * 0.5, h - m * 0.5], [w - m * 0.5, h - m * 0.5]]) gem(ctx, x, y, 8);
+  return c;
+}
+
+/** Gold arrowhead pointing right (mirror it for the left one). */
+export function paintArrowHead(): HTMLCanvasElement {
+  const S = 2;
+  const [c, ctx] = makeCanvas(48 * S, 56 * S);
+  ctx.scale(S, S);
+  ctx.beginPath();
+  ctx.moveTo(6, 6);
+  ctx.lineTo(42, 28);
+  ctx.lineTo(6, 50);
+  ctx.lineTo(16, 28);
+  ctx.closePath();
+  ctx.fillStyle = goldGrad(ctx, 0, 6, 0, 50);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(50,24,2,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  return c;
+}

@@ -337,20 +337,35 @@ export function softGlow(src: HTMLCanvasElement, radius = 12): HTMLCanvasElement
 
 /** Particle: blood droplet with ink outline. */
 export function paintDrop(color = '#e0213a', light = '#ff8a96'): HTMLCanvasElement {
+  // glossy ruby droplet: deep body, darker rim, bright caustic and specular, no cartoon outline
   const [c, ctx] = makeCanvas(48, 64);
   ctx.translate(24, 0);
+  const shape = new Path2D();
+  shape.moveTo(0, 6);
+  shape.bezierCurveTo(10, 24, 18, 32, 18, 42);
+  shape.arc(0, 42, 18, 0, Math.PI);
+  shape.bezierCurveTo(-18, 32, -10, 24, 0, 6);
+  shape.closePath();
+  const body = ctx.createRadialGradient(-4, 38, 2, 0, 42, 24);
+  body.addColorStop(0, light);
+  body.addColorStop(0.45, color);
+  body.addColorStop(1, 'rgba(40,0,6,1)');
+  ctx.fillStyle = body;
+  ctx.fill(shape);
+  ctx.save();
+  ctx.clip(shape);
+  ctx.strokeStyle = 'rgba(30,0,4,0.6)';
+  ctx.lineWidth = 4;
+  ctx.filter = 'blur(2px)';
+  ctx.stroke(shape);
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.beginPath();
-  ctx.moveTo(0, 6);
-  ctx.bezierCurveTo(10, 24, 18, 32, 18, 42);
-  ctx.arc(0, 42, 18, 0, Math.PI);
-  ctx.bezierCurveTo(-18, 32, -10, 24, 0, 6);
-  ctx.closePath();
-  ctx.fillStyle = color;
+  ctx.ellipse(-7, 38, 3.2, 6, 0.35, 0, Math.PI * 2);
   ctx.fill();
-  ink(ctx, 5);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.beginPath();
-  ctx.ellipse(-7, 42, 4, 7, 0.3, 0, Math.PI * 2);
-  ctx.fillStyle = light;
+  ctx.ellipse(6, 50, 4, 2, -0.4, 0, Math.PI * 2);
   ctx.fill();
   return c;
 }

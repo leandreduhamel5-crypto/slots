@@ -1,5 +1,6 @@
 import { Container, FillGradient, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
 import { MATERIALS, render3DText } from './art/painters';
+import { paintArrowHead, paintBanner, paintCartouche, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
 import { Digits } from './Digits';
 import gsap from 'gsap';
 import { SYMBOLS, Sym } from '../math/config';
@@ -45,18 +46,20 @@ const title = (size: number, light = '#fff6c0', base = '#ffd23f'): TextStyleOpti
   fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
   fontSize: size,
   fill: cel(light, base),
-  stroke: { color: COLORS.ink, width: Math.max(8, size * 0.16), join: 'round' },
-  dropShadow: { color: COLORS.ink, blur: 0, distance: size * 0.09, angle: Math.PI / 2, alpha: 1 },
-  letterSpacing: size * 0.03,
+  stroke: { color: 0x1a0604, width: Math.max(4, size * 0.1), join: 'round' },
+  dropShadow: { color: 0x000000, blur: size * 0.12, distance: size * 0.06, angle: Math.PI / 2, alpha: 0.85 },
+  letterSpacing: size * 0.04,
   align: 'center',
 });
 
 const body = (size: number, fill = 0xffffff): TextStyleOptions => ({
-  fontFamily: 'Nunito, sans-serif',
+  fontFamily: 'Cinzel, serif',
   fontWeight: '900',
   fontSize: size,
   fill,
-  stroke: { color: COLORS.ink, width: size * 0.22, join: 'round' },
+  stroke: { color: 0x0a0204, width: size * 0.12, join: 'round' },
+  dropShadow: { color: 0x000000, blur: size * 0.3, distance: size * 0.05, angle: Math.PI / 2, alpha: 0.9 },
+  letterSpacing: size * 0.06,
   align: 'center',
 });
 
@@ -159,7 +162,7 @@ export class Overlays extends Container {
     this.visible = true;
     this.content.alpha = 1;
     this.drawDim(0);
-    gsap.to(this.dim, { alpha: 0.82, duration: 0.25 });
+    gsap.to(this.dim, { alpha: 0.93, duration: 0.25 });
   }
 
   private async close(): Promise<void> {
@@ -200,17 +203,20 @@ export class Overlays extends Container {
     const c = new Container();
     const base = new Sprite(this.raysTex());
     base.anchor.set(0.5);
-    base.width = base.height = 2600;
+    base.width = base.height = 2400;
+    base.blendMode = 'add';
+    base.alpha = 0.3;
     const counter = new Sprite(this.raysTex());
     counter.anchor.set(0.5);
-    counter.width = counter.height = 2200;
-    counter.alpha = 0.45;
+    counter.width = counter.height = 2000;
+    counter.blendMode = 'add';
+    counter.alpha = 0.14;
     counter.rotation = 0.08;
     const core = new Sprite(this.tex.glow);
     core.anchor.set(0.5);
     core.width = core.height = 900;
     core.blendMode = 'add';
-    core.alpha = 0.55;
+    core.alpha = 0.4;
     c.addChild(base, counter, core);
     const lighten = (col: number, k: number) => {
       const ch = (sh: number) => Math.min(255, Math.round(((col >> sh) & 255) * k + 18));
@@ -240,35 +246,7 @@ export class Overlays extends Container {
 
   private rays: Texture | null = null;
   private raysTex(): Texture {
-    if (this.rays) return this.rays;
-    const S = 1024;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = S;
-    const ctx = cv.getContext('2d')!;
-    ctx.fillStyle = '#1a0a1e';
-    ctx.fillRect(0, 0, S, S);
-    const n = 22;
-    for (let i = 0; i < n; i++) {
-      const a0 = (i / n) * Math.PI * 2;
-      const a1 = a0 + (Math.PI / n) * (0.75 + (i % 3) * 0.2);
-      const g = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
-      g.addColorStop(0, 'rgba(255,255,255,0.95)');
-      g.addColorStop(0.35, 'rgba(255,255,255,0.55)');
-      g.addColorStop(1, 'rgba(255,255,255,0.08)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.moveTo(S / 2, S / 2);
-      ctx.arc(S / 2, S / 2, S * 0.75, a0, a1);
-      ctx.closePath();
-      ctx.fill();
-    }
-    // vignette darkening toward the edges
-    const v = ctx.createRadialGradient(S / 2, S / 2, S * 0.1, S / 2, S / 2, S * 0.5);
-    v.addColorStop(0, 'rgba(0,0,0,0)');
-    v.addColorStop(1, 'rgba(8,2,10,0.75)');
-    ctx.fillStyle = v;
-    ctx.fillRect(0, 0, S, S);
-    this.rays = Texture.from(cv);
+    this.rays ??= Texture.from(paintSoftRays());
     return this.rays;
   }
 
@@ -304,34 +282,38 @@ export class Overlays extends Container {
   }
 
 
-  /** Ink-outlined ribbon banner. */
-  private ribbon(width: number, height: number, color: number): Graphics {
-    const g = new Graphics();
-    const w = width / 2;
-    const h = height / 2;
-    for (const d of [-1, 1]) {
-      g.poly([d * (w - 30), -h + 26, d * (w + 70), -h + 26, d * (w + 40), 12, d * (w + 70), h + 26, d * (w - 30), h + 26])
-        .fill(0x5a0b22)
-        .stroke({ width: 8, color: COLORS.ink, join: 'round' });
+  private bannerCache = new Map<string, { tex: Texture; cy: number }>();
+  private shrineTex: Texture | null = null;
+  private arrowTex: Texture | null = null;
+
+  /** Gold-railed lacquer banner crowned by a winged sun (painted once per size). */
+  private ribbon(width: number, height: number, color: number): Sprite {
+    const tone = color === 0x8a0f26 ? 'red' : 'dark';
+    const key = `${width}|${height}|${tone}`;
+    let b = this.bannerCache.get(key);
+    if (!b) {
+      const p = paintBanner(width, height, tone);
+      b = { tex: Texture.from(p.canvas), cy: p.cy };
+      this.bannerCache.set(key, b);
     }
-    g.moveTo(-w, -h).quadraticCurveTo(0, -h - 24, w, -h).lineTo(w, h).quadraticCurveTo(0, h - 24, -w, h).closePath().fill(color).stroke({ width: 9, color: COLORS.ink, join: 'round' });
-    g.moveTo(-w + 16, -h + 12).quadraticCurveTo(0, -h - 8, w - 16, -h + 12).stroke({ width: 6, color: 0xffffff, alpha: 0.25 });
-    return g;
+    const s = new Sprite(b.tex);
+    s.anchor.set(0.5, b.cy);
+    s.scale.set(0.5);
+    return s;
   }
 
-  private plate(width: number, height: number): Graphics {
-    return new Graphics()
-      .roundRect(-width / 2, -height / 2 + 10, width, height, 26)
-      .fill(COLORS.ink)
-      .roundRect(-width / 2, -height / 2, width, height, 26)
-      .fill(0x120605)
-      .stroke({ width: 9, color: COLORS.ink })
-      .roundRect(-width / 2 + 5, -height / 2 + 5, width - 10, height - 10, 22)
-      .stroke({ width: 5, color: 0xd8a03a })
-      .roundRect(-width / 2 + 13, -height / 2 + 13, width - 26, height - 26, 16)
-      .stroke({ width: 1.5, color: 0x7a4a10 })
-      .roundRect(-width / 2 + 16, -height / 2 + 14, width - 32, 10, 5)
-      .fill({ color: 0xffe2a0, alpha: 0.1 });
+  /** Gold cartouche for the amounts. */
+  private plate(width: number, height: number): Sprite {
+    const key = `plate|${width}|${height}`;
+    let b = this.bannerCache.get(key);
+    if (!b) {
+      b = { tex: Texture.from(paintCartouche(width, height)), cy: 0.5 };
+      this.bannerCache.set(key, b);
+    }
+    const s = new Sprite(b.tex);
+    s.anchor.set(0.5, (16 + height / 2) / (height + 40));
+    s.scale.set(0.5);
+    return s;
   }
 
   private popIn(o: Container, delay = 0, from = 0.2): void {
@@ -350,9 +332,8 @@ export class Overlays extends Container {
     this.burstRays = rays;
     const eye = new Sprite(this.tex.normal[Sym.CODEX]);
     eye.anchor.set(0.5);
-    eye.width = eye.height = 380;
-    eye.y = -40;
-    eye.alpha = 0.9;
+    eye.width = eye.height = 210;
+    eye.y = -395;
     gsap.to(eye, { rotation: 0.06, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     const ribbon = this.ribbon(860, 150, 0x1e0a08);
     ribbon.y = -150;
@@ -363,9 +344,10 @@ export class Overlays extends Container {
     const amount = new Digits(118);
     amount.value = 0;
     amount.y = 150;
-    const sub = new Text({ text: 'touchez pour passer', style: body(24, 0xb8a8c8) });
+    const sub = new Text({ text: 'TOUCHEZ POUR PASSER', style: body(20, 0xd8b878) });
     sub.anchor.set(0.5);
     sub.y = 290;
+    gsap.to(sub, { alpha: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.content.addChild(eye, ribbon, heading, plate, amount, sub);
     this.popIn(eye, 0, 0.1);
     this.popIn(ribbon, 0.1);
@@ -438,31 +420,32 @@ export class Overlays extends Container {
     const pool = PREMIUM_EXPANDERS.filter((s) => s === final || !exclude.includes(s));
     const box = new Container();
     box.y = y;
-    const frame = new Graphics()
-      .roundRect(-150, -140, 300, 290, 34)
-      .fill(COLORS.ink)
-      .roundRect(-150, -150, 300, 290, 34)
-      .fill(0x8a5612)
-      .stroke({ width: 9, color: COLORS.ink })
-      .roundRect(-142, -142, 284, 274, 28)
-      .stroke({ width: 5, color: 0xf2c25a })
-      .roundRect(-124, -124, 248, 238, 22)
-      .fill(0x120606)
-      .stroke({ width: 7, color: COLORS.ink })
-      .roundRect(-118, -118, 236, 226, 18)
-      .stroke({ width: 4, color: COLORS.yellow });
-    for (const [bx, by] of [
-      [-132, -132],
-      [132, -132],
-      [-132, 122],
-      [132, 122],
-    ]) frame.circle(bx, by, 9).fill(0xe0213a).stroke({ width: 4, color: COLORS.ink }).circle(bx - 3, by - 3, 3).fill(0xffd0c8);
+    const aura = new Sprite(this.tex.glow);
+    aura.anchor.set(0.5);
+    aura.width = aura.height = 560;
+    aura.tint = COLORS.infection;
+    aura.blendMode = 'add';
+    aura.alpha = 0.55;
+    gsap.to(aura.scale, { x: aura.scale.x * 1.12, y: aura.scale.y * 1.12, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.shrineTex ??= Texture.from(paintShrineFrame(300, 290));
+    const frame = new Sprite(this.shrineTex);
+    frame.anchor.set(0.5);
+    frame.scale.set(0.5);
+    frame.y = -5;
     const sprite = new Sprite(this.tex.normal[pool[0]]);
     sprite.anchor.set(0.5);
     sprite.width = sprite.height = 220;
     sprite.y = -6;
-    const arrowL = new Graphics().poly([-190, -30, -160, -6, -190, 18]).fill(COLORS.infection).stroke({ width: 6, color: COLORS.ink, join: 'round' });
-    const arrowR = new Graphics().poly([190, -30, 160, -6, 190, 18]).fill(COLORS.infection).stroke({ width: 6, color: COLORS.ink, join: 'round' });
+    this.arrowTex ??= Texture.from(paintArrowHead());
+    const arrowL = new Sprite(this.arrowTex);
+    const arrowR = new Sprite(this.arrowTex);
+    for (const [a, d] of [[arrowL, -1], [arrowR, 1]] as const) {
+      a.anchor.set(0.5);
+      a.scale.set(-0.5 * d, 0.5);
+      a.position.set(d * 186, -6);
+      gsap.to(a, { x: d * 176, duration: 0.35, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    }
+    box.addChild(aura);
     box.addChild(frame, sprite, arrowL, arrowR);
     this.content.addChild(box);
     this.popIn(box);
@@ -501,7 +484,7 @@ export class Overlays extends Container {
     book.anchor.set(0.5);
     book.width = book.height = 440;
     book.y = 10;
-    const ribbon = this.ribbon(900, 150, 0x8a0f26);
+    const ribbon = this.ribbon(1120, 150, 0x8a0f26);
     ribbon.y = -300;
     const head = this.head3d(`${spins} TOURS GRATUITS`, 88, 'gold');
     head.y = -312;
