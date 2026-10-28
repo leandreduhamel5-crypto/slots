@@ -54,6 +54,10 @@ export class Fire extends Container {
   private t = Math.random() * 10;
   private boost = 0;
   hot = 0;
+  /** size factor relative to the 92 px reference brazier */
+  private get k(): number {
+    return this.width0 / 92;
+  }
 
   constructor(
     private flame: Texture,
@@ -87,14 +91,14 @@ export class Fire extends Container {
     const s = this.get();
     s.texture = spark ? this.glow : this.flame;
     const u = (Math.random() + Math.random() - 1) * 0.5; // biased to the centre
-    const heat = 1 + this.boost * 0.8;
+    const heat = (1 + this.boost * 0.8) * this.k;
     this.live.push({
       s,
       vx: -u * 30 + (Math.random() - 0.5) * 16,
       vy: spark ? -(160 + Math.random() * 180) * heat : -(120 + Math.random() * 110) * heat,
       life: spark ? 0.9 + Math.random() * 0.9 : 0.42 + Math.random() * 0.36,
       age: 0,
-      size: spark ? 3 + Math.random() * 4 : (16 + Math.random() * 20) * (1 - Math.abs(u) * 0.8) * (1 + this.boost * 0.4),
+      size: (spark ? 3 + Math.random() * 4 : (16 + Math.random() * 20) * (1 - Math.abs(u) * 0.8) * (1 + this.boost * 0.4)) * this.k,
       phase: Math.random() * 10,
       spark,
     });

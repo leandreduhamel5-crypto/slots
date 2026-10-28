@@ -3,7 +3,7 @@ import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { GodrayFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { makeCanvas, seeded } from './art/painters';
-import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, RS, TH as H, TW as W } from './art/templeHD';
+import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, OBELISK_TIP_Y, PYRAMID_HALF, RS, TH as H, TW as W } from './art/templeHD';
 import { Fire, paintFlameBlob } from './Fire';
 import { COLORS } from './layout';
 
@@ -96,7 +96,7 @@ function paintHaloRing(): HTMLCanvasElement {
 /** Is this point open sky (not behind the pyramid, an obelisk or the moon)? */
 function openSky(x: number, y: number): boolean {
   if (y > HORIZON - 120) return false;
-  const slope = APEX[1] + ((HORIZON - APEX[1]) * Math.abs(x - APEX[0])) / 960;
+  const slope = APEX[1] + ((HORIZON - APEX[1]) * Math.abs(x - APEX[0])) / PYRAMID_HALF;
   if (y > slope - 24) return false;
   for (const ox of OBELISKS) if (Math.abs(x - ox) < 80) return false;
   return Math.hypot(x - MOON[0], y - MOON[1]) > MOON[2] + 30;
@@ -171,7 +171,7 @@ export class Background extends Container {
     custom: HTMLImageElement | null = null,
   ) {
     super();
-    // the temple is painted offline in two states (art/templeHD.ts); live lights, lightning and fire go on top
+    // the temple is a 3D scene rendered offline in two states (art/temple3d.ts); live lights, lightning and fire go on top
     this.scene = new Sprite(Texture.from(custom ? coverCanvas(custom, W, H) : night));
     this.scene.anchor.set(0.5);
     if (!custom) this.scene.scale.set(1 / RS);
@@ -192,7 +192,7 @@ export class Background extends Container {
       // the capstone: a lighthouse of gold at night, the infection's heart in the bonus
       this.heart = new Sprite(glowTex);
       this.heart.anchor.set(0.5);
-      this.heart.position.set(APEX[0] - W / 2, APEX[1] + 20 - H / 2);
+      this.heart.position.set(APEX[0] - W / 2, APEX[1] + 12 - H / 2);
       this.heart.blendMode = 'add';
       this.sceneC.addChild(this.heart);
       // twinkling stars in the open sky
@@ -227,13 +227,13 @@ export class Background extends Container {
       for (const [lx, ly] of BRAZIERS) {
         const g = new Sprite(glowTex);
         g.anchor.set(0.5);
-        g.position.set(lx - W / 2, ly - 80 - H / 2);
+        g.position.set(lx - W / 2, ly - 60 - H / 2);
         g.width = g.height = 300;
         g.tint = 0xff8a2a;
         g.blendMode = 'add';
         this.lampGlows.push(g);
-        const fire = new Fire(flameTex, glowTex);
-        fire.position.set(lx - W / 2, ly - 8 - H / 2);
+        const fire = new Fire(flameTex, glowTex, 150);
+        fire.position.set(lx - W / 2, ly - H / 2);
         this.fires.push(fire);
         this.sceneC.addChild(g, fire);
       }
@@ -241,7 +241,7 @@ export class Background extends Container {
       for (const x of OBELISKS) {
         const g = new Sprite(glowTex);
         g.anchor.set(0.5);
-        g.position.set(x - W / 2, 110 - H / 2);
+        g.position.set(x - W / 2, OBELISK_TIP_Y + 24 - H / 2);
         g.width = g.height = 180;
         g.blendMode = 'add';
         this.tips.push(g);
@@ -315,12 +315,12 @@ export class Background extends Container {
     else if (r < 0.3) to = [ax, ay + 10];
     else if (r < 0.55) {
       // the obelisks' gold tips act as lightning rods
-      to = [OBELISKS[Math.random() < 0.5 ? 0 : 1], 80];
+      to = [OBELISKS[Math.random() < 0.5 ? 0 : 1], OBELISK_TIP_Y];
     } else {
       // somewhere on the slopes left visible beside the reels
       const side = Math.random() < 0.5 ? -1 : 1;
       const x = ax + side * (540 + Math.random() * 360);
-      to = [x, ay + ((HORIZON - ay) * Math.abs(x - ax)) / 960];
+      to = [x, ay + ((HORIZON - ay) * Math.abs(x - ax)) / PYRAMID_HALF];
     }
     const from: Pt = [to[0] + (Math.random() - 0.5) * 500, -40];
     const main = boltPath(from, to, 0.28);

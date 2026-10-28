@@ -4,7 +4,6 @@ import { ICONS as PAINTED } from './game/art/icons';
 import { downsample } from './game/art/paint';
 import { paintRoyal } from './game/art/royals';
 import { Audio } from './game/Audio';
-import { paintTemple } from './game/art/templeHD';
 import { EYES, PRES, PW, PH, RING_R, paintPharaoh } from './game/art/pharaoh';
 
 /** Dev-only: renders the painted premium symbols large and at reel size. ?only=blood to focus one. */
@@ -12,20 +11,19 @@ async function run(): Promise<void> {
   await Promise.all([document.fonts.load('400 64px "Luckiest Guy"'), document.fonts.load('900 64px Nunito')]);
   const out = document.getElementById('out')!;
   const only = new URLSearchParams(location.search).get('only');
-  if (only === 'temple') {
-    const t0 = performance.now();
-    const c = paintTemple('night');
-    const c2 = paintTemple('infected');
+  if (only === 'temple3d') {
+    const { renderTemple3D } = await import('./game/art/temple3d');
+    const params = new URLSearchParams(location.search);
+    const scale = Number(params.get('scale') ?? 4 / 3);
+    const states = (params.get('states') ?? 'night,infected').split(',') as ('night' | 'infected')[];
     const w = window as unknown as Record<string, unknown>;
-    w.templeMs = performance.now() - t0;
-    w.templeNight = c.toDataURL('image/png');
-    w.templeInfected = c2.toDataURL('image/png');
-    c2.style.width = '1920px';
-    out.append(c2);
-    c.style.width = '1920px';
-    document.body.style.margin = '0';
-    out.style.padding = '0';
-    out.append(c);
+    for (const st of states) {
+      const t0 = performance.now();
+      const { canvas, marks } = await renderTemple3D(st, scale);
+      w['t3d_' + st] = canvas.toDataURL('image/png');
+      w['t3d_marks'] = marks;
+      w['t3d_ms_' + st] = performance.now() - t0;
+    }
     document.body.dataset.ready = '1';
     return;
   }
