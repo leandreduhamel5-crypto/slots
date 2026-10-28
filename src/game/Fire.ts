@@ -17,7 +17,7 @@ export function paintFlameBlob(): HTMLCanvasElement {
 /** colour over a flame tongue's life: white-hot core → yellow → orange → deep red */
 const RAMPS = {
   gold: [0xffe6a8, 0xffa830, 0xff5a0a, 0x8a1400],
-  infected: [0xffc8b8, 0xff4a36, 0xc80c14, 0x4a0004],
+  infected: [0xfff0e0, 0xff7a5a, 0xff2a1c, 0x8a0608],
 };
 
 function mix(a: number, b: number, k: number): number {

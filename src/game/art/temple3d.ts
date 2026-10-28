@@ -3,6 +3,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
@@ -537,7 +539,7 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
   const moonPos = new THREE.Vector3(-210, 250, -700);
   const moon = new THREE.Mesh(
     new THREE.CircleGeometry(46, 64),
-    new THREE.MeshBasicMaterial({ map: moonTexture(state), transparent: true, fog: false, color: red ? new THREE.Color(1.5, 0.45, 0.4) : new THREE.Color(1.05, 1.02, 0.96), depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: moonTexture(state), transparent: true, fog: false, color: red ? new THREE.Color(1.5, 0.45, 0.4) : new THREE.Color(0.82, 0.8, 0.76), depthWrite: false }),
   );
   moon.position.copy(moonPos);
   moon.lookAt(camera.position);
@@ -565,14 +567,17 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
   scene.add(rim);
   scene.add(new THREE.HemisphereLight(red ? 0x5a1010 : 0x1c2448, red ? 0x200404 : 0x120a06, red ? 0.35 : 0.22));
 
+  /** additive light effects: drawn in the beauty pass but kept out of the occlusion */
+  const glowOnly: THREE.Object3D[] = [];
+
   // the great pyramid, block by block
   const stone = limestone();
   const B = 52;
   const PH = 64;
   const PZ = -48;
-  const courses = 46;
+  const courses = 58;
   const ch = PH / courses;
-  const blockW = 3.1;
+  const blockW = 2.7;
   const blocks: THREE.Matrix4[] = [];
   const colors: THREE.Color[] = [];
   const r = rng(101);
@@ -583,20 +588,25 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
     const half = B * (1 - k / courses);
     const y = k * ch + ch / 2;
     const depth = (B / courses) * 2.2;
-    const n = Math.max(1, Math.round((half * 2) / blockW));
-    const bw = (half * 2) / n;
     for (let side = 0; side < 4; side++) {
       q.setFromAxisAngle(up, (side * Math.PI) / 2);
-      for (let i = 0; i < n; i++) {
-        if (r() < 0.012 && k > 2 && k < courses - 3) continue; // missing block
-        const out = r() < 0.06 ? (r() - 0.5) * 0.5 : 0;
-        const local = new THREE.Vector3(-half + bw * (i + 0.5) + (r() - 0.5) * 0.15, y + (r() - 0.5) * 0.06, half - depth / 2 + out);
+      // blocks of irregular length with staggered joints, like real masonry
+      let x = -half + (k % 2 ? blockW * 0.45 * r() : 0) - blockW * 0.5;
+      while (x < half) {
+        const len = blockW * (0.65 + r() * 0.9);
+        const x0 = Math.max(-half, x);
+        const x1 = Math.min(half, x + len);
+        x += len;
+        if (x1 - x0 < 0.4) continue;
+        if (r() < 0.01 && k > 2 && k < courses - 3) continue; // missing block
+        const out = r() < 0.07 ? (r() - 0.5) * 0.45 : 0;
+        const local = new THREE.Vector3((x0 + x1) / 2, y + (r() - 0.5) * 0.05, half - depth / 2 + out);
         local.applyQuaternion(q);
-        const s = new THREE.Vector3(bw * (0.93 + r() * 0.05), ch * (0.94 + r() * 0.05), depth);
+        const s = new THREE.Vector3((x1 - x0) * (0.95 + r() * 0.03), ch * (0.93 + r() * 0.05), depth);
         m.compose(local, q, s);
         blocks.push(m.clone());
-        const tone = 0.78 + r() * 0.3 - (r() < 0.12 ? 0.18 : 0);
-        colors.push(new THREE.Color(tone, tone * (0.97 + r() * 0.04), tone * (0.92 + r() * 0.06)));
+        const tone = 0.8 + r() * 0.28 - (r() < 0.1 ? 0.16 : 0);
+        colors.push(new THREE.Color(tone, tone * (0.96 + r() * 0.04), tone * (0.9 + r() * 0.06)));
       }
     }
   }
@@ -610,7 +620,7 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
     envMap: env,
     envMapIntensity: 0.04,
   });
-  const blockMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), blockMat, blocks.length);
+  const blockMesh = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 1, 1, 2, 0.09), blockMat, blocks.length);
   blocks.forEach((mm, i) => {
     blockMesh.setMatrixAt(i, mm);
     blockMesh.setColorAt(i, colors[i]);
@@ -650,6 +660,7 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
       const face = new THREE.Mesh(faceGeo, mat);
       face.rotation.y = (side * Math.PI) / 2;
       pyramid.add(face);
+      glowOnly.push(face);
     }
   }
   pyramid.position.set(0, 0, PZ);
@@ -664,6 +675,7 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
       );
       beam.position.set(0, PH + 210, PZ);
       scene.add(beam);
+      glowOnly.push(beam);
     }
   }
 
@@ -722,6 +734,17 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
   const target = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, samples: 4 });
   const composer = new EffectComposer(renderer, target);
   composer.addPass(new RenderPass(scene, camera));
+  // ambient occlusion: dark joints between the blocks, contact shadows under the props
+  const gtao = new GTAOPass(scene, camera, W, H);
+  gtao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.5, thickness: 2, scale: 1.2, samples: 12 });
+  gtao.blendIntensity = 1;
+  const aoRender = gtao.render.bind(gtao);
+  gtao.render = (...args: Parameters<typeof aoRender>) => {
+    for (const o of glowOnly) o.visible = false;
+    aoRender(...args);
+    for (const o of glowOnly) o.visible = true;
+  };
+  composer.addPass(gtao);
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), red ? 0.55 : 0.5, 0.5, 0.88));
   composer.addPass(new OutputPass());
   composer.render();

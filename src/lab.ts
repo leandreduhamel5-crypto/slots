@@ -4,7 +4,6 @@ import { ICONS as PAINTED } from './game/art/icons';
 import { downsample } from './game/art/paint';
 import { paintRoyal } from './game/art/royals';
 import { Audio } from './game/Audio';
-import { EYES, PRES, PW, PH, RING_R, paintPharaoh } from './game/art/pharaoh';
 
 /** Dev-only: renders the painted premium symbols large and at reel size. ?only=blood to focus one. */
 async function run(): Promise<void> {
@@ -23,33 +22,6 @@ async function run(): Promise<void> {
       w['t3d_' + st] = canvas.toDataURL('image/png');
       w['t3d_marks'] = marks;
       w['t3d_ms_' + st] = performance.now() - t0;
-    }
-    document.body.dataset.ready = '1';
-    return;
-  }
-  if (only === 'pharaoh') {
-    const a = paintPharaoh();
-    for (const infected of [false, true]) {
-      const [c, ctx] = [document.createElement('canvas'), null as unknown as CanvasRenderingContext2D];
-      c.width = PW * PRES + 200;
-      c.height = PH * PRES + 120;
-      const x = c.getContext('2d')!;
-      void ctx;
-      x.fillStyle = infected ? '#2a0608' : '#10101e';
-      x.fillRect(0, 0, c.width, c.height);
-      x.translate(100, 120);
-      x.drawImage(a.ring, (200 - RING_R - 30) * PRES, (200 - RING_R - 30) * PRES);
-      x.drawImage(a.body, 0, 0);
-      x.drawImage(a.jaw, 0, infected ? 14 : 0);
-      if (infected) {
-        x.drawImage(a.cracks, 0, 0);
-        x.globalCompositeOperation = 'lighter';
-        x.drawImage(a.cracksGlow, 0, 0);
-      }
-      x.globalCompositeOperation = 'lighter';
-      for (const [ex, ey] of EYES) x.drawImage(a.iris, ex * PRES - 20, ey * PRES - 20, 40, 40);
-      c.style.width = c.width / 2 + 'px';
-      out.append(c);
     }
     document.body.dataset.ready = '1';
     return;

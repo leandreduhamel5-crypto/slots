@@ -21,8 +21,8 @@ import type { SymbolTextures } from './textures';
 const BOARD_Y = 152;
 const WORLD_TOP = -140;
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
-const MASCOT_X = 246;
-const MASCOT_SCALE = 0.9;
+const MASCOT_X = 236;
+const MASCOT_SCALE = 0.95;
 const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 200;
 
