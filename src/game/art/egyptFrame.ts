@@ -369,25 +369,27 @@ export function paintCoin(): HTMLCanvasElement {
 
 /** Anticipation column: infected light rising up the reel, glowing cracks, gold edge lines. */
 export function paintRisingColumn(w: number, h: number): HTMLCanvasElement {
+  // a curtain of light rising from the bottom of the reel: bright rims, soft haze, no hard edges
   const [c, ctx] = makeCanvas(w, h);
-  const g = ctx.createLinearGradient(0, h, 0, 0);
-  g.addColorStop(0, 'rgba(255,60,40,0.85)');
-  g.addColorStop(0.5, 'rgba(200,10,30,0.45)');
-  g.addColorStop(1, 'rgba(120,0,20,0.1)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
-  const side = ctx.createLinearGradient(0, 0, w, 0);
-  side.addColorStop(0, 'rgba(0,0,0,0.5)');
-  side.addColorStop(0.25, 'rgba(0,0,0,0)');
-  side.addColorStop(0.75, 'rgba(0,0,0,0)');
-  side.addColorStop(1, 'rgba(0,0,0,0.5)');
-  ctx.fillStyle = side;
-  ctx.fillRect(0, 0, w, h);
-  for (let i = 0; i < 7; i++) redCrack(ctx, w * (0.15 + Math.random() * 0.7), h - Math.random() * h * 0.3, -Math.PI / 2 + (Math.random() - 0.5) * 0.6, h * (0.3 + Math.random() * 0.4), 3.5, 900 + i * 17);
-  for (const x of [3, w - 3]) {
-    ctx.fillStyle = goldGrad(ctx, x - 3, 0, x + 3, h);
-    ctx.fillRect(x - 3, 0, 6, h);
+  const img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    const v = y / (h - 1); // 0 at the top, 1 at the bottom
+    const fadeV = Math.pow(v, 1.6);
+    for (let x = 0; x < w; x++) {
+      const u = Math.abs(x / (w - 1) - 0.5) * 2; // 0 centre, 1 edges
+      const rim = Math.pow(u, 6) * 1.0 + Math.pow(u, 2) * 0.25;
+      const haze = 0.16 + 0.22 * Math.pow(v, 3);
+      const a = Math.min(1, (rim + haze) * fadeV * (u > 0.985 ? 0.4 : 1));
+      const i = (y * w + x) * 4;
+      // white-hot near the bottom rims, then orange, then infected red higher up
+      const hot = Math.min(1, rim * v * 1.4);
+      img.data[i] = 255;
+      img.data[i + 1] = Math.round(60 + 170 * hot + 40 * Math.pow(v, 4));
+      img.data[i + 2] = Math.round(40 + 140 * hot * hot);
+      img.data[i + 3] = Math.round(a * 255);
+    }
   }
+  ctx.putImageData(img, 0, 0);
   return c;
 }
 

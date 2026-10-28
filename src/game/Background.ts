@@ -3,7 +3,8 @@ import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { GodrayFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { makeCanvas, seeded } from './art/painters';
-import { APEX, BRAZIERS, HORIZON, OBELISKS, RS, TH as H, TW as W } from './art/templeHD';
+import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, RS, TH as H, TW as W } from './art/templeHD';
+import { Fire, paintFlameBlob } from './Fire';
 import { COLORS } from './layout';
 
 /** Tileable value-noise fog. */
@@ -39,6 +40,66 @@ function paintFog(size = 512): HTMLCanvasElement {
   }
   ctx.putImageData(img, 0, 0);
   return c;
+}
+
+/** Wispy clouds, tileable horizontally, fading out toward the horizon. */
+function paintClouds(w = 512, h = 256): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(w, h);
+  const img = ctx.createImageData(w, h);
+  const rnd = seeded(77);
+  const octaves = [
+    { cx: 3, cy: 2, amp: 0.5 },
+    { cx: 6, cy: 4, amp: 0.27 },
+    { cx: 12, cy: 8, amp: 0.15 },
+    { cx: 24, cy: 16, amp: 0.08 },
+  ];
+  const grids = octaves.map((o) => Array.from({ length: o.cx * (o.cy + 1) }, () => rnd()));
+  const sm = (t: number) => t * t * (3 - 2 * t);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      octaves.forEach((o, k) => {
+        const fx = (x / w) * o.cx;
+        const fy = (y / h) * o.cy;
+        const x0 = Math.floor(fx), y0 = Math.floor(fy);
+        const tx = sm(fx - x0), ty = sm(fy - y0);
+        const g = grids[k];
+        const at = (ix: number, iy: number) => g[iy * o.cx + (ix % o.cx)];
+        const a = at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx;
+        const b = at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx;
+        v += (a * (1 - ty) + b * ty) * o.amp;
+      });
+      const fade = Math.sin((y / h) * Math.PI);
+      const i = (y * w + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+      img.data[i + 3] = Math.max(0, Math.min(1, (v - 0.48) * 3.2)) * fade * 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+/** A soft ring of light around the moon (clear centre so the disc keeps its detail). */
+function paintHaloRing(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(256, 256);
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.3, 'rgba(255,255,255,0)');
+  g.addColorStop(0.36, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.18)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  return c;
+}
+
+/** Is this point open sky (not behind the pyramid, an obelisk or the moon)? */
+function openSky(x: number, y: number): boolean {
+  if (y > HORIZON - 120) return false;
+  const slope = APEX[1] + ((HORIZON - APEX[1]) * Math.abs(x - APEX[0])) / 960;
+  if (y > slope - 24) return false;
+  for (const ox of OBELISKS) if (Math.abs(x - ox) < 80) return false;
+  return Math.hypot(x - MOON[0], y - MOON[1]) > MOON[2] + 30;
 }
 
 type Pt = [number, number];
@@ -91,6 +152,12 @@ export class Background extends Container {
   private t = 0;
   private feature = 0;
   private nextStrike = 9;
+  private fires: Fire[] = [];
+  private stars: { s: Sprite; f: number; p: number; a: number }[] = [];
+  private clouds: TilingSprite | null = null;
+  private moonHalo: Sprite | null = null;
+  private meteor: Sprite;
+  private nextMeteor = 6;
   private w = W;
   private h = H;
   /** called on every lightning strike with its power (0.3 distant … 1 direct hit) */
@@ -109,6 +176,7 @@ export class Background extends Container {
     this.scene.anchor.set(0.5);
     if (!custom) this.scene.scale.set(1 / RS);
     this.sceneC.addChild(this.scene);
+    const flameTex = Texture.from(paintFlameBlob());
     if (!custom) {
       const tex = Texture.from(infected);
       this.infected = new Sprite(tex);
@@ -127,6 +195,35 @@ export class Background extends Container {
       this.heart.position.set(APEX[0] - W / 2, APEX[1] + 20 - H / 2);
       this.heart.blendMode = 'add';
       this.sceneC.addChild(this.heart);
+      // twinkling stars in the open sky
+      for (let i = 0; i < 60; i++) {
+        let x = 0;
+        let y = 0;
+        for (let k = 0; k < 20; k++) {
+          x = Math.random() * W;
+          y = Math.random() * (HORIZON - 160);
+          if (openSky(x, y)) break;
+        }
+        if (!openSky(x, y)) continue;
+        const st = new Sprite(glowTex);
+        st.anchor.set(0.5);
+        st.position.set(x - W / 2, y - H / 2);
+        st.scale.set((3 + Math.random() * Math.random() * 9) / 256);
+        st.blendMode = 'add';
+        st.tint = Math.random() < 0.7 ? 0xfff2d8 : 0xbcd0ff;
+        this.stars.push({ s: st, f: 0.6 + Math.random() * 2.4, p: Math.random() * 10, a: 0.4 + Math.random() * 0.6 });
+        this.sceneC.addChild(st);
+      }
+      this.moonHalo = new Sprite(Texture.from(paintHaloRing()));
+      this.moonHalo.anchor.set(0.5);
+      this.moonHalo.position.set(MOON[0] - W / 2, MOON[1] - H / 2);
+      this.moonHalo.blendMode = 'add';
+      this.sceneC.addChild(this.moonHalo);
+      // slow clouds drifting across the sky
+      this.clouds = new TilingSprite({ texture: Texture.from(paintClouds()), width: W, height: 560 });
+      this.clouds.position.set(-W / 2, -H / 2 - 40);
+      this.clouds.tileScale.set(2.2, 2.2);
+      this.sceneC.addChild(this.clouds);
       for (const [lx, ly] of BRAZIERS) {
         const g = new Sprite(glowTex);
         g.anchor.set(0.5);
@@ -135,7 +232,10 @@ export class Background extends Container {
         g.tint = 0xff8a2a;
         g.blendMode = 'add';
         this.lampGlows.push(g);
-        this.sceneC.addChild(g);
+        const fire = new Fire(flameTex, glowTex);
+        fire.position.set(lx - W / 2, ly - 8 - H / 2);
+        this.fires.push(fire);
+        this.sceneC.addChild(g, fire);
       }
       // the obelisks' gold pyramidions catch the light
       for (const x of OBELISKS) {
@@ -149,7 +249,11 @@ export class Background extends Container {
       }
     }
     this.bolts.blendMode = 'add';
-    this.sceneC.addChild(this.bolts);
+    this.meteor = new Sprite(glowTex);
+    this.meteor.anchor.set(0.92, 0.5);
+    this.meteor.blendMode = 'add';
+    this.meteor.visible = false;
+    this.sceneC.addChild(this.bolts, this.meteor);
 
     this.redWash = new Sprite(sporeTex);
     this.redWash.anchor.set(0.5);
@@ -267,6 +371,7 @@ export class Background extends Container {
   /** The temple answers a win: the capstone blazes, braziers roar, light shafts brighten. */
   flare(power = 0.6): void {
     this.flareV = Math.max(this.flareV, power);
+    for (const fire of this.fires) fire.roar(power);
   }
 
   thump(strength = 0.35): void {
@@ -307,6 +412,46 @@ export class Background extends Container {
       this.heart.alpha = Math.min(1, 0.4 + beat * 0.3 * f + f * 0.3 + this.flareV + this.boltLight);
       this.heart.tint = f > 0.5 ? COLORS.infection : 0xffd890;
       this.heart.scale.set(((300 + f * 260) / this.heart.texture.width) * (1 + this.flareV * 0.6 + beat * 0.15 * f));
+    }
+    for (const fire of this.fires) {
+      fire.hot = f;
+      fire.update(dt);
+    }
+    for (const st of this.stars) st.s.alpha = st.a * (0.55 + 0.45 * Math.sin(this.t * st.f + st.p)) * (1 - f * 0.6);
+    if (this.clouds) {
+      this.clouds.tilePosition.x -= dt * (6 + f * 30);
+      this.clouds.tint = f > 0.5 ? 0xff4a3a : 0x8a7c9c;
+      this.clouds.alpha = 0.2 + f * 0.15 + this.boltLight * 0.4;
+    }
+    if (this.moonHalo) {
+      this.moonHalo.tint = f > 0.5 ? 0xff3020 : 0xffe8c0;
+      this.moonHalo.alpha = 0.35 + 0.1 * Math.sin(this.t * 0.7) + f * 0.25;
+      this.moonHalo.scale.set((MOON[2] * 5.8) / 256);
+    }
+    // a shooting star now and then on calm nights
+    this.nextMeteor -= dt;
+    if (this.nextMeteor <= 0 && f < 0.5 && this.infected) {
+      this.nextMeteor = 14 + Math.random() * 20;
+      const x0 = 300 + Math.random() * 1300;
+      const y0 = 40 + Math.random() * 160;
+      const ang = Math.PI * (0.12 + Math.random() * 0.12) * (Math.random() < 0.5 ? 1 : -1) + (Math.random() < 0.5 ? 0 : Math.PI);
+      const m = this.meteor;
+      m.visible = true;
+      m.rotation = ang;
+      m.tint = 0xfff0d0;
+      m.position.set(x0 - W / 2, y0 - H / 2);
+      const o = { k: 0 };
+      gsap.to(o, {
+        k: 1,
+        duration: 0.9,
+        ease: 'power1.in',
+        onUpdate: () => {
+          m.position.set(x0 + Math.cos(ang) * 520 * o.k - W / 2, y0 + Math.sin(ang) * 520 * o.k - H / 2);
+          m.scale.set((60 + 240 * Math.sin(o.k * Math.PI)) / 256, 4 / 256);
+          m.alpha = Math.sin(o.k * Math.PI);
+        },
+        onComplete: () => (m.visible = false),
+      });
     }
     // weather: rare heat lightning on the horizon at night, the pyramid under fire in the bonus
     this.nextStrike -= dt;

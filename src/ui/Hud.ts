@@ -2,14 +2,40 @@ import { fmt } from './format';
 
 const ICONS = {
   menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
-  info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
-  sound: '<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>',
-  mute: '<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>',
-  turbo: '<svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
-  auto: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>',
-  spin: '<svg viewBox="0 0 64 64"><path d="M50 32a18 18 0 1 1-5.3-12.7"/><path d="M48 12v9h-9"/></svg>',
+  // papyrus scroll: the rules and pays
+  info: '<svg viewBox="0 0 24 24"><path d="M7 4h11a2 2 0 0 1 2 2v1h-4"/><path d="M16 7v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1h10v1a2 2 0 0 0 2 2"/><path d="M7 4a2 2 0 0 0-2 2v11"/><path d="M8.5 9.5h4.5M8.5 13h4.5"/></svg>',
+  sound: '<svg viewBox="0 0 24 24"><path d="M3.5 9.5v5h3.8l5.2 4.3V5.2L7.3 9.5z"/><path d="M15.8 9.2a4 4 0 0 1 0 5.6M18.4 6.6a7.6 7.6 0 0 1 0 10.8"/></svg>',
+  mute: '<svg viewBox="0 0 24 24"><path d="M3.5 9.5v5h3.8l5.2 4.3V5.2L7.3 9.5z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></svg>',
+  turbo: '<svg viewBox="0 0 24 24"><path d="M13.5 2.5L5 13.5h6.2l-1.4 8 8.7-11.2h-6.3z"/></svg>',
+  auto: '<svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 0 1-13.1 5"/><path d="M4.5 12a7.5 7.5 0 0 1 13.1-5"/><path d="M17.8 3.2v4.1h-4.1M6.2 20.8v-4.1h4.1"/></svg>',
+  spin: '<svg viewBox="0 0 64 64"><path d="M49 34a17 17 0 1 1-5-13"/><path d="M47.5 10.5v11.2H36.3"/></svg>',
   stop: '<svg viewBox="0 0 64 64"><rect x="22" y="22" width="20" height="20" rx="3"/></svg>',
 };
+
+/** Shared gradients for the gold line icons (referenced from CSS as url(#hud-gold)). */
+const DEFS = `<svg class="hud-defs" width="0" height="0" aria-hidden="true"><defs>
+  <linearGradient id="hud-gold" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff6cf"/><stop offset="0.35" stop-color="#f6c95a"/><stop offset="0.7" stop-color="#c7871f"/><stop offset="1" stop-color="#ffe08a"/>
+  </linearGradient>
+</defs></svg>`;
+
+/** The spin medallion's engraved band: ankh, eye and sun glyphs alternating with studs. */
+function glyphRing(): string {
+  const n = 12;
+  const parts: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * 360;
+    const g =
+      i % 3 === 0
+        ? '<ellipse cx="0" cy="-3" rx="1.7" ry="2.3"/><path d="M-3 0h6M0 -0.6v5.2"/>'
+        : i % 3 === 1
+          ? '<path d="M-3.6 0q3.6-3.2 7.2 0q-3.6 2.6-7.2 0z"/><circle cx="0" cy="0" r="0.9"/>'
+          : '<circle cx="0" cy="0" r="2.4"/><circle cx="0" cy="0" r="0.6"/>';
+    parts.push(`<g transform="rotate(${a}) translate(0 -42)">${g}</g>`);
+    parts.push(`<circle transform="rotate(${a + 15}) translate(0 -42)" r="1.1" class="stud"/>`);
+  }
+  return `<svg viewBox="-50 -50 100 100">${parts.join('')}</svg>`;
+}
 
 export interface HudHandlers {
   spin(): void;
@@ -30,7 +56,7 @@ export class Hud {
   constructor(h: HudHandlers) {
     this.root = document.createElement('div');
     this.root.id = 'hud';
-    this.root.innerHTML = `
+    this.root.innerHTML = `${DEFS}
       <div class="hud-meters">
         <div class="meter"><label>Solde</label><span data-k="balance">0,00</span></div>
         <div class="meter meter-win"><label data-k="winLabel">Gain</label><span data-k="win">0,00</span></div>
@@ -45,7 +71,7 @@ export class Hud {
           <div class="meter"><label>Mise</label><span data-k="bet">0,00</span></div>
           <button class="step" data-k="betInc" aria-label="Augmenter la mise">+</button>
         </div>
-        <button class="spin" data-k="spin" aria-label="Lancer"><span class="spin-ring"></span><span data-k="spinIcon">${ICONS.spin}</span><span class="spin-count" data-k="autoCount"></span></button>
+        <button class="spin" data-k="spin" aria-label="Lancer"><span class="spin-halo"></span><span class="spin-ring">${glyphRing()}</span><span class="spin-dome"></span><span class="spin-icon" data-k="spinIcon">${ICONS.spin}</span><span class="spin-count" data-k="autoCount"></span></button>
         <div class="hud-side">
           <button class="icon" data-k="auto" aria-label="Jeu automatique">${ICONS.auto}</button>
           <button class="icon" data-k="turbo" aria-label="Turbo">${ICONS.turbo}</button>

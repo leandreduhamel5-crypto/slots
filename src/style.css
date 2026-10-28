@@ -389,7 +389,7 @@ button {
   pointer-events: none;
   opacity: 0.9;
 }
-#hud.spinning .spin svg {
+#hud.spinning .spin-icon svg {
   animation: rotate 0.5s linear infinite;
 }
 #hud.spinning .spin-ring {
@@ -411,7 +411,7 @@ button {
   -webkit-text-stroke: 2px var(--ink);
   paint-order: stroke fill;
 }
-#hud.autoplaying .spin svg {
+#hud.autoplaying .spin-icon svg {
   opacity: 0.35;
 }
 @keyframes rotate {
@@ -1174,4 +1174,397 @@ button {
 }
 #paytable {
   background: rgba(8, 2, 3, 0.85);
+}
+
+/* =====================================================================
+   Premium console: obsidian slab, Egyptian block border, gold cartouches,
+   gold-and-lacquer medallion buttons, sun-disk spin button
+   ===================================================================== */
+:root {
+  --gold-metal: linear-gradient(180deg, #fff4c8 0%, #f4c752 20%, #b0701c 48%, #f8d47c 70%, #7a4508 100%);
+  --gold-ring: conic-gradient(from 210deg, #fff2c0, #c98a24, #6e3e08, #f6cd6a, #fff6d6, #b5741a, #5a3206, #e8b448, #fff2c0);
+  --lacquer: radial-gradient(circle at 50% 30%, #2a1712 0%, #140a08 55%, #070303 100%);
+  --lapis: #1f42a8;
+  --carnelian: #c92a1c;
+}
+.hud-defs {
+  position: absolute;
+  pointer-events: none;
+}
+#hud {
+  background:
+    radial-gradient(ellipse 60% 120% at 50% 120%, rgba(255, 70, 40, 0.16), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.85 0 0 0 0 0.6 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #1d0f0b 0%, #120807 40%, #060203 100%);
+  border-top: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 170, 0.18),
+    inset 0 -24px 36px rgba(0, 0, 0, 0.6),
+    0 -10px 30px rgba(0, 0, 0, 0.55);
+}
+#hud::before {
+  /* Egyptian block border: lapis / gold / carnelian tiles between two gold rails */
+  top: -13px;
+  height: 13px;
+  border: 0;
+  background:
+    linear-gradient(180deg, #fff1b8, #c28a2a 45%, #5a3008) top / 100% 3px no-repeat,
+    linear-gradient(180deg, #fff1b8, #c28a2a 45%, #5a3008) bottom / 100% 3px no-repeat,
+    repeating-linear-gradient(90deg,
+      #0a0405 0 1px, var(--lapis) 1px 13px, #0a0405 13px 14px, #f2c25a 14px 20px,
+      #0a0405 20px 21px, var(--carnelian) 21px 33px, #0a0405 33px 34px, #f2c25a 34px 40px);
+  box-shadow: 0 -6px 18px rgba(255, 60, 40, 0.28), 0 3px 6px rgba(0, 0, 0, 0.6);
+  opacity: 1;
+}
+
+/* ---- cartouche meters ---- */
+.meter {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  padding: 5px 26px 7px;
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 0%, rgba(255, 200, 120, 0.1), transparent 70%) padding-box,
+    linear-gradient(180deg, #170908, #070203) padding-box,
+    var(--gold-metal) border-box;
+  box-shadow:
+    0 0 0 2px #0a0405,
+    0 0 0 4px rgba(176, 112, 28, 0.55),
+    0 6px 12px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.9),
+    inset 0 0 0 3px rgba(242, 194, 90, 0.35),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.meter::before {
+  /* the cartouche's knot bar */
+  content: '';
+  position: absolute;
+  right: 11px;
+  top: 18%;
+  bottom: 18%;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--gold-metal);
+  box-shadow: 0 0 6px rgba(255, 200, 100, 0.4);
+}
+.meter::after {
+  /* polished glass sweep */
+  left: 10%;
+  right: 10%;
+  top: 2px;
+  height: 40%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 240, 210, 0.1), transparent);
+}
+.meter label {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: #e8b850;
+  opacity: 1;
+  text-shadow: 0 1px 0 #000, 0 0 8px rgba(242, 194, 90, 0.35);
+}
+.meter span {
+  font-family: var(--display);
+  font-weight: 900;
+  background: linear-gradient(180deg, #fffaf0 0%, #ffe6b0 45%, #e2a848 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 0;
+  filter: drop-shadow(0 2px 0 #000) drop-shadow(0 0 8px rgba(255, 200, 120, 0.25));
+}
+.meter-win.lit {
+  background:
+    radial-gradient(ellipse 80% 90% at 50% 40%, rgba(255, 180, 50, 0.38), transparent 75%) padding-box,
+    linear-gradient(180deg, #2a1406, #0e0603) padding-box,
+    var(--gold-metal) border-box;
+  animation: cartouche-lit 0.5s ease-out;
+}
+.meter-win.lit span {
+  color: transparent;
+  background: linear-gradient(180deg, #fffbe8 0%, #ffd65a 50%, #ff9a1a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 2px 0 #000) drop-shadow(0 0 12px rgba(255, 190, 60, 0.75));
+}
+.meter-win.lit::after {
+  left: -60%;
+  right: auto;
+  width: 40%;
+  height: 100%;
+  top: 0;
+  border-radius: 0;
+  background: linear-gradient(100deg, transparent, rgba(255, 245, 210, 0.45), transparent);
+  animation: sheen 1.6s ease-in-out infinite;
+}
+@keyframes sheen {
+  to { left: 130%; }
+}
+@keyframes cartouche-lit {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+#hud.feature .meter-win {
+  background:
+    radial-gradient(ellipse 80% 90% at 50% 40%, rgba(255, 40, 30, 0.3), transparent 75%) padding-box,
+    linear-gradient(180deg, #240606, #0e0203) padding-box,
+    var(--gold-metal) border-box;
+}
+#hud.feature .meter-win label {
+  color: #ff5a4a;
+  text-shadow: 0 1px 0 #000, 0 0 8px rgba(255, 60, 40, 0.6);
+}
+
+/* ---- medallion buttons ---- */
+.step,
+.icon {
+  position: relative;
+  border: 3px solid transparent;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 58%, rgba(31, 66, 168, 0.85) 60% 66%, transparent 68%) padding-box,
+    var(--lacquer) padding-box,
+    var(--gold-ring) border-box;
+  box-shadow:
+    0 0 0 1.5px #0a0405,
+    0 5px 0 #040101,
+    0 7px 12px rgba(0, 0, 0, 0.55),
+    inset 0 2px 0 rgba(255, 230, 170, 0.18),
+    inset 0 -6px 10px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.step::after,
+.icon::after {
+  /* specular sweep on hover */
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 240, 200, 0.35) 50%, transparent 65%);
+  transform: translateX(-80%);
+  transition: transform 0.45s ease;
+  pointer-events: none;
+}
+.step:hover:not(:disabled)::after,
+.icon:hover::after {
+  transform: translateX(80%);
+}
+.step:hover:not(:disabled),
+.icon:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+.step:active:not(:disabled),
+.icon:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 1.5px #0a0405, 0 1px 0 #040101, inset 0 2px 0 rgba(255, 230, 170, 0.18), inset 0 -4px 8px rgba(0, 0, 0, 0.6);
+}
+.icon svg {
+  stroke: url(#hud-gold);
+  stroke-width: 2.1;
+  filter: drop-shadow(0 1.5px 0 #000) drop-shadow(0 0 4px rgba(255, 190, 80, 0.35));
+}
+.step {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: 26px;
+  padding-top: 2px;
+  background:
+    var(--lacquer) padding-box,
+    var(--gold-ring) border-box;
+  color: #f6c95a;
+  -webkit-text-stroke: 0;
+  text-shadow: 0 2px 0 #000, 0 0 8px rgba(255, 190, 80, 0.45);
+}
+.step:disabled {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+.icon.active {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 120, 90, 0.9), #b0141c 55%, #3a0206 100%) padding-box,
+    var(--gold-ring) border-box;
+  box-shadow:
+    0 0 0 1.5px #0a0405,
+    0 5px 0 #040101,
+    0 0 18px rgba(255, 50, 40, 0.65),
+    inset 0 2px 0 rgba(255, 230, 200, 0.35);
+}
+.icon.active svg {
+  stroke: #fff6e8;
+  filter: drop-shadow(0 1.5px 0 #3a0006) drop-shadow(0 0 6px rgba(255, 220, 180, 0.8));
+}
+[data-k='turbo'].active svg {
+  fill: #ffe6a0;
+}
+
+/* ---- sun-disk spin button ---- */
+.spin {
+  border: 0;
+  padding: 0;
+  background: var(--gold-ring);
+  box-shadow:
+    0 0 0 2px #0a0405,
+    0 0 0 5px rgba(176, 112, 28, 0.7),
+    0 0 0 7px #0a0405,
+    0 10px 0 4px #040101,
+    0 14px 26px rgba(0, 0, 0, 0.7),
+    inset 0 2px 2px rgba(255, 250, 220, 0.6),
+    inset 0 -3px 4px rgba(60, 30, 0, 0.7);
+  animation: none;
+  isolation: isolate;
+}
+.spin-halo {
+  position: absolute;
+  inset: -26px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 70, 40, 0.55) 35%, rgba(255, 70, 40, 0.18) 55%, transparent 70%);
+  z-index: -1;
+  animation: halo 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes halo {
+  50% { transform: scale(1.12); opacity: 0.55; }
+}
+.spin-ring {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 0 69%, #120806 70% 99%);
+  -webkit-mask: none;
+  mask: none;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 230, 160, 0.4), inset 0 0 6px rgba(0, 0, 0, 0.9);
+  opacity: 1;
+  animation: rotate 30s linear infinite;
+}
+.spin .spin-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: #f6cd6a;
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  filter: none;
+}
+.spin .spin-ring svg .stud {
+  fill: #f6cd6a;
+  stroke: none;
+}
+.spin-dome {
+  position: absolute;
+  inset: 16%;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse 52% 30% at 50% 22%, rgba(255, 255, 255, 0.6), transparent 72%),
+    radial-gradient(circle at 50% 70%, rgba(255, 150, 90, 0.55), transparent 55%),
+    radial-gradient(circle at 50% 45%, #ff5a4a 0%, #d8141e 40%, #8a0410 72%, #2e0004 100%);
+  box-shadow:
+    0 0 0 2px #0a0405,
+    0 0 0 3.5px #f6cd6a,
+    0 0 0 5px #0a0405,
+    inset 0 -8px 14px rgba(60, 0, 10, 0.7),
+    inset 0 3px 6px rgba(255, 220, 200, 0.3);
+  overflow: hidden;
+}
+.spin-dome::after {
+  /* a slow light sweep inviting the next spin */
+  content: '';
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(110deg, transparent 40%, rgba(255, 240, 220, 0.55) 50%, transparent 60%);
+  animation: dome-sweep 3.2s ease-in-out infinite;
+}
+@keyframes dome-sweep {
+  0%, 55% { transform: translateX(-90%); }
+  85%, 100% { transform: translateX(90%); }
+}
+.spin-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.spin-icon svg {
+  stroke: #fffaf0;
+  stroke-width: 8;
+  filter: drop-shadow(0 3px 0 #4a0008) drop-shadow(0 0 8px rgba(255, 220, 190, 0.6));
+}
+.spin:hover {
+  filter: brightness(1.08) saturate(1.1);
+}
+.spin:hover .spin-ring {
+  animation-duration: 8s;
+}
+.spin:active {
+  transform: translateY(5px) scale(0.97);
+}
+.spin.pulse {
+  animation: spin-press 0.5s ease-out;
+}
+.spin.pulse .spin-halo {
+  animation: halo-burst 0.6s ease-out;
+}
+@keyframes spin-press {
+  25% { transform: scale(0.9); }
+  60% { transform: scale(1.06); }
+}
+@keyframes halo-burst {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+#hud.spinning .spin-ring {
+  animation-duration: 1.6s;
+}
+#hud.spinning .spin-dome {
+  filter: brightness(0.75) saturate(0.85);
+}
+#hud.spinning .spin-dome::after,
+#hud.locked .spin-dome::after {
+  animation: none;
+  opacity: 0;
+}
+#hud.spinning .spin-halo,
+#hud.locked .spin-halo {
+  animation: none;
+  opacity: 0.35;
+}
+#hud.feature .spin-halo {
+  background: radial-gradient(circle, rgba(255, 30, 20, 0.75) 35%, rgba(255, 30, 20, 0.25) 55%, transparent 70%);
+}
+.spin-count {
+  font-family: var(--display);
+  font-weight: 900;
+  color: #ffe6a0;
+  -webkit-text-stroke: 0;
+  text-shadow: 0 2px 0 #3a0006, 0 0 8px rgba(255, 200, 120, 0.8);
+}
+
+/* ---- menus and refill in the same materials ---- */
+.auto-menu {
+  border: 3px solid transparent;
+  background: linear-gradient(180deg, #1e0c0a, #0b0404) padding-box, var(--gold-metal) border-box;
+  box-shadow: 0 0 0 2px #0a0405, 0 14px 30px rgba(0, 0, 0, 0.7);
+}
+.auto-menu p {
+  font-weight: 900;
+  -webkit-text-stroke: 0;
+  text-shadow: 0 2px 0 #000;
+}
+.auto-menu button {
+  border: 2px solid transparent;
+  background: var(--lacquer) padding-box, var(--gold-ring) border-box;
+  box-shadow: 0 4px 0 #040101;
+  font-weight: 900;
+  color: #ffe6b0;
+}
+.auto-menu button:hover {
+  background: radial-gradient(circle at 50% 40%, #ff6a50, #b0141c 60%, #3a0206) padding-box, var(--gold-ring) border-box;
+}
+.refill {
+  border: 3px solid #0a0405;
+  font-weight: 900;
+  background: var(--gold-metal);
+  box-shadow: 0 6px 0 #040101, 0 0 24px rgba(255, 200, 80, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.6);
 }

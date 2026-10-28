@@ -581,7 +581,6 @@ function obelisk(ctx: Ctx, x: number, p: Palette, state: TempleState, stone: HTM
 }
 
 function brazier(ctx: Ctx, x: number, y: number, state: TempleState): void {
-  const fire = state === 'night' ? ['rgba(255,90,20,0.85)', 'rgba(255,170,50,0.9)', 'rgba(255,245,200,0.95)'] : ['rgba(255,20,20,0.85)', 'rgba(255,90,50,0.9)', 'rgba(255,220,200,0.95)'];
   glow(ctx, x, y + 250, 260, 50, state === 'night' ? 'rgba(255,140,60,0.5)' : 'rgba(255,50,40,0.55)');
   ctx.fillStyle = goldFill(ctx, x - 26, 0, x + 26, 0);
   ctx.beginPath();
@@ -611,20 +610,9 @@ function brazier(ctx: Ctx, x: number, y: number, state: TempleState): void {
   ctx.fill();
   ctx.fillStyle = '#ffb04a';
   ctx.fillRect(x - 72, y - 12, 144, 8);
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  for (const [i, k, blur] of [[0, 1.1, 6], [1, 0.8, 3], [2, 0.45, 1]] as const) {
-    ctx.filter = `blur(${blur}px)`;
-    ctx.fillStyle = fire[i];
-    ctx.beginPath();
-    ctx.moveTo(x - 56 * k, y - 8);
-    ctx.bezierCurveTo(x - 52 * k, y - 96 * k, x - 10, y - 116 * k, x + 6, y - 180 * k);
-    ctx.bezierCurveTo(x + 14, y - 116 * k, x + 56 * k, y - 84 * k, x + 56 * k, y - 8);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
-  glow(ctx, x, y - 50, 280, 280, state === 'night' ? 'rgba(255,130,40,0.5)' : 'rgba(255,40,30,0.55)');
+  // the fire itself is live (Background.ts); paint only the embers glowing in the bowl
+  glow(ctx, x, y - 6, 90, 26, state === 'night' ? 'rgba(255,170,60,0.9)' : 'rgba(255,60,40,0.9)');
+  glow(ctx, x, y - 40, 220, 220, state === 'night' ? 'rgba(255,130,40,0.35)' : 'rgba(255,40,30,0.4)');
 }
 
 function grade(ctx: Ctx, grain: HTMLCanvasElement): void {

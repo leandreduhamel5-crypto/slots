@@ -383,30 +383,23 @@ export function paintStar(): HTMLCanvasElement {
 
 /** Particle: cartoon smoke puff. */
 export function paintPuff(): HTMLCanvasElement {
-  const [c, ctx] = makeCanvas(96, 80);
-  const blobs: [number, number, number][] = [
-    [30, 46, 22],
-    [52, 34, 26],
-    [70, 48, 20],
-    [48, 56, 20],
-  ];
-  ctx.beginPath();
-  for (const [x, y, r] of blobs) {
-    ctx.moveTo(x + r, y);
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+  // soft volumetric smoke: overlapping blurred lobes, denser at the core, no outline
+  const [c, ctx] = makeCanvas(128, 128);
+  const rnd = seeded(23);
+  ctx.filter = 'blur(4px)';
+  for (let i = 0; i < 14; i++) {
+    const a = rnd() * Math.PI * 2;
+    const d = rnd() * 26;
+    const x = 64 + Math.cos(a) * d;
+    const y = 64 + Math.sin(a) * d * 0.8;
+    const r = 18 + rnd() * 18;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.32)');
+    g.addColorStop(0.6, 'rgba(255,255,255,0.12)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
   }
-  ink(ctx, 8);
-  ctx.fillStyle = '#efe6f2';
-  for (const [x, y, r] of blobs) {
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#c9bcd2';
-  ctx.beginPath();
-  ctx.arc(56, 56, 18, 0, Math.PI * 2);
-  ctx.arc(72, 52, 14, 0, Math.PI * 2);
-  ctx.fill();
   return c;
 }
 

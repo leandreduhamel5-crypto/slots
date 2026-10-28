@@ -81,7 +81,7 @@ export class ReelBoard extends Container {
   private fx: Particles;
   private labelLayer = new Container();
   private cycleTl: gsap.core.Timeline | null = null;
-  private anticipationFx: { glow: Sprite; veins: Sprite; mask: Graphics }[] = [];
+  private anticipationFx: { glow: Sprite; veins: Sprite; border: Graphics; comets: Sprite[] }[] = [];
   private throbbing: Rig[] = [];
   private rigs = new Map<string, Rig>();
   private hurried = false;
@@ -123,18 +123,32 @@ export class ReelBoard extends Container {
       glow.position.set(reelX(r) + CELL_W / 2, BOARD_H / 2);
       glow.alpha = 0;
       glow.blendMode = 'add';
+      // light curtain rising from the bottom of the reel (soft gradient: no hard edges)
       const veins = new Sprite(tex.veins);
-      veins.position.set(reelX(r), 0);
+      veins.anchor.set(0, 1);
+      veins.position.set(reelX(r), BOARD_H);
       veins.width = CELL_W;
       veins.height = BOARD_H;
       veins.alpha = 0;
-      const vm = new Graphics().rect(reelX(r), 0, CELL_W, BOARD_H).fill(0xffffff);
-      vm.pivot.y = BOARD_H;
-      vm.y = BOARD_H;
-      vm.scale.y = 0;
-      veins.mask = vm;
-      this.anticipationFx.push({ glow, veins, mask: vm });
-      this.anticipationLayer.addChild(glow, vm, veins);
+      veins.blendMode = 'add';
+      // pulsing gold border with two comets of light racing around it
+      const border = new Graphics();
+      const pad = 3;
+      for (const [w, a] of [[16, 0.18], [7, 0.4], [2.5, 1]] as const) {
+        border.roundRect(reelX(r) - pad, -pad, CELL_W + pad * 2, BOARD_H + pad * 2, 10).stroke({ width: w, color: 0xffc860, alpha: a });
+      }
+      border.blendMode = 'add';
+      border.alpha = 0;
+      const comets = [0, 1].map(() => {
+        const c = new Sprite(tex.glow);
+        c.anchor.set(0.5);
+        c.blendMode = 'add';
+        c.tint = 0xfff0c0;
+        c.alpha = 0;
+        return c;
+      });
+      this.anticipationFx.push({ glow, veins, border, comets });
+      this.anticipationLayer.addChild(glow, veins, border, ...comets);
     }
 
     const shade = new Sprite(tex.shade);
@@ -288,18 +302,43 @@ export class ReelBoard extends Container {
   }
 
   private setAnticipation(reel: number, on: boolean, dur: number): void {
-    const { glow, veins, mask } = this.anticipationFx[reel];
-    gsap.killTweensOf([glow, glow.scale, veins, mask.scale]);
+    const { glow, veins, border, comets } = this.anticipationFx[reel];
+    gsap.killTweensOf([glow, glow.scale, veins, veins.scale, border, ...comets]);
     this.onAnticipate?.(on);
     if (on) {
       glow.alpha = 0;
       gsap.to(glow, { alpha: 0.75, duration: 0.25 });
       gsap.to(glow.scale, { x: glow.scale.x * 1.1, duration: 0.22, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-      veins.alpha = 1;
-      mask.scale.y = 0;
-      gsap.to(mask.scale, { y: 1, duration: dur, ease: 'power1.in' });
+      veins.alpha = 0.95;
+      const sy = BOARD_H / veins.texture.height;
+      veins.scale.y = 0;
+      gsap.to(veins.scale, { y: sy, duration: dur, ease: 'power1.in' });
+      gsap.fromTo(border, { alpha: 0 }, { alpha: 1, duration: 0.2 });
+      gsap.to(border, { alpha: 0.45, duration: 0.18, yoyo: true, repeat: -1, delay: 0.2, ease: 'sine.inOut' });
+      // comets race around the reel's outline, faster as the decision nears
+      const L = 2 * (CELL_W + BOARD_H);
+      const at = (d: number): [number, number] => {
+        d = ((d % L) + L) % L;
+        const x0 = reelX(reel) - 3;
+        const w = CELL_W + 6;
+        const h = BOARD_H + 6;
+        if (d < w) return [x0 + d, -3];
+        if (d < w + h) return [x0 + w, -3 + d - w];
+        if (d < 2 * w + h) return [x0 + w - (d - w - h), h - 3];
+        return [x0, h - 3 - (d - 2 * w - h)];
+      };
+      const run = { d: 0 };
+      comets.forEach((c) => {
+        c.alpha = 1;
+        c.width = c.height = 46;
+      });
+      gsap.to(run, {
+        d: L * 3.2,
+        duration: dur,
+        ease: 'power2.in',
+        onUpdate: () => comets.forEach((c, k) => c.position.set(...at(run.d + (k * L) / 2))),
+      });
       this.reels[reel].speedScale = 1.25;
-      veins.blendMode = 'add';
       // the books already down throb like a heart while the last reel decides
       for (let r = 0; r < reel; r++) {
         for (let row = 0; row < ROWS; row++) {
@@ -319,13 +358,14 @@ export class ReelBoard extends Container {
       const emit = () => {
         if (glow.alpha <= 0.05) return;
         this.fx.sparks(x + (Math.random() - 0.5) * CELL_W, BOARD_H - 10, 3, 0.6);
-        if (Math.random() < 0.3) this.fx.puffs(x, BOARD_H + 10, 1, CELL_W);
         gsap.delayedCall(0.09, emit);
       };
       gsap.delayedCall(0.1, emit);
     } else {
       gsap.to(glow, { alpha: 0, duration: 0.3 });
       gsap.to(veins, { alpha: 0, duration: 0.25 });
+      gsap.to(border, { alpha: 0, duration: 0.25 });
+      gsap.to(comets, { alpha: 0, duration: 0.2 });
       this.reels[reel].speedScale = 1;
       for (const rig of this.throbbing) if (!rig.root.destroyed) this.dropRig(rig);
       this.throbbing = [];
