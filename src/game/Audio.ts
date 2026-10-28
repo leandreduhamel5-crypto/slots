@@ -792,8 +792,8 @@ export class Audio {
   tick(progress = -1): void {
     if (!this.ctx) return;
     const at = this.t;
-    if (progress >= 0) this.coin(at, 0.06, (Math.random() - 0.5) * 0.5, 0.8 + Math.min(1, progress) * 0.55, this.ui);
-    else this.coin(at, 0.05, (Math.random() - 0.5) * 0.4, 0.95 + Math.random() * 0.15, this.ui);
+    if (progress >= 0) this.coin(at, 0.09, (Math.random() - 0.5) * 0.5, 0.8 + Math.min(1, progress) * 0.55, this.ui);
+    else this.coin(at, 0.08, (Math.random() - 0.5) * 0.4, 0.95 + Math.random() * 0.15, this.ui);
   }
 
   /** Strain expands over a reel: slimy splash, rising whoosh, sub hit. */

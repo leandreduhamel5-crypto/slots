@@ -230,7 +230,7 @@ export class Mascot extends Container {
     this.ringGlow.tint = tint;
     this.ring.tint = lerpColor(0xffffff, 0xff9a8a, r);
     this.aura.tint = tint;
-    this.aura.alpha = 0.2 + r * 0.15 + fx.flare * 0.35 + beat * 0.1;
+    this.aura.alpha = 0.2 + r * 0.15 + fx.flare * 0.2 + beat * 0.1;
     this.body.tint = this.jaw.tint = lerpColor(0xffffff, 0xffb8a8, r * 0.6);
     this.cracks.alpha = r;
     this.cracksGlow.alpha = r * (0.45 + beat * 0.55 + fx.flare * 0.5);
@@ -249,14 +249,15 @@ export class Mascot extends Container {
       const halo = this.halos[i];
       halo.position.copyFrom(iris.position);
       halo.tint = tint;
-      halo.alpha = (0.45 + r * 0.35 + 0.15 * Math.sin(t * 2.3) + fx.flare * 0.6) * flick;
-      halo.scale.set(((70 + fx.flare * 90) / 256) * 1.3, (70 + fx.flare * 90) / 256);
+      halo.alpha = Math.min(0.85, 0.45 + r * 0.3 + 0.15 * Math.sin(t * 2.3) + fx.flare * 0.3) * flick;
+      halo.scale.set(((64 + fx.flare * 30) / 256) * 1.3, (64 + fx.flare * 30) / 256);
       const beam = this.beams[i];
       beam.position.copyFrom(iris.position);
       beam.alpha = fx.beam * (0.8 + Math.random() * 0.2);
       beam.tint = tint;
-      beam.scale.set(900 / 256, (16 + Math.random() * 6) / 256);
-      beam.rotation = Math.PI + 0.12 + Math.sin(t * 6) * 0.02;
+      beam.scale.set(700 / 256, (30 + Math.random() * 10) / 256);
+      // twin shafts of light blasting skyward in a V
+      beam.rotation = -Math.PI / 2 + (i === 0 ? -0.32 : 0.32) + Math.sin(t * 6 + i) * 0.03;
     });
     this.uraeus.alpha = 0.25 + r * 0.4 + fx.flare * 0.6;
 
