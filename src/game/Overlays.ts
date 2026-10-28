@@ -437,10 +437,12 @@ export class Overlays extends Container {
       .roundRect(-150, -140, 300, 290, 34)
       .fill(COLORS.ink)
       .roundRect(-150, -150, 300, 290, 34)
-      .fill(0x3a4a55)
+      .fill(0x8a5612)
       .stroke({ width: 9, color: COLORS.ink })
+      .roundRect(-142, -142, 284, 274, 28)
+      .stroke({ width: 5, color: 0xf2c25a })
       .roundRect(-124, -124, 248, 238, 22)
-      .fill(0x1e1726)
+      .fill(0x120606)
       .stroke({ width: 7, color: COLORS.ink })
       .roundRect(-118, -118, 236, 226, 18)
       .stroke({ width: 4, color: COLORS.yellow });
@@ -449,7 +451,7 @@ export class Overlays extends Container {
       [132, -132],
       [-132, 122],
       [132, 122],
-    ]) frame.circle(bx, by, 8).fill(0x9aa6b0).stroke({ width: 4, color: COLORS.ink });
+    ]) frame.circle(bx, by, 9).fill(0xe0213a).stroke({ width: 4, color: COLORS.ink }).circle(bx - 3, by - 3, 3).fill(0xffd0c8);
     const sprite = new Sprite(this.tex.normal[pool[0]]);
     sprite.anchor.set(0.5);
     sprite.width = sprite.height = 220;

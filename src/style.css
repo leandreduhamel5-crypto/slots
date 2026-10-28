@@ -679,8 +679,13 @@ button {
   border: 4px solid var(--ink);
   box-shadow: 0 4px 0 var(--ink);
 }
+.pt-sym {
+  background: linear-gradient(180deg, #1c0a08, #0e0504);
+  box-shadow: 0 4px 0 #050202, 0 0 0 2px #7a4a10;
+}
 .pt-sym.premium {
-  background: #3a1028;
+  background: linear-gradient(180deg, #34100e, #160606);
+  box-shadow: 0 4px 0 #050202, 0 0 0 2px #c48a2a;
 }
 .pt-sym img {
   width: 92px;

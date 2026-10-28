@@ -45,20 +45,24 @@ class FeatureBanner extends Container {
       .roundRect(-340, -66, 680, 150, 30)
       .fill(ink)
       .roundRect(-340, -76, 680, 150, 30)
-      .fill(0x2a1530)
+      .fill(0x1a0a08)
       .stroke({ width: 9, color: ink })
-      .roundRect(-326, -66, 652, 12, 6)
-      .fill({ color: 0xffffff, alpha: 0.12 })
+      .roundRect(-334, -70, 668, 138, 25)
+      .stroke({ width: 3, color: 0xc48a2a })
+      .roundRect(-326, -66, 652, 10, 5)
+      .fill({ color: 0xffe2a0, alpha: 0.1 })
       .roundRect(-320, -60, 300, 118, 20)
-      .fill(0x1a0d20)
-      .stroke({ width: 6, color: ink });
+      .fill(0x0c0404)
+      .stroke({ width: 6, color: ink })
+      .roundRect(-316, -56, 292, 110, 17)
+      .stroke({ width: 2, color: 0x8a5612 });
     const label = new Text({ text: 'TOURS GRATUITS', style: cartoon(28, COLORS.infection) });
     label.anchor.set(0.5);
     label.position.set(-170, -34);
     this.count = new Text({ text: '0 / 10', style: cartoon(64, COLORS.yellow) });
     this.count.anchor.set(0.5);
     this.count.position.set(-170, 18);
-    const strains = new Text({ text: 'SOUCHES', style: cartoon(24, 0xe8dcf0) });
+    const strains = new Text({ text: 'SOUCHES', style: cartoon(24, 0xf2c25a) });
     strains.anchor.set(0.5);
     strains.position.set(150, -48);
     this.icons.position.set(150, 14);
@@ -486,7 +490,10 @@ export class Game {
       // Wins at or below the stake are shown plainly, without celebration (no "loss disguised as a win").
       const celebrate = lineSum > bet;
       const size = lineSum >= bet * 5 ? 2 : lineSum > bet ? 1 : 0;
-      if (celebrate) this.audio.win(size);
+      if (celebrate) {
+        this.audio.win(size);
+        this.bg.flare(0.45 + size * 0.2);
+      }
       else this.audio.tick();
       shown += lineSum;
       this.hud.rollWin(shown, celebrate ? 900 : 300, label);

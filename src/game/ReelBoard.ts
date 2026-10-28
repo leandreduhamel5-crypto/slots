@@ -36,6 +36,14 @@ interface Rig {
 }
 
 /** Tint of the star-burst behind each winning symbol. */
+/** Glowing eyes / gems on the painted symbols: [x, y, radius, tint] in texture px from the centre. */
+const EYES: Partial<Record<Sym, [number, number, number, number][]>> = {
+  [Sym.ZERO]: [[-24, -10, 9, 0xff3a2a], [25, -10, 9, 0xff3a2a]],
+  [Sym.MASK]: [[20, -20, 10, 0xff2a2a]],
+  [Sym.ANTIDOTE]: [[0, -90, 13, 0xff3040]],
+  [Sym.BLOOD]: [[0, 5, 18, 0xff4a2a]],
+};
+
 const SYMBOL_GLOW: Record<number, number> = {
   [Sym.CODEX]: 0xff3347,
   [Sym.ZERO]: 0xffb03a,
@@ -391,10 +399,86 @@ export class ReelBoard extends Container {
       .to(lid.scale, { y: 0, duration: 0.12, ease: 'power2.out' }, '+=0.05');
   }
 
+  /** Glow + cross glint sprites on a painted symbol's eyes (texture space, body-local). */
+  private eyeFlares(rig: Rig, scale = 1): { glow: Sprite; cross: Container }[] {
+    return (EYES[rig.sym] ?? []).map(([x, y, r, tint]) => {
+      const glow = new Sprite(this.tex.glow);
+      glow.anchor.set(0.5);
+      glow.position.set(x, y);
+      glow.width = glow.height = r * 6 * scale;
+      glow.tint = tint;
+      glow.blendMode = 'add';
+      glow.alpha = 0;
+      const cross = new Container();
+      cross.position.set(x, y);
+      cross.alpha = 0;
+      for (const [w, h] of [[r * 11, r * 0.6], [r * 0.6, r * 7]]) {
+        const ray = new Sprite(this.tex.glow);
+        ray.anchor.set(0.5);
+        ray.width = w * scale;
+        ray.height = h * scale;
+        ray.tint = 0xffe0c0;
+        ray.blendMode = 'add';
+        cross.addChild(ray);
+      }
+      rig.body.addChild(glow, cross);
+      return { glow, cross };
+    });
+  }
+
+  /** Win signature for the painted Egyptian symbols (and the royals). */
+  private egyptWin(rig: Rig, tl: gsap.core.Timeline, amp: number, once: (fn: () => void) => void, pos: { x: number; y: number }): void {
+    const b = rig.body;
+    const s = SYMBOL_SIZE / TEX_SIZE;
+    for (const f of this.eyeFlares(rig)) {
+      tl.fromTo(f.glow, { alpha: 0 }, { alpha: 1, duration: 0.18 }, 0.12)
+        .fromTo(f.glow.scale, { x: f.glow.scale.x * 0.4, y: f.glow.scale.y * 0.4 }, { x: f.glow.scale.x, y: f.glow.scale.y, duration: 0.35, ease: 'back.out(3)' }, 0.12)
+        .fromTo(f.cross, { alpha: 0, rotation: -0.5 }, { alpha: 1, rotation: 0.25, duration: 0.4, ease: 'power2.out' }, 0.16)
+        .to(f.cross, { alpha: 0, duration: 0.35 }, 0.62)
+        .to(f.glow, { alpha: 0.55, duration: 0.4 }, 0.6);
+    }
+    once(() => this.fx.sparks(pos.x, pos.y, amp > 0.8 ? 12 : 6, 0.55));
+    switch (rig.sym) {
+      case Sym.ZERO: // Pharaoh: a slow, regal rise
+        tl.to(b, { y: -10 * amp, duration: 0.35, ease: 'power2.out' }, 0.15).to(b, { y: 0, duration: 0.5, ease: 'bounce.out' }, 0.75);
+        break;
+      case Sym.MASK: // Anubis: snarling head toss
+        tl.to(b, { rotation: -0.12 * amp, duration: 0.12, ease: 'power2.out' }, 0.18)
+          .to(b, { rotation: 0.06 * amp, duration: 0.14 })
+          .to(b, { rotation: 0, duration: 0.4, ease: 'elastic.out(1.2, 0.4)' });
+        break;
+      case Sym.ANTIDOTE: // Scarab: scuttles
+        tl.to(b, { x: 6 * amp, duration: 0.035, yoyo: true, repeat: 11, ease: 'none' }, 0.18);
+        break;
+      case Sym.BLOOD: // Eye of Horus: throbs
+        tl.to(b.scale, { x: s * 1.26, y: s * 1.26, duration: 0.12, ease: 'power2.out' }, 0.3)
+          .to(b.scale, { x: s * 1.1, y: s * 1.1, duration: 0.5, ease: 'elastic.out(1.2, 0.3)' })
+          .to(rig.burst, { alpha: 1, duration: 0.1 }, 0.3)
+          .to(rig.burst, { alpha: 0.6, duration: 0.5 }, 0.45);
+        break;
+      default: // royals
+        tl.to(b, { rotation: -0.07, duration: 0.1 }, 0.2)
+          .to(b, { rotation: 0.07, duration: 0.14 })
+          .to(b, { rotation: 0, duration: 0.3, ease: 'elastic.out(1.2, 0.4)' });
+    }
+  }
+
   private performIdle(rig: Rig): void {
     const b = rig.body;
     const s = b.scale.x;
     let tl: gsap.core.Timeline;
+    if (!this.tex.rigs.has(rig.sym) && EYES[rig.sym]) {
+      // the painted gods watch: eyes kindle, a glint, then back to sleep
+      tl = gsap.timeline();
+      for (const f of this.eyeFlares(rig, 0.7)) {
+        tl.fromTo(f.glow, { alpha: 0 }, { alpha: 0.95, duration: 0.25 }, 0).to(f.glow, { alpha: 0, duration: 0.6 }, 0.7);
+        tl.fromTo(f.cross, { alpha: 0, rotation: -0.3 }, { alpha: 1, rotation: 0.3, duration: 0.35 }, 0.1).to(f.cross, { alpha: 0, duration: 0.3 }, 0.5);
+      }
+      tl.fromTo(rig.shine, { x: -320 }, { x: 320, duration: 0.7, ease: 'power1.inOut' }, 0);
+      tl.eventCallback('onComplete', () => this.dropRig(rig));
+      rig.tweens.push(tl);
+      return;
+    }
     switch (this.motionOf(rig)) {
       case Sym.CODEX:
         tl = gsap
@@ -454,7 +538,11 @@ export class ReelBoard extends Container {
       .to(b.scale, { x: s * (1 + 0.12 * amp), y: s * (1 + 0.24 * amp), duration: 0.1 })
       .to(b.scale, { x: s * 1.12, y: s * 1.12, duration: 0.35, ease: 'elastic.out(1.2, 0.4)' })
       .to(rig.glow, { alpha: 0.45, duration: 0.15 }, 0);
-    switch (this.motionOf(rig)) {
+    if (!this.tex.rigs.has(rig.sym)) {
+      tl.to(rig.glow, { alpha: 0.18, duration: 0.15 }, 0);
+      this.egyptWin(rig, tl, amp, once, pos);
+    }
+    else switch (this.motionOf(rig)) {
       case Sym.CODEX:
         tl.to(rig.parts.iris, { x: -12, duration: 0.18 }, 0.2)
           .to(rig.parts.iris, { x: 12, duration: 0.25 })

@@ -13,14 +13,17 @@ type Pan = number;
 const A4 = 440;
 const midi = (n: number) => A4 * Math.pow(2, (n - 69) / 12);
 /** A harmonic minor, the score's home key */
-const SCALE = [57, 59, 60, 62, 64, 65, 68, 69, 71, 72, 74, 76];
-/** i – VI – iv – V (Am, F, Dm, E) as MIDI chords */
+/** E Hijaz (phrygian dominant): the augmented second F → G# gives the Egyptian colour */
+const SCALE = [64, 65, 68, 69, 71, 72, 74, 76, 77, 80, 81];
+/** E – F – E – Dm (Hijaz cadence) as MIDI chords, root first */
 const PROGRESSION = [
-  [45, 57, 60, 64],
-  [41, 57, 60, 65],
-  [38, 57, 62, 65],
   [40, 56, 59, 64],
+  [41, 57, 60, 65],
+  [40, 56, 59, 64],
+  [38, 57, 62, 65],
 ];
+/** Maqsum darbuka rhythm over 8 eighths: D T . T D . T . */
+const MAQSUM = ['D', 'T', '', 'T', 'D', '', 'T', ''];
 
 export class Audio {
   private ctx: BaseAudioContext | null = null;
@@ -317,7 +320,7 @@ export class Audio {
     lfo.start();
     const g = ctx.createGain();
     g.gain.value = 0.12;
-    for (const f of [27.5, 27.62, 55, 82.4]) {
+    for (const f of [41.2, 41.35, 82.4, 123.5]) {
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
       o.frequency.value = f;
@@ -364,21 +367,88 @@ export class Audio {
     // pad: one swell every two bars
     if (s === 0 && bar % 2 === 0) this.pad(at, chord, dur * 16);
     if (!this.feature) {
-      // creepy music box: sparse, mostly chord tones, with echo
-      if (Math.random() < (s % 2 ? 0.22 : 0.45)) {
+      // a ney phrase every four bars, the music box answering in between
+      if (s === 0 && bar % 4 === 1) this.neyPhrase(at, dur);
+      else if (bar % 4 !== 1 && bar % 4 !== 2 && Math.random() < (s % 2 ? 0.18 : 0.38)) {
         const pool = Math.random() < 0.7 ? chord.slice(1).map((n) => n + 12) : SCALE.map((n) => n + 12);
         this.musicBox(at, midi(pool[Math.floor(Math.random() * pool.length)]));
       }
     } else {
-      // free spins: kick on the beat, ticks off the beat, bass ostinato, music box doubles
-      if (s % 2 === 0) this.kick(at);
-      else this.hat(at);
-      if (s === 6) this.hat(at + dur * 0.5, 0.5);
+      // free spins: darbuka maqsum, bass ostinato, music box doubles
+      const hit = MAQSUM[s];
+      if (hit === 'D') this.doum(at);
+      else if (hit === 'T') this.tek(at);
+      if (s === 7 && Math.random() < 0.6) this.tek(at + dur * 0.5, 0.6);
       const root = chord[0];
-      const bassNotes = [root, root, root + 12, root, root + 7, root, root + 12, root + 10];
+      const bassNotes = [root, root, root + 12, root, root + 7, root, root + 12, root + 1];
       this.bass(at, midi(bassNotes[s]), dur);
-      if (Math.random() < 0.35) this.musicBox(at, midi(chord[1 + (s % 3)] + 24), 0.06);
+      if (Math.random() < 0.3) this.musicBox(at, midi(chord[1 + (s % 3)] + 24), 0.06);
     }
+  }
+
+  /** Ney flute: breathy sine with delayed vibrato and a little grace-note slide. */
+  private ney(at: number, f: number, len: number, vol = 0.07): void {
+    const ctx = this.ctx!;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f * 0.97, at);
+    o.frequency.exponentialRampToValueAtTime(f, at + 0.08);
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 5.2;
+    const vg = ctx.createGain();
+    vg.gain.setValueAtTime(0, at);
+    vg.gain.linearRampToValueAtTime(f * 0.012, at + len * 0.6);
+    vib.connect(vg).connect(o.frequency);
+    const h = ctx.createOscillator();
+    h.type = 'triangle';
+    h.frequency.value = f * 2;
+    const hg = ctx.createGain();
+    hg.gain.value = 0.12;
+    h.connect(hg);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + 0.12);
+    g.gain.setValueAtTime(vol * 0.85, at + len * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len + 0.25);
+    o.connect(g);
+    hg.connect(g);
+    g.connect(this.music);
+    const e = ctx.createGain();
+    e.gain.value = 0.45;
+    g.connect(e).connect(this.echoIn);
+    for (const n of [o, vib, h]) {
+      n.start(at);
+      n.stop(at + len + 0.3);
+    }
+    // breath
+    this.hiss({ at, dur: len, type: 'bandpass', f0: f * 2.5, q: 3, vol: vol * 0.25, a: 0.1, dest: this.music });
+  }
+
+  private neyPhrase(at: number, dur: number): void {
+    const motifs = [
+      [76, 77, 80, 77, 76],
+      [71, 72, 71, 69, 68, 69],
+      [64, 65, 68, 69, 68, 65, 64],
+      [81, 80, 77, 76],
+    ];
+    const m = motifs[Math.floor(Math.random() * motifs.length)];
+    let t = at;
+    m.forEach((n, i) => {
+      const len = i === m.length - 1 ? dur * 5 : dur * (Math.random() < 0.3 ? 2 : 1);
+      this.ney(t, midi(n), len);
+      t += len;
+    });
+  }
+
+  /** Darbuka: deep "doum" in the centre, dry "tek" on the rim. */
+  private doum(at: number): void {
+    this.voice({ at, f: 140, to: 78, glide: 0.08, vol: 0.5, r: 0.32, a: 0.002, dest: this.music });
+    this.voice({ at, f: 220, to: 160, glide: 0.05, type: 'triangle', vol: 0.12, r: 0.12, a: 0.001, dest: this.music });
+  }
+
+  private tek(at: number, vol = 1): void {
+    this.hiss({ at, dur: 0.05, type: 'bandpass', f0: 3200, q: 2.5, vol: 0.45 * vol, a: 0.001, dest: this.music, pan: 0.25 });
+    this.voice({ at, f: 680, to: 520, glide: 0.03, type: 'triangle', vol: 0.26 * vol, r: 0.05, a: 0.001, dest: this.music, pan: 0.25 });
   }
 
   private pad(at: number, chord: number[], len: number): void {
@@ -410,15 +480,6 @@ export class Audio {
     this.voice({ at, f, vol, r: 1.1, a: 0.002, dest: this.music, echo: 0.6, pan: (Math.random() - 0.5) * 0.8 });
     this.voice({ at, f: f * 4.02, vol: vol * 0.35, r: 0.25, a: 0.001, dest: this.music, echo: 0.4 });
     this.voice({ at, f: f * 2.0, vol: vol * 0.2, r: 0.6, a: 0.002, dest: this.music });
-  }
-
-  private kick(at: number): void {
-    this.voice({ at, f: 120, to: 42, glide: 0.12, vol: 0.55, r: 0.28, a: 0.002, dest: this.music });
-    this.hiss({ at, dur: 0.03, type: 'highpass', f0: 3000, vol: 0.06, a: 0.001, dest: this.music });
-  }
-
-  private hat(at: number, vol = 1): void {
-    this.hiss({ at, dur: 0.05, type: 'highpass', f0: 7000, vol: 0.05 * vol, a: 0.001, dest: this.music, pan: 0.3 });
   }
 
   private bass(at: number, f: number, dur: number): void {
@@ -642,7 +703,7 @@ export class Audio {
   win(size: number): void {
     if (!this.ctx) return;
     const at = this.t;
-    const up = [57, 60, 64, 69, 72, 76, 81, 84];
+    const up = [64, 65, 68, 71, 72, 76, 77, 80, 83, 88];
     const count = 3 + size * 2;
     for (let i = 0; i < count; i++) {
       const t = at + i * 0.075;
@@ -656,7 +717,7 @@ export class Audio {
     if (size >= 1) {
       // closing chord with sparkle
       const t = at + count * 0.075;
-      for (const n of [57, 64, 69, 72]) this.voice({ at: t, f: midi(n), type: 'triangle', vol: 0.07, r: 1.2, a: 0.01, echo: 0.3 });
+      for (const n of [52, 64, 68, 71]) this.voice({ at: t, f: midi(n), type: 'triangle', vol: 0.07, r: 1.2, a: 0.01, echo: 0.3 });
       this.hiss({ at: t, dur: 0.8, type: 'highpass', f0: 6000, vol: 0.05, a: 0.05 });
     }
     if (size >= 2) this.boom(at, 0.4, 55);

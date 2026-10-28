@@ -73,6 +73,7 @@ export class Background extends Container {
   private portholes: Sprite[] = [];
   private blackout = new Graphics();
   private heart: Sprite | null = null;
+  private flareV = 0;
   /** volumetric light shafts slanting down through the corridor */
   private rays = new GodrayFilter({ angle: 22, parallel: true, gain: 0.42, lacunarity: 2.6, alpha: 0.32 });
   private redWash: Sprite;
@@ -202,7 +203,13 @@ export class Background extends Container {
     this.onLightning?.();
   }
 
+  /** The temple answers a win: the pyramid's capstone blazes, braziers roar, light shafts brighten. */
+  flare(power = 0.6): void {
+    this.flareV = Math.max(this.flareV, power);
+  }
+
   thump(strength = 0.35): void {
+    this.flare(strength * 2);
     this.pulse.clear().rect(0, 0, this.w, this.h).fill({ color: COLORS.infection });
     this.pulse.blendMode = 'add';
     gsap.fromTo(this.pulse, { alpha: strength }, { alpha: 0, duration: 0.6, ease: 'power2.out' });
@@ -228,7 +235,13 @@ export class Background extends Container {
       this.cones[i].tint = this.feature > 0.5 ? 0xff9aa4 : 0xffffff;
     });
     this.portholes.forEach((g, i) => (g.alpha = 0.35 + 0.25 * Math.sin(this.t * 2 + i) + this.feature * 0.3 + beat * 0.2));
-    if (this.heart) this.heart.alpha = (0.35 + beat * 0.35 + this.feature * 0.25) * (1 - this.dark * 0.6);
+    this.flareV *= Math.pow(0.25, dt);
+    if (this.heart) {
+      this.heart.alpha = (0.35 + beat * 0.35 + this.feature * 0.25 + this.flareV) * (1 - this.dark * 0.6);
+      this.heart.scale.set((520 / this.heart.texture.width) * (1 + this.flareV * 0.6));
+    }
+    for (const g of this.lampGlows) g.alpha = Math.min(1, g.alpha + this.flareV * 0.5);
+    this.rays.alpha = Math.min(0.75, this.rays.alpha + this.flareV * 0.35);
     this.nextOutage -= dt;
     if (this.nextOutage <= 0) {
       this.nextOutage = 12 + Math.random() * 16;

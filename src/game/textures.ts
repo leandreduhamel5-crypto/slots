@@ -18,7 +18,7 @@ import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { paintEgyptFrame, paintStonePanel } from './art/egyptFrame';
+import { goldGrad, paintEgyptFrame, paintStonePanel, redCrack } from './art/egyptFrame';
 
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
@@ -146,42 +146,83 @@ function motionBlur(src: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
-function drawExpanded(symbolCanvas: HTMLCanvasElement, veins: HTMLImageElement, w: number, h: number): HTMLCanvasElement {
+/** Strain column for free spins: gold-framed dark stone, red light rays behind the giant symbol, infection cracks. */
+function drawExpanded(symbolCanvas: HTMLCanvasElement, _veins: HTMLImageElement, w: number, h: number): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(w, h);
-  ctx.beginPath();
-  ctx.roundRect(6, 6, w - 12, h - 12, 22);
-  ctx.fillStyle = '#3a0a22';
+  const box = () => {
+    ctx.beginPath();
+    ctx.roundRect(6, 6, w - 12, h - 12, 14);
+  };
+  box();
+  const bg = ctx.createLinearGradient(0, 0, 0, h);
+  bg.addColorStop(0, '#2a0608');
+  bg.addColorStop(0.5, '#4a0a10');
+  bg.addColorStop(1, '#1a0304');
+  ctx.fillStyle = bg;
   ctx.fill();
   ctx.save();
+  box();
   ctx.clip();
-  ctx.fillStyle = '#5a0b2a';
-  ctx.beginPath();
-  ctx.moveTo(w * 0.62, 0);
-  ctx.lineTo(w, 0);
-  ctx.lineTo(w, h);
-  ctx.lineTo(w * 0.3, h);
-  ctx.closePath();
-  ctx.fill();
-  ctx.globalAlpha = 0.9;
-  ctx.drawImage(veins, 0, 0, w, h);
-  ctx.globalAlpha = 0.35;
-  const ghost = w * 0.62;
-  ctx.drawImage(symbolCanvas, (w - ghost) / 2, 8, ghost, ghost);
-  ctx.drawImage(symbolCanvas, (w - ghost) / 2, h - ghost - 8, ghost, ghost);
+  // light rays fanning from the centre
+  ctx.globalCompositeOperation = 'lighter';
+  const cx = w / 2;
+  const cy = h / 2;
+  for (let i = 0; i < 18; i++) {
+    const a0 = (i / 18) * Math.PI * 2;
+    const a1 = a0 + Math.PI / 30;
+    const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, h * 0.6);
+    g.addColorStop(0, 'rgba(255,90,60,0.5)');
+    g.addColorStop(1, 'rgba(255,40,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, h * 0.6, a0, a1);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 0.75);
+  core.addColorStop(0, 'rgba(255,140,80,0.55)');
+  core.addColorStop(1, 'rgba(255,40,40,0)');
+  ctx.fillStyle = core;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'source-over';
+  // cracks crawling up and down the column
+  for (let i = 0; i < 6; i++) {
+    const top = i % 2 === 0;
+    redCrack(ctx, w * (0.2 + (i / 6) * 0.6), top ? 10 : h - 10, top ? Math.PI / 2 : -Math.PI / 2, h * 0.22, 3, 700 + i * 13);
+  }
+  // faint echoes above and below
+  ctx.globalAlpha = 0.28;
+  const ghost = w * 0.66;
+  ctx.drawImage(symbolCanvas, (w - ghost) / 2, 14, ghost, ghost);
+  ctx.drawImage(symbolCanvas, (w - ghost) / 2, h - ghost - 14, ghost, ghost);
   ctx.globalAlpha = 1;
   ctx.restore();
-  const size = Math.min(w * 1.18, h * 0.6);
+  const size = Math.min(w * 1.2, h * 0.62);
   ctx.drawImage(symbolCanvas, (w - size) / 2, (h - size) / 2, size, size);
-  ctx.beginPath();
-  ctx.roundRect(6, 6, w - 12, h - 12, 22);
+  // gold frame with gems top and bottom
+  box();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 12;
   ctx.stroke();
-  ctx.beginPath();
-  ctx.roundRect(6, 6, w - 12, h - 12, 22);
-  ctx.strokeStyle = '#ffd23f';
-  ctx.lineWidth = 5;
+  box();
+  ctx.strokeStyle = goldGrad(ctx, 0, 0, w, h);
+  ctx.lineWidth = 7;
   ctx.stroke();
+  for (const y of [8, h - 8]) {
+    ctx.beginPath();
+    ctx.arc(w / 2, y, 13, 0, Math.PI * 2);
+    ctx.fillStyle = goldGrad(ctx, w / 2 - 13, y - 13, w / 2 + 13, y + 13);
+    ctx.fill();
+    const gg = ctx.createRadialGradient(w / 2 - 3, y - 3, 1, w / 2, y, 9);
+    gg.addColorStop(0, '#ffd0c8');
+    gg.addColorStop(0.4, '#ff2a36');
+    gg.addColorStop(1, '#5a0008');
+    ctx.beginPath();
+    ctx.arc(w / 2, y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = gg;
+    ctx.fill();
+  }
   return c;
 }
 
