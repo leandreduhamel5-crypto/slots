@@ -5,6 +5,7 @@ import gsap from 'gsap';
 import { makeCanvas, seeded } from './art/painters';
 import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, OBELISK_TIP_Y, PYRAMID_HALF, RS, TH as H, TW as W } from './art/templeHD';
 import { Fire, paintFlameBlob } from './Fire';
+import { TempleFx } from './TempleFx';
 import { COLORS } from './layout';
 
 /** Tileable value-noise fog. */
@@ -152,6 +153,7 @@ export class Background extends Container {
   private t = 0;
   private feature = 0;
   private nextStrike = 9;
+  templeFx: TempleFx | null = null;
   private fires: Fire[] = [];
   private stars: { s: Sprite; f: number; p: number; a: number }[] = [];
   private clouds: TilingSprite | null = null;
@@ -248,6 +250,11 @@ export class Background extends Container {
         this.sceneC.addChild(g);
       }
     }
+    if (!custom) {
+      this.templeFx = new TempleFx(glowTex);
+      this.templeFx.onCharge = (p) => this.flare(p * 0.5);
+      this.sceneC.addChild(this.templeFx);
+    }
     this.bolts.blendMode = 'add';
     this.meteor = new Sprite(glowTex);
     this.meteor.anchor.set(0.92, 0.5);
@@ -300,6 +307,7 @@ export class Background extends Container {
     gsap.to(this, { feature: on ? 1 : 0, duration: on ? 0.9 : 1.6, ease: 'power2.inOut' });
     if (on) {
       this.strike(1, APEX);
+      this.templeFx?.surge(1);
       gsap.delayedCall(0.35, () => this.strike(0.8));
       gsap.delayedCall(0.8, () => this.strike(0.9));
       this.nextStrike = 3;
@@ -370,6 +378,7 @@ export class Background extends Container {
 
   /** The temple answers a win: the capstone blazes, braziers roar, light shafts brighten. */
   flare(power = 0.6): void {
+    if (power >= 0.6 && this.flareV < 0.5) this.templeFx?.surge(power);
     this.flareV = Math.max(this.flareV, power);
     for (const fire of this.fires) fire.roar(power);
   }
@@ -412,6 +421,10 @@ export class Background extends Container {
       this.heart.alpha = Math.min(1, 0.4 + beat * 0.3 * f + f * 0.3 + this.flareV + this.boltLight);
       this.heart.tint = f > 0.5 ? COLORS.infection : 0xffd890;
       this.heart.scale.set(((300 + f * 260) / this.heart.texture.width) * (1 + this.flareV * 0.6 + beat * 0.15 * f));
+    }
+    if (this.templeFx) {
+      this.templeFx.feature = f;
+      this.templeFx.update(dt, this.boltLight);
     }
     for (const fire of this.fires) {
       fire.hot = f;

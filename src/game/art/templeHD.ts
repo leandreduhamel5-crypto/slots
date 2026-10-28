@@ -22,3 +22,14 @@ export const BRAZIERS: [number, number][] = [
 export const OBELISKS = [233, 1687];
 export const OBELISK_TIP_Y = 61;
 export const MOON: [number, number, number] = [500, 273, 100];
+/** the pyramid's visible edges, base corner → apex (screen) */
+export const PYRAMID_EDGES: [[number, number], [number, number]][] = [
+  [[546, 1086], APEX],
+  [[13, 915], APEX],
+  [[2110, 938], APEX],
+];
+/** obelisk shafts: [bottom centre, top centre] */
+export const OBELISK_SHAFTS: [[number, number], [number, number]][] = [
+  [[175, 949], [229, 132]],
+  [[1745, 949], [1691, 132]],
+];

@@ -25,6 +25,9 @@ export interface Marks {
   moon: [number, number, number];
   horizon: number;
   pyramidHalf: number;
+  /** pyramid base corners (screen) and obelisk shaft bottom/top centres */
+  corners: [number, number][];
+  shafts: [number, number][][];
 }
 
 const OUT_W = 1920;
@@ -774,6 +777,8 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
     moon: [moonScreen[0], moonScreen[1], Math.abs(moonEdge[0] - moonScreen[0])],
     horizon: project(new THREE.Vector3(0, 0, -400))[1],
     pyramidHalf: Math.round(Math.max(Math.abs(baseL[0] - OUT_W / 2), Math.abs(baseR[0] - OUT_W / 2))),
+    corners: [[-B, B], [B, B], [B, -B], [-B, -B]].map(([x, z]) => project(new THREE.Vector3(x, 0, z).applyMatrix4(pyramid.matrixWorld))),
+    shafts: obPos.map((p) => [project(p.clone().add(new THREE.Vector3(0, 2.2, 0))), project(p.clone().add(new THREE.Vector3(0, 38.2, 0)))]),
   };
   renderer.dispose();
   return { canvas: out, marks };

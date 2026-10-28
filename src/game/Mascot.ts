@@ -92,6 +92,16 @@ function beamCanvas(): HTMLCanvasElement {
   return c;
 }
 
+function fadeCanvas(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(64, 128);
+  const g = ctx.createLinearGradient(0, 0, 0, 128);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 128);
+  return c;
+}
+
 function smokeCanvas(): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(128, 128);
   ctx.filter = 'blur(5px)';
@@ -152,6 +162,9 @@ export class Mascot extends Container {
   private float = new Container();
   private rig = new Container();
   private circle = new Container();
+  /** mirrored copy on the polished floor */
+  private reflection: Sprite;
+  private shock: Sprite;
   private ring: Sprite;
   private ringGlow: Sprite;
   private floorGlow: Sprite;
@@ -286,7 +299,29 @@ export class Mascot extends Container {
       this.front,
     );
     this.float.addChild(this.rig);
-    this.grow.addChild(this.circle, this.float);
+    // reflection: the art flipped under the feet, fading into the floor
+    this.reflection = new Sprite(tex.art);
+    this.reflection.anchor.set(0.5, 0);
+    this.reflection.scale.set(1, -0.55);
+    this.reflection.alpha = 0.22;
+    const fade = new Sprite(Texture.from(fadeCanvas()));
+    fade.anchor.set(0.5, 0);
+    fade.width = CS * 1.2;
+    fade.height = CS * 0.6;
+    this.reflection.mask = fade;
+    const refl = new Container();
+    refl.addChild(this.reflection, fade);
+    refl.position.set(0, -2);
+    this.reflection.position.set(0, CS * 0.55);
+    // ground shockwave ring for reactions
+    this.shock = new Sprite(tex.ring);
+    this.shock.anchor.set(0.5);
+    this.shock.blendMode = 'add';
+    this.shock.alpha = 0;
+    const shockC = new Container();
+    shockC.scale.set(1, 0.3);
+    shockC.addChild(this.shock);
+    this.grow.addChild(refl, this.circle, shockC, this.float);
     this.addChild(this.grow);
     // the circle stays on the ground while the body floats
     this.circle.position.set(0, -4);
@@ -347,6 +382,10 @@ export class Mascot extends Container {
     const tint = lerpColor(0xff6a30, RED, r);
 
     this.float.y = Math.sin(t * 1.2) * (6 + r * 3) + fx.y;
+    // the reflection follows the hover (mirrored) and dims as the body rises
+    this.reflection.y = CS * 0.55 - this.float.y * 0.55;
+    this.reflection.tint = this.body.tint;
+    this.reflection.alpha = 0.2 + r * 0.06;
     this.look.x += (this.look.tx - this.look.x) * Math.min(1, dt * 5);
     this.look.y += (this.look.ty - this.look.y) * Math.min(1, dt * 5);
 
@@ -532,6 +571,15 @@ export class Mascot extends Container {
     });
   }
 
+  /** Ring of light racing outward on the floor. */
+  shockwave(power = 1): void {
+    const s = this.shock;
+    gsap.killTweensOf([s, s.scale]);
+    s.tint = this.form === 'inhuman' ? RED : GOLD;
+    gsap.fromTo(s.scale, { x: 0.3, y: 0.3 }, { x: 0.9 + power * 0.5, y: 0.9 + power * 0.5, duration: 0.7, ease: 'power2.out' });
+    gsap.fromTo(s, { alpha: Math.min(1, power) }, { alpha: 0, duration: 0.7, ease: 'power1.in' });
+  }
+
   lookAt(x: number, y: number): void {
     this.look.tx = x;
     this.look.ty = y;
@@ -589,6 +637,7 @@ export class Mascot extends Container {
           .add(() => this.lookAt(-0.7, 0.15), '<');
         break;
       case 'win':
+        this.shockwave(0.7);
         this.lookAt(0, 0);
         this.burst(16);
         tl.to(this.fx, { y: -16, roar: 0.8, flare: 0.9, spin: 2.5, duration: 0.2, ease: 'power2.out' })
@@ -597,6 +646,7 @@ export class Mascot extends Container {
         if (this.book) tl.fromTo(this.bookC.scale, { x: 1, y: 1 }, { x: 1.18, y: 1.18, duration: 0.15, yoyo: true, repeat: 1 }, 0);
         break;
       case 'big':
+        this.shockwave(1.2);
         this.lookAt(-0.8, 0.5);
         tl.to(this.fx, { y: -26, roar: 1.2, flare: 1.4, spin: 6, shake: 8, duration: 0.25, ease: 'power2.out' }, 0)
           .to(this.fx, { beam: 1, duration: 0.12 }, 0.1)
