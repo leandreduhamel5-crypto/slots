@@ -357,18 +357,27 @@ export function paintDrop(color = '#e0213a', light = '#ff8a96'): HTMLCanvasEleme
 
 /** Particle: comic 4-point star. */
 export function paintStar(): HTMLCanvasElement {
+  // gold four-point glint (replaces the comic star): soft halo + sharp cross
   const [c, ctx] = makeCanvas(64, 64);
-  ctx.translate(32, 32);
+  const halo = ctx.createRadialGradient(32, 32, 0, 32, 32, 30);
+  halo.addColorStop(0, 'rgba(255,230,160,0.9)');
+  halo.addColorStop(0.35, 'rgba(255,170,60,0.35)');
+  halo.addColorStop(1, 'rgba(255,120,40,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, 64, 64);
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 30);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.3, '#fff0b0');
+  g.addColorStop(1, '#f2a020');
+  ctx.fillStyle = g;
   ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const r = i % 2 ? 9 : 27;
-    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
-    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
+  ctx.moveTo(32, 2);
+  ctx.quadraticCurveTo(35, 29, 62, 32);
+  ctx.quadraticCurveTo(35, 35, 32, 62);
+  ctx.quadraticCurveTo(29, 35, 2, 32);
+  ctx.quadraticCurveTo(29, 29, 32, 2);
   ctx.closePath();
-  ctx.fillStyle = '#fff6c0';
   ctx.fill();
-  ink(ctx, 4);
   return c;
 }
 

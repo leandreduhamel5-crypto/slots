@@ -366,3 +366,27 @@ export function paintCoin(): HTMLCanvasElement {
   ctx.restore();
   return c;
 }
+
+/** Anticipation column: infected light rising up the reel, glowing cracks, gold edge lines. */
+export function paintRisingColumn(w: number, h: number): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(w, h);
+  const g = ctx.createLinearGradient(0, h, 0, 0);
+  g.addColorStop(0, 'rgba(255,60,40,0.85)');
+  g.addColorStop(0.5, 'rgba(200,10,30,0.45)');
+  g.addColorStop(1, 'rgba(120,0,20,0.1)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  const side = ctx.createLinearGradient(0, 0, w, 0);
+  side.addColorStop(0, 'rgba(0,0,0,0.5)');
+  side.addColorStop(0.25, 'rgba(0,0,0,0)');
+  side.addColorStop(0.75, 'rgba(0,0,0,0)');
+  side.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = side;
+  ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 7; i++) redCrack(ctx, w * (0.15 + Math.random() * 0.7), h - Math.random() * h * 0.3, -Math.PI / 2 + (Math.random() - 0.5) * 0.6, h * (0.3 + Math.random() * 0.4), 3.5, 900 + i * 17);
+  for (const x of [3, w - 3]) {
+    ctx.fillStyle = goldGrad(ctx, x - 3, 0, x + 3, h);
+    ctx.fillRect(x - 3, 0, 6, h);
+  }
+  return c;
+}

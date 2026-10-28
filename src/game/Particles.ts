@@ -46,7 +46,8 @@ export class Particles extends Container {
     const t = custom ?? byKind[kind];
     const s = new Sprite(t);
     s.anchor.set(0.5, kind === 'drop' || kind === 'cyan' ? 0.65 : 0.5);
-    if (kind === 'puff') s.tint = 0xc8ecb4;
+    if (kind === 'puff') s.tint = 0xd8bc94; // desert dust
+    if (kind === 'star') s.blendMode = 'add';
     if (kind === 'spark') {
       s.blendMode = 'add';
       s.tint = Math.random() < 0.5 ? 0xff3347 : 0xffd23f;

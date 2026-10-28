@@ -1,6 +1,5 @@
 import { Texture } from 'pixi.js';
 import { SYMBOLS, Sym } from '../math/config';
-import { VEINS_SVG } from './art/symbols';
 import {
   INK,
   makeCanvas,
@@ -18,7 +17,7 @@ import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintCoin, paintEgyptFrame, paintStonePanel, redCrack } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
 
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
@@ -65,15 +64,6 @@ const ROYALS: Record<string, { text: string; material: Deco; glow: string; drip:
   j: { text: 'J', material: 'slime', glow: '#7be05a', drip: ['#e2ffcc', '#6fd04a', '#1d6a18'] },
   ten: { text: '10', material: 'rust', glow: '#ffa23a', drip: ['#ffe0a8', '#f08a2a', '#7a3006'] },
 };
-
-export function loadSvg(svg: string, w: number, h: number): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image(w, h);
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-  });
-}
 
 /** Glyph mask of a royal letter, used for its glow map. */
 function glyph(text: string, size: number, color: string): HTMLCanvasElement {
@@ -148,7 +138,7 @@ function motionBlur(src: HTMLCanvasElement): HTMLCanvasElement {
 }
 
 /** Strain column for free spins: gold-framed dark stone, red light rays behind the giant symbol, infection cracks. */
-function drawExpanded(symbolCanvas: HTMLCanvasElement, _veins: HTMLImageElement, w: number, h: number): HTMLCanvasElement {
+function drawExpanded(symbolCanvas: HTMLCanvasElement, w: number, h: number): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(w, h);
   const box = () => {
     ctx.beginPath();
@@ -287,13 +277,10 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
       glowCanvases.push(softGlow(glyph(r.text, r.text.length > 1 ? 168 : 206, r.glow), 10));
     }
   }
-  const veinsImg = await loadSvg(VEINS_SVG, 200, 600);
   const expanded = new Map<Sym, Texture>();
   canvases.forEach((c, i) => {
-    if (i !== Sym.CODEX) expanded.set(i as Sym, Texture.from(drawExpanded(c, veinsImg, 220, 600)));
+    if (i !== Sym.CODEX) expanded.set(i as Sym, Texture.from(drawExpanded(c, 220, 600)));
   });
-  const [vc, vctx] = makeCanvas(200, 600);
-  vctx.drawImage(veinsImg, 0, 0);
 
   return {
     canvases,
@@ -307,7 +294,7 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
     winFrame: Texture.from(paintWinFrame(CELL_W, CELL_H)),
-    veins: Texture.from(vc),
+    veins: Texture.from(paintRisingColumn(CELL_W, BOARD_H)),
     glow: Texture.from(radial(256, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
     spore: Texture.from(radial(64, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),
     drop: Texture.from(paintDrop()),

@@ -82,6 +82,7 @@ export class ReelBoard extends Container {
   private labelLayer = new Container();
   private cycleTl: gsap.core.Timeline | null = null;
   private anticipationFx: { glow: Sprite; veins: Sprite; mask: Graphics }[] = [];
+  private throbbing: Rig[] = [];
   private rigs = new Map<string, Rig>();
   private hurried = false;
   /** camera hooks */
@@ -298,6 +299,22 @@ export class ReelBoard extends Container {
       mask.scale.y = 0;
       gsap.to(mask.scale, { y: 1, duration: dur, ease: 'power1.in' });
       this.reels[reel].speedScale = 1.25;
+      veins.blendMode = 'add';
+      // the books already down throb like a heart while the last reel decides
+      for (let r = 0; r < reel; r++) {
+        for (let row = 0; row < ROWS; row++) {
+          if (this.symbolAt(r, row) !== Sym.CODEX) continue;
+          const rig = this.rig(r, row);
+          const sc = rig.body.scale.x;
+          rig.tweens.push(
+            gsap.to(rig.body.scale, { x: sc * 1.12, y: sc * 1.12, duration: 0.2, yoyo: true, repeat: -1, repeatDelay: 0.25, ease: 'power2.out' }),
+            gsap.to(rig.glow, { alpha: 0.8, duration: 0.2, yoyo: true, repeat: -1, repeatDelay: 0.25 }),
+            gsap.to(rig.burst, { alpha: 0.5, duration: 0.3 }),
+            gsap.to(rig.burst, { rotation: Math.PI * 2, duration: 5, repeat: -1, ease: 'none' }),
+          );
+          this.throbbing.push(rig);
+        }
+      }
       const x = reelX(reel) + CELL_W / 2;
       const emit = () => {
         if (glow.alpha <= 0.05) return;
@@ -310,6 +327,8 @@ export class ReelBoard extends Container {
       gsap.to(glow, { alpha: 0, duration: 0.3 });
       gsap.to(veins, { alpha: 0, duration: 0.25 });
       this.reels[reel].speedScale = 1;
+      for (const rig of this.throbbing) if (!rig.root.destroyed) this.dropRig(rig);
+      this.throbbing = [];
     }
   }
 
