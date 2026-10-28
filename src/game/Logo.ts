@@ -1,8 +1,9 @@
 import { Container, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
-import { INK, MATERIALS, makeCanvas, paintDrop, paintShine, render3DText, softGlow } from './art/painters';
+import { INK, makeCanvas, paintShine, softGlow } from './art/painters';
 import { goldGrad } from './art/egyptFrame';
+import { BLOOD_METAL, GOLD, metalTitle, textMask } from './art/logoArt';
 
 /** Eye medallion that replaces an "O" in BOOK: gold ring, red reptile eye. */
 function eyeMedallion(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
@@ -16,8 +17,8 @@ function eyeMedallion(ctx: CanvasRenderingContext2D, x: number, y: number, r: nu
   ctx.restore();
   // ring (with ink edge, matching the 3D letters)
   ctx.beginPath();
-  ctx.arc(x, y, r + 10, 0, Math.PI * 2);
-  ctx.fillStyle = INK;
+  ctx.arc(x, y, r + 8, 0, Math.PI * 2);
+  ctx.fillStyle = '#0a0204';
   ctx.fill();
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -56,47 +57,68 @@ function eyeMedallion(ctx: CanvasRenderingContext2D, x: number, y: number, r: nu
   ctx.fill();
 }
 
-/** "BOOK OF INFECTION": antique-gold engraved capitals with an eye in the O, blood-brush INFECTION. */
+/**
+ * "BOOK OF INFECTION" as cast metal (art/logoArt.ts): polished-gold BOOK OF with the eye
+ * medallion as its second O, and INFECTION in blood-red metal veined with molten cracks,
+ * both rimmed in gold. Painted at 2× (2200×760) for crisp edges on any screen.
+ */
 export function paintLogo(_eye?: HTMLCanvasElement): HTMLCanvasElement {
-  const w = 1100;
-  const h = 380;
+  const S = 2;
+  const w = 1100 * S;
+  const h = 380 * S;
   const [c, ctx] = makeCanvas(w, h);
-  const serif = '"Cinzel Decorative", Cinzel, serif';
-  const gold = MATERIALS.pharaoh;
 
-  // dark red smoke behind the title so it reads over anything
+  // dark smoke behind the title so it reads over anything
   ctx.save();
-  ctx.filter = 'blur(28px)';
-  ctx.fillStyle = 'rgba(30,0,4,0.75)';
+  ctx.filter = 'blur(60px)';
+  ctx.fillStyle = 'rgba(20,0,4,0.7)';
   ctx.beginPath();
-  ctx.ellipse(w / 2, h / 2, w * 0.42, h * 0.34, 0, 0, Math.PI * 2);
+  ctx.ellipse(w / 2, h / 2, w * 0.4, h * 0.32, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // ---- BOOK OF (letters placed one by one so an eye can replace the second O)
-  const size = 150;
-  const parts: { ch: string; eye?: boolean }[] = [{ ch: 'B' }, { ch: 'O' }, { ch: 'O', eye: true }, { ch: 'K' }];
-  const glyphs = parts.map((p) => (p.eye ? null : render3DText(p.ch, { size, material: gold, font: serif, depth: 12, ink: 9 })));
-  const eyeW = size * 0.95;
-  const adv = glyphs.map((g) => (g ? g.width - 44 : eyeW));
-  const of = render3DText('OF', { size: 74, material: gold, font: serif, depth: 7, ink: 6 });
-  const total = adv.reduce((a, b) => a + b, 0) + of.width - 24;
-  let x = w / 2 - total / 2;
-  const baseY = 112;
-  parts.forEach((_p, i) => {
-    const g = glyphs[i];
-    if (g) ctx.drawImage(g, x + adv[i] / 2 - g.width / 2, baseY - g.height / 2);
-    else eyeMedallion(ctx, x + adv[i] / 2, baseY + 6, size * 0.36);
-    x += adv[i];
-  });
-  ctx.drawImage(of, x - 14, baseY - of.height / 2 - 26);
+  // ---- BOOK OF: one mask, the eye takes the place of the second O
+  const deco = '"Cinzel Decorative", Cinzel, serif';
+  const size = 270;
+  const pad = 40;
+  const [, mx] = makeCanvas(10, 10);
+  mx.font = `900 ${size}px ${deco}`;
+  const wB = mx.measureText('B').width;
+  const wO = mx.measureText('O').width;
+  const wK = mx.measureText('K').width;
+  mx.font = `900 ${size * 0.48}px ${deco}`;
+  const wOF = mx.measureText('OF').width;
+  const gap = 10;
+  const eyeW = wO * 1.08;
+  const total = wB + wO + eyeW + wK + wOF + gap * 5;
+  const [bm, bctx] = makeCanvas(Math.ceil(total + pad * 2), Math.ceil(size * 1.25 + pad * 2));
+  bctx.fillStyle = '#fff';
+  bctx.textBaseline = 'middle';
+  const midY = bm.height / 2 + size * 0.04;
+  let x = pad;
+  bctx.font = `900 ${size}px ${deco}`;
+  bctx.fillText('B', x, midY);
+  x += wB + gap;
+  bctx.fillText('O', x, midY);
+  x += wO + gap;
+  const eyeX = x + eyeW / 2;
+  x += eyeW + gap;
+  bctx.fillText('K', x, midY);
+  x += wK + gap * 2;
+  bctx.font = `900 ${size * 0.48}px ${deco}`;
+  bctx.fillText('OF', x, midY - size * 0.2);
+  const book = metalTitle(bm, GOLD, { outline: 9, tilt: -0.05 });
+  const bookX = w / 2 - bm.width / 2;
+  const bookY = 30;
+  ctx.drawImage(book, bookX, bookY);
+  eyeMedallion(ctx, bookX + eyeX, bookY + midY + 4, size * 0.4);
 
-  // ---- INFECTION in dripping blood brush, slanted
-  const inf = render3DText('INFECTION', { size: 168, material: MATERIALS.infection, font: 'Creepster, serif', depth: 10, ink: 9 });
+  // ---- INFECTION: blood metal with molten veins
+  const im = textMask('INFECTION', 'Cinzel, serif', 300, 14, 50);
+  const inf = metalTitle(im, BLOOD_METAL, { outline: 10, cracks: 22, seed: 11 });
+  const k = Math.min(1, (w - 60) / inf.width);
   ctx.save();
-  ctx.translate(w / 2, 272);
-  ctx.transform(1, 0, -0.14, 1, 0, 0);
-  const k = Math.min(1, (w - 40) / inf.width);
+  ctx.translate(w / 2, 520);
   ctx.scale(k, k);
   ctx.drawImage(inf, -inf.width / 2, -inf.height / 2);
   ctx.restore();
@@ -111,6 +133,17 @@ export function logoCanvas(eye: HTMLCanvasElement, custom: HTMLImageElement | nu
   const w = custom.naturalWidth * k;
   const h = custom.naturalHeight * k;
   ctx.drawImage(custom, (1100 - w) / 2, (360 - h) / 2, w, h);
+  return c;
+}
+
+function emberCanvas(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(32, 32);
+  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.3, 'rgba(255,255,255,0.6)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 32, 32);
   return c;
 }
 
@@ -134,14 +167,18 @@ export class Logo extends Container {
   private drops: Drop[] = [];
   private dropLayer = new Container();
   private art: HTMLCanvasElement;
+  private base = 0.78;
 
   constructor(art: HTMLCanvasElement) {
     super();
     this.art = art;
     const tex = Texture.from(art);
-    this.inner.scale.set(0.78);
+    // the painted art is 2× (custom art is 1×): keep the on-screen size the same
+    const k = 1100 / art.width;
+    this.base = 0.78 * k;
+    this.inner.scale.set(this.base);
     // red halo hugging the silhouette
-    this.halo = new Sprite(Texture.from(softGlow(art, 18)));
+    this.halo = new Sprite(Texture.from(softGlow(art, 18 / k)));
     this.halo.anchor.set(0.5, 0.45);
     this.halo.blendMode = 'add';
     this.halo.tint = 0xff2a44;
@@ -154,17 +191,17 @@ export class Logo extends Container {
     this.shine = new Sprite(Texture.from(paintShine()));
     this.shine.anchor.set(0.5);
     this.shine.height = art.height * 1.3;
-    this.shine.width = 220;
+    this.shine.width = 220 / k;
     this.shine.rotation = 0.35;
     this.shine.blendMode = 'add';
     this.shine.x = -art.width;
     this.shine.mask = mask;
-    this.dropTex = Texture.from(paintDrop());
+    this.dropTex = Texture.from(emberCanvas());
     this.inner.addChild(this.halo, this.sprite, mask, this.shine, this.dropLayer);
     this.addChild(this.inner);
     this.scheduleGlitch();
     this.scheduleShine();
-    gsap.to(this.inner.scale, { x: 0.8, y: 0.77, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    gsap.to(this.inner.scale, { x: this.base * 1.025, y: this.base * 0.99, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     gsap.to(this.halo, { alpha: 0.6, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     gsap.ticker.add(this.tick);
   }
@@ -186,34 +223,34 @@ export class Logo extends Container {
   private tick = (): void => {
     if (this.destroyed) return;
     const dt = Math.min(0.05, gsap.ticker.deltaRatio() / 60);
-    // a drop forms under a random letter now and then
-    if (Math.random() < dt * 0.9) {
+    // embers rise off the molten INFECTION letters
+    if (Math.random() < dt * 9) {
       const s = new Sprite(this.dropTex);
-      s.anchor.set(0.5, 0);
-      s.scale.set(0.5 + Math.random() * 0.35);
-      s.position.set((Math.random() - 0.5) * this.art.width * 0.55, this.art.height * 0.12 + Math.random() * 20);
+      s.anchor.set(0.5);
+      s.blendMode = 'add';
+      s.scale.set((0.4 + Math.random() * 0.7) / this.k());
+      s.tint = Math.random() < 0.7 ? 0xff6a20 : 0xffd080;
+      s.position.set((Math.random() - 0.5) * this.art.width * 0.8, this.art.height * (0.12 + Math.random() * 0.3));
       s.alpha = 0;
       this.dropLayer.addChild(s);
-      this.drops.push({ s, vy: 0, life: 0 });
+      this.drops.push({ s, vy: -(40 + Math.random() * 70) / this.k(), life: 0 });
     }
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const d = this.drops[i];
       d.life += dt;
-      if (d.life < 0.5) {
-        // swelling on the letter before letting go
-        d.s.alpha = d.life / 0.5;
-        d.s.scale.y = d.s.scale.x * (0.6 + d.life);
-      } else {
-        d.vy += 1400 * dt;
-        d.s.y += d.vy * dt;
-        d.s.alpha = Math.max(0, 1 - (d.life - 0.5) * 1.4);
-      }
-      if (d.life > 1.3) {
+      d.s.y += d.vy * dt;
+      d.s.x += Math.sin(d.life * 4 + i) * 20 * dt / this.k();
+      d.s.alpha = Math.min(1, d.life * 3) * Math.max(0, 1 - d.life / 1.6);
+      if (d.life > 1.6) {
         d.s.destroy();
         this.drops.splice(i, 1);
       }
     }
   };
+
+  private k(): number {
+    return 1100 / this.art.width;
+  }
 
   private scheduleGlitch(): void {
     gsap.delayedCall(4 + Math.random() * 5, () => {
