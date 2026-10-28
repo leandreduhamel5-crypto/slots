@@ -3,7 +3,7 @@ import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { GodrayFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { makeCanvas, seeded } from './art/painters';
-import { H, W, paintScene } from './art/temple';
+import { APEX, BRAZIERS, GUARDIAN_EYES, TH as H, TW as W } from './art/templeHD';
 import { COLORS } from './layout';
 
 /** Light cone under a hanging lamp. */
@@ -74,6 +74,7 @@ export class Background extends Container {
   private blackout = new Graphics();
   private heart: Sprite | null = null;
   private flareV = 0;
+  private eyes: Sprite[] = [];
   /** volumetric light shafts slanting down through the corridor */
   private rays = new GodrayFilter({ angle: 22, parallel: true, gain: 0.42, lacunarity: 2.6, alpha: 0.32 });
   private redWash: Sprite;
@@ -92,11 +93,13 @@ export class Background extends Container {
   constructor(
     private sporeTex: Texture,
     glowTex: Texture,
+    temple: HTMLImageElement,
     custom: HTMLImageElement | null = null,
   ) {
     super();
-    const painted = custom ? null : paintScene();
-    this.scene = new Sprite(Texture.from(custom ? coverCanvas(custom, W, H) : painted!.canvas));
+    // the painted temple is pre-rendered (art/templeHD.ts → egypt/temple.webp); dynamic lights go on top
+    const painted = custom ? null : { heart: APEX, lamps: BRAZIERS.map(([x, y]) => [x, y - 70] as [number, number]), portholes: [] as [number, number][] };
+    this.scene = new Sprite(Texture.from(custom ? coverCanvas(custom, W, H) : temple));
     this.scene.anchor.set(0.5);
     this.sceneC.addChild(this.scene);
     if (painted) {
@@ -139,6 +142,21 @@ export class Background extends Container {
         this.sceneC.addChild(g);
       }
     }
+    if (painted) {
+      // the guardians' eyes smoulder, and blaze when the temple flares
+      for (const [x, y] of GUARDIAN_EYES) {
+        for (const [size, tint] of [[150, 0xff2a2a], [46, 0xffd0b0]] as const) {
+          const e = new Sprite(glowTex);
+          e.anchor.set(0.5);
+          e.position.set(x - W / 2, y - H / 2);
+          e.width = e.height = size;
+          e.tint = tint;
+          e.blendMode = 'add';
+          this.eyes.push(e);
+          this.sceneC.addChild(e);
+        }
+      }
+    }
     this.blackout.rect(-W, -H, W * 2, H * 2).fill(0x05020a);
     this.blackout.alpha = 0;
     this.sceneC.addChild(this.blackout);
@@ -175,7 +193,7 @@ export class Background extends Container {
     const scale = Math.max(w / W, h / H);
     this.sceneC.scale.set(scale);
     // portrait screens only see a narrow slice: frame the great pyramid and its beam instead of the plain centre
-    const focus = h > w ? Math.min((W / 2 - 400) * scale, (W * scale) / 2 - w / 2) : 0;
+    const focus = 0;
     this.sceneC.position.set(w / 2 + focus, h / 2);
     this.redWash.position.set(w / 2, h * 0.45);
     this.redWash.width = w * 1.2;
@@ -241,6 +259,13 @@ export class Background extends Container {
       this.heart.scale.set((520 / this.heart.texture.width) * (1 + this.flareV * 0.6));
     }
     for (const g of this.lampGlows) g.alpha = Math.min(1, g.alpha + this.flareV * 0.5);
+    this.eyes.forEach((e, i) => {
+      const halo = i % 2 === 0;
+      const smoulder = 0.35 + 0.2 * Math.sin(this.t * 1.7 + i) + this.feature * 0.3;
+      e.alpha = Math.min(1, (halo ? smoulder * 0.7 : smoulder) + this.flareV * 1.2);
+      const k = 1 + this.flareV * (halo ? 0.8 : 0.4);
+      e.scale.set((halo ? 150 : 46) / e.texture.width * k);
+    });
     this.rays.alpha = Math.min(0.75, this.rays.alpha + this.flareV * 0.35);
     this.nextOutage -= dt;
     if (this.nextOutage <= 0) {

@@ -48,7 +48,7 @@ async function boot(): Promise<void> {
   warmDigits([118, 114, 56, 54]);
   setProgress(1);
 
-  const game = new Game(app, tex, tex.canvases[0], mascot, assets);
+  const game = new Game(app, tex, tex.canvases[0], mascot, assets, egypt.extra.temple);
   if (import.meta.env.DEV) Object.assign(window, { game, app, gsap });
 
   const loader = document.getElementById('loader');

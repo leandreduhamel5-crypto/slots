@@ -117,8 +117,9 @@ export class Game {
     codexCanvas: HTMLCanvasElement,
     mascotTex: MascotTextures,
     assets: LoadedAssets,
+    temple: HTMLImageElement,
   ) {
-    this.bg = new Background(tex.spore, tex.glow, assets.background);
+    this.bg = new Background(tex.spore, tex.glow, temple, assets.background);
     this.bg.onLightning = () => this.audio.thunder();
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);

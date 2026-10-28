@@ -5,12 +5,29 @@ import { downsample } from './game/art/paint';
 import { ORB, SRES, paintSpectre } from './game/art/spectre';
 import { paintRoyal } from './game/art/royals';
 import { Audio } from './game/Audio';
+import { paintTempleHD } from './game/art/templeHD';
+import anubisUrl from './game/art/egypt/anubis.webp';
+import anubis2Url from './game/art/egypt/anubis2.webp';
 
 /** Dev-only: renders the painted premium symbols large and at reel size. ?only=blood to focus one. */
 async function run(): Promise<void> {
   await Promise.all([document.fonts.load('400 64px "Luckiest Guy"'), document.fonts.load('900 64px Nunito')]);
   const out = document.getElementById('out')!;
   const only = new URLSearchParams(location.search).get('only');
+  if (only === 'temple') {
+    const load = (u: string) => new Promise<HTMLImageElement>((r) => { const i = new Image(); i.onload = () => r(i); i.src = u; });
+    const [a1, a2] = await Promise.all([load(anubisUrl), load(anubis2Url)]);
+    const t0 = performance.now();
+    const c = paintTempleHD(a1, a2);
+    (window as unknown as { templeMs: number }).templeMs = performance.now() - t0;
+    (window as unknown as { templePng: string }).templePng = c.toDataURL('image/png');
+    c.style.width = '1920px';
+    document.body.style.margin = '0';
+    out.style.padding = '0';
+    out.append(c);
+    document.body.dataset.ready = '1';
+    return;
+  }
   if (only === 'audio') {
     // render every sound offline, report levels and draw a spectrogram for each
     const tests: [string, (a: Audio) => void, number][] = [
