@@ -666,10 +666,22 @@ export class ReelBoard extends Container {
     return [{ x: -20, y: pts[0].y }, ...pts, { x: BOARD_W + 20, y: pts[pts.length - 1].y }];
   }
 
-  /** Thick inked payline drawn progressively. */
-  private traceLine(line: number, duration = 0.4): Graphics {
+  /** Payline of light drawn progressively: neon halo, inked core, and a comet racing ahead with a spark trail. */
+  private traceLine(line: number, duration = 0.4): Container {
+    const root = new Container();
     const g = new Graphics();
+    const comet = new Container();
+    const halo = new Sprite(this.tex.glow);
+    halo.anchor.set(0.5);
+    halo.width = halo.height = 110;
+    const head = new Sprite(this.tex.glow);
+    head.anchor.set(0.5);
+    head.width = head.height = 34;
     const color = LINE_COLORS[line];
+    halo.tint = color;
+    for (const sp of [halo, head]) sp.blendMode = 'add';
+    comet.addChild(halo, head);
+    root.addChild(g, comet);
     const pts = this.linePoints(line);
     const segs: number[] = [];
     let total = 0;
@@ -679,7 +691,7 @@ export class ReelBoard extends Container {
       total += d;
     }
     const draw = (t: number) => {
-      if (g.destroyed) return;
+      if (root.destroyed || g.destroyed) return;
       g.clear();
       let left = total * t;
       const path: { x: number; y: number }[] = [pts[0]];
@@ -693,17 +705,20 @@ export class ReelBoard extends Container {
         for (const p of path) g.lineTo(p.x, p.y);
         g.stroke({ width, color: c, alpha: a, join: 'round', cap: 'round' });
       };
-      stroke(19, COLORS.ink);
-      stroke(10, color);
-      stroke(3, 0xffffff, 0.75);
-      const head = path[path.length - 1];
-      if (t < 1) g.circle(head.x, head.y, 13).fill(COLORS.ink).circle(head.x, head.y, 8).fill(0xffffff);
-      for (const p of path.slice(1, -1)) g.circle(p.x, p.y, 9).fill(COLORS.ink).circle(p.x, p.y, 5).fill(color);
+      stroke(34, color, 0.16);
+      stroke(17, COLORS.ink);
+      stroke(9, color);
+      stroke(3, 0xffffff, 0.85);
+      for (const p of path.slice(1, -1)) g.circle(p.x, p.y, 9).fill(COLORS.ink).circle(p.x, p.y, 5).fill(color).circle(p.x - 1.5, p.y - 1.5, 2).fill(0xffffff);
+      const tip = path[path.length - 1];
+      comet.position.set(tip.x, tip.y);
+      comet.alpha = t < 1 ? 1 : 0;
+      if (t < 1 && Math.random() < 0.45) this.fx.sparks(tip.x, tip.y, 1, 0.25);
     };
     const o = { t: 0 };
     draw(0);
-    gsap.to(o, { t: 1, duration, ease: 'power1.inOut', onUpdate: () => draw(o.t) });
-    return g;
+    gsap.to(o, { t: 1, duration: duration * 1.25, ease: 'power1.inOut', onUpdate: () => draw(o.t) });
+    return root;
   }
 
   private dimExcept(cells: Cell[]): void {
@@ -845,7 +860,37 @@ export class ReelBoard extends Container {
     gsap.to(p.scale, { x: 0, y: 0, duration: 0.2, ease: 'back.in(2)', onComplete: () => p.destroy({ children: true }) });
   }
 
-  /** Book-style expansion: tendrils crawl down the reel, it bursts, then the strain slams in. */
+  /** Light pillar + gold shock ring where a strain slams into a reel. */
+  private slamLight(cx: number): void {
+    const layer = this.labelLayer;
+    const beam = new Sprite(this.tex.glow);
+    beam.anchor.set(0.5);
+    beam.position.set(cx, BOARD_H / 2);
+    beam.width = CELL_W * 1.8;
+    beam.height = BOARD_H * 2.4;
+    beam.tint = 0xffd2a0;
+    beam.blendMode = 'add';
+    const core = new Sprite(this.tex.glow);
+    core.anchor.set(0.5);
+    core.position.set(cx, BOARD_H / 2);
+    core.width = CELL_W * 0.5;
+    core.height = BOARD_H * 2.2;
+    core.tint = 0xffffff;
+    core.blendMode = 'add';
+    const ring = new Graphics().circle(0, 0, 60).stroke({ width: 10, color: 0xf2c25a }).circle(0, 0, 60).stroke({ width: 3, color: 0xffffff });
+    ring.position.set(cx, BOARD_H / 2);
+    ring.blendMode = 'add';
+    layer.addChild(beam, core, ring);
+    const done = () => [beam, core, ring].forEach((o) => !o.destroyed && o.destroy());
+    gsap.fromTo(beam, { alpha: 1 }, { alpha: 0, duration: 0.7, ease: 'power2.out' });
+    gsap.fromTo(beam.scale, { x: beam.scale.x * 1.4 }, { x: beam.scale.x * 0.4, duration: 0.7, ease: 'power2.out' });
+    gsap.fromTo(core, { alpha: 1 }, { alpha: 0, duration: 0.45, ease: 'power3.out' });
+    gsap.fromTo(ring.scale, { x: 0.3, y: 0.3 }, { x: 4.2, y: 4.2, duration: 0.6, ease: 'power2.out' });
+    gsap.fromTo(ring, { alpha: 1 }, { alpha: 0, duration: 0.6, ease: 'power1.in', onComplete: done });
+    this.fx.coins(cx, BOARD_H * 0.75, 8, 0.8);
+  }
+
+  /** Book-style expansion: infected light rises up the reel, it bursts, then the strain slams in. */
   async expand(exp: Expansion, onReel?: (reel: number) => void): Promise<void> {
     this.clearHighlights();
     for (const r of exp.reels) {
@@ -866,6 +911,7 @@ export class ReelBoard extends Container {
       veins.position.set(x, 0);
       veins.width = CELL_W;
       veins.height = BOARD_H;
+      veins.blendMode = 'add';
       const vm = new Graphics().rect(x, 0, CELL_W, BOARD_H).fill(0xffffff);
       vm.scale.y = 0;
       veins.mask = vm;
@@ -887,6 +933,7 @@ export class ReelBoard extends Container {
             for (const rig of [...this.rigs.values()].filter((g) => g.reel === r)) this.dropRig(rig);
             this.fx.impact(x + CELL_W / 2, BOARD_H / 2, 1.2);
             this.onImpact?.(0.8);
+            this.slamLight(x + CELL_W / 2);
             for (let row = 0; row < ROWS; row++) this.fx.burst(x + CELL_W / 2, row * CELL_H + CELL_H / 2, 8, 0.7);
           })
           .to(big, { alpha: 1, duration: 0.05 })

@@ -9,7 +9,6 @@ import {
   paintDrop,
   paintPuff,
   paintStar,
-  paintWinFrame,
   softGlow,
 } from './art/painters';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP } from './layout';
@@ -17,7 +16,7 @@ import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintCoin, paintEgyptFrame, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintGoldWinFrame, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
 
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
@@ -293,7 +292,7 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     frame: Texture.from(framed()),
     reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
-    winFrame: Texture.from(paintWinFrame(CELL_W, CELL_H)),
+    winFrame: Texture.from(paintGoldWinFrame(CELL_W, CELL_H)),
     veins: Texture.from(paintRisingColumn(CELL_W, BOARD_H)),
     glow: Texture.from(radial(256, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
     spore: Texture.from(radial(64, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),

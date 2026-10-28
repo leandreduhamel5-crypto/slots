@@ -390,3 +390,50 @@ export function paintRisingColumn(w: number, h: number): HTMLCanvasElement {
   }
   return c;
 }
+
+/** Frame around a winning symbol: soft gold-red halo, gold double rim, gem corners. */
+export function paintGoldWinFrame(w: number, h: number): HTMLCanvasElement {
+  const b = 14;
+  const [c, ctx] = makeCanvas(w + b * 2, h + b * 2);
+  ctx.translate(b, b);
+  const box = (inset: number, r: number) => rr(ctx, inset, inset, w - inset * 2, h - inset * 2, r);
+  ctx.save();
+  ctx.filter = 'blur(6px)';
+  box(4, 16);
+  ctx.strokeStyle = 'rgba(255,150,60,0.8)';
+  ctx.lineWidth = 12;
+  ctx.stroke();
+  ctx.restore();
+  box(4, 16);
+  ctx.strokeStyle = '#1a0806';
+  ctx.lineWidth = 10;
+  ctx.stroke();
+  box(4, 16);
+  ctx.strokeStyle = goldGrad(ctx, 0, 0, w, h);
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  box(10, 11);
+  ctx.strokeStyle = 'rgba(255,236,180,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  for (const [x, y] of [[6, 6], [w - 6, 6], [6, h - 6], [w - 6, h - 6]]) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = goldGrad(ctx, -10, -10, 10, 10);
+    ctx.fillRect(-9, -9, 18, 18);
+    ctx.strokeStyle = '#1a0806';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-9, -9, 18, 18);
+    ctx.restore();
+    const g = ctx.createRadialGradient(x - 2, y - 2, 0.5, x, y, 6);
+    g.addColorStop(0, '#ffd0c8');
+    g.addColorStop(0.45, '#ff2a36');
+    g.addColorStop(1, '#5a0008');
+    ctx.beginPath();
+    ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
+  return c;
+}

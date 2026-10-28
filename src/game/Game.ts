@@ -297,7 +297,33 @@ export class Game {
     this.overlays.resize(w, h);
   }
 
+  /** Time warp for hit-stops (1 = normal). */
+  private warp = 1;
+
+  /** The third book lands: flash, shockwave, camera kick, and (on the last reel) a short freeze-frame. */
+  private triggerHit(freeze: boolean): void {
+    this.bg.thump(0.5);
+    this.shockwave();
+    this.punch(1.8);
+    this.shake(16);
+    this.logo.glitch(2);
+    if (!freeze) return;
+    this.warp = 0.06;
+    gsap.globalTimeline.timeScale(0.06);
+    window.setTimeout(() => {
+      const start = performance.now();
+      const ramp = () => {
+        const k = Math.min(1, (performance.now() - start) / 260);
+        this.warp = 0.06 + (1 - 0.06) * k * k;
+        gsap.globalTimeline.timeScale(this.warp);
+        if (k < 1) requestAnimationFrame(ramp);
+      };
+      ramp();
+    }, 170);
+  }
+
   private update(dt: number): void {
+    dt *= this.warp;
     this.board.update(dt);
     this.mascotFx.update(dt);
     this.bg.update(dt);
@@ -468,7 +494,8 @@ export class Game {
             landedCodex++;
             this.audio.codex(landedCodex);
             this.board.popCell(r, row);
-            if (landedCodex >= 3) this.bg.thump(0.25);
+            if (landedCodex === 3) this.triggerHit(r === REELS - 1);
+            else if (landedCodex > 3) this.bg.thump(0.25);
           } else if (specials?.includes(s)) {
             this.board.popCell(r, row, COLORS.bone);
           }
