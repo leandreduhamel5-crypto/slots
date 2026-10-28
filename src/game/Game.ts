@@ -21,9 +21,9 @@ import type { SymbolTextures } from './textures';
 const BOARD_Y = 152;
 const WORLD_TOP = -140;
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
-const MASCOT_X = 250;
-/** the cartoon wraith doesn't fit the painted Book of Infection art direction; kept for later */
-const SHOW_MASCOT = false;
+const MASCOT_X = 246;
+const MASCOT_SCALE = 0.9;
+const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 200;
 
 class FeatureBanner extends Container {
@@ -134,16 +134,16 @@ export class Game {
     this.banner.position.set(BOARD_W / 2, 6);
     this.teaser = this.buildTeaser(tex);
     this.mascot = new Mascot(mascotTex, assets.mascot);
-    this.mascot.scale.set(-1.12, 1.12);
-    this.mascot.position.set(BOARD_W + MASCOT_X, BOARD_Y + BOARD_H + 46);
+    this.mascot.scale.set(MASCOT_SCALE);
+    this.mascot.position.set(BOARD_W + MASCOT_X, BOARD_Y + BOARD_H + 24);
+    this.mascot.setBook(tex.normal[Sym.CODEX]);
     this.mascotFx = new Particles(tex);
     this.mascot.onTransform = (to) => {
       if (!this.mascot.visible) return;
       const x = this.mascot.x;
-      const y = this.mascot.y - 300;
+      const y = this.mascot.y - 280;
       this.mascotFx.impact(x, y, 1.6);
       this.mascotFx.burst(x, y, 30, 1.1);
-      this.mascotFx.puffs(x, this.mascot.y - 40, 6, 200);
       this.audio.stinger(to === 'inhuman' ? 2 : 0);
       this.bg.thump(to === 'inhuman' ? 0.4 : 0.15);
       this.shake(to === 'inhuman' ? 16 : 6);
@@ -293,7 +293,7 @@ export class Game {
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
-    const mascotRight = (BOARD_W + MASCOT_X + 240 - BOARD_W / 2) * scale + w / 2;
+    const mascotRight = (BOARD_W + MASCOT_X + 236 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
     this.mascot.visible = SHOW_MASCOT && !portrait && mascotRight < w;
     this.bg.resize(w, h);
     this.overlays.resize(w, h);
@@ -444,6 +444,7 @@ export class Game {
     this.mascot.react('spin');
 
     await this.spinTo(round.base.grid, null);
+    this.mascot.lookAt(0, 0);
     await this.presentOutcome(round.base, round.bet, 0, false);
 
     if (round.feature) await this.runFeature(round, 0);

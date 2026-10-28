@@ -1,49 +1,29 @@
-import { Container, MeshPlane, Sprite, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
-import { EYE_Y, ORB, SHOULDER_L, SHOULDER_R, SRES, SW, SH, paintSmokePuff, paintSpectre, type SpectreParts } from './art/spectre';
+import { EYES, MOUTH, PH, PRES, PW, URAEUS, paintPharaoh } from './art/pharaoh';
 import { makeCanvas } from './art/painters';
 
-const FEET = { x: 200, y: 584 };
-const RAGE_SCALE = 1.12;
-
-interface FormTextures {
-  cloak: Texture;
-  face: Texture;
-  jaw: Texture;
-  eyeArt: Texture;
-  eyes: Texture;
-  handL: Texture;
-  handR: Texture;
-  orb: Texture;
-  horns: Texture;
-}
+/** the character stands on this point (bottom centre of the collar) */
+const FEET = { x: PW / 2, y: PH - 20 };
+const HEAD = { x: 200, y: 200 };
+const RAGE_SCALE = 1.06;
+const GOLD = 0xffc860;
+const RED = 0xff2a22;
 
 export interface MascotTextures {
-  human: FormTextures;
-  inhuman: FormTextures;
-  puff: Texture;
+  body: Texture;
+  jaw: Texture;
+  cracks: Texture;
+  cracksGlow: Texture;
+  ring: Texture;
+  iris: Texture;
   glow: Texture;
 }
 
-/** 'human' is the calm keeper, 'inhuman' the unleashed form shown during free spins. */
+/** 'human' is the calm golden pharaoh, 'inhuman' the infected form shown during free spins. */
 export type Form = 'human' | 'inhuman';
 export type Reaction = 'spin' | 'win' | 'big' | 'feature';
-
-function form(p: SpectreParts): FormTextures {
-  const t = (c: HTMLCanvasElement) => Texture.from(c);
-  return {
-    cloak: t(p.cloak),
-    face: t(p.face),
-    jaw: t(p.jaw),
-    eyeArt: t(p.eyeArt),
-    eyes: t(p.eyes),
-    handL: t(p.handL),
-    handR: t(p.handR),
-    orb: t(p.orb),
-    horns: t(p.horns),
-  };
-}
 
 function glowCanvas(): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(256, 256);
@@ -57,8 +37,9 @@ function glowCanvas(): HTMLCanvasElement {
 }
 
 export async function buildMascotTextures(): Promise<MascotTextures> {
-  const painted = paintSpectre();
-  return { human: form(painted.calm), inhuman: form(painted.rage), puff: Texture.from(paintSmokePuff()), glow: Texture.from(glowCanvas()) };
+  const a = paintPharaoh();
+  const t = (c: HTMLCanvasElement) => Texture.from(c);
+  return { body: t(a.body), jaw: t(a.jaw), cracks: t(a.cracks), cracksGlow: t(a.cracksGlow), ring: t(a.ring), iris: t(a.iris), glow: t(glowCanvas()) };
 }
 
 interface Mote {
@@ -67,45 +48,46 @@ interface Mote {
   vy: number;
   life: number;
   age: number;
-  grow: number;
-  spin: number;
   a0: number;
 }
 
 /**
- * "Le Gardien du Codex": a floating hooded wraith. Its tattered cloak is a mesh rippling in an
- * unseen wind, smoke pours from the hem, embers rise, the orb of infection pulses in one claw and
- * the Codex rests in the other. During free spins it unleashes: horns, molten cracks, red eyes.
+ * "Le Pharaon": a golden death mask floating in front of a slowly turning ring of hieroglyphs.
+ * Its eyes are empty sockets lit from within; they follow the reels while they spin, blaze on a
+ * win, and the jaw drops to pour out light on big wins. In the free spins the infection takes it:
+ * molten cracks spread over the gold, the eyes and the ring turn red, lightning crawls around it.
  */
 export class Mascot extends Container {
   private grow = new Container();
   private float = new Container();
   private rig = new Container();
   private aura: Sprite;
-  private smokeBack = new Container();
-  private smokeFront = new Container();
-  private cloak: MeshPlane;
-  private basePos: Float32Array;
-  private horns: Sprite;
-  private faceC = new Container();
-  private face: Sprite;
+  private ringC = new Container();
+  private ring: Sprite;
+  private ringGlow: Sprite;
+  private body: Sprite;
+  private cracks: Sprite;
+  private cracksGlow: Sprite;
+  private mouthGlow: Sprite;
   private jaw: Sprite;
-  private eyeArt: Sprite;
-  private eyes: Sprite;
-  private handL = new Container();
-  private handR = new Container();
-  private handLs: Sprite;
-  private handRs: Sprite;
-  private orbC = new Container();
-  private orb: Sprite;
-  private orbGlow: Sprite;
+  private irises: Sprite[] = [];
+  private halos: Sprite[] = [];
+  private beams: Sprite[] = [];
+  private uraeus: Sprite;
+  private bookC = new Container();
+  private bookGlow: Sprite;
+  private book: Sprite | null = null;
+  private sparks = new Graphics();
+  private motesBack = new Container();
+  private motesFront = new Container();
   private motes: Mote[] = [];
   private split = new RGBSplitFilter({ red: { x: 0, y: 0 }, green: { x: 0, y: 0 }, blue: { x: 0, y: 0 } });
   private busy: gsap.core.Timeline | null = null;
   private t = Math.random() * 10;
   private rage = 0;
   private emitIn = 0;
-  private lift = { y: 0, lean: 0, wind: 1, flare: 1 };
+  private look = { x: 0, y: 0, tx: 0, ty: 0 };
+  private fx = { y: 0, lean: 0, jaw: 0, flare: 0, spin: 0, beam: 0 };
   form: Form = 'human';
   /** called at the climax of a transformation (particles, sound…) */
   onTransform: ((to: Form) => void) | null = null;
@@ -115,106 +97,116 @@ export class Mascot extends Container {
     custom: HTMLImageElement | null = null,
   ) {
     super();
-    const k = 1 / SRES;
-    const sprite = (t: Texture) => {
+    const k = 1 / PRES;
+    const art = (t: Texture) => {
       const s = new Sprite(t);
       s.scale.set(k);
       return s;
     };
-    const t = tex.human;
+    const glow = (x: number, y: number, size: number, tint: number) => {
+      const s = new Sprite(tex.glow);
+      s.anchor.set(0.5);
+      s.position.set(x, y);
+      s.width = s.height = size;
+      s.tint = tint;
+      s.blendMode = 'add';
+      return s;
+    };
     this.rig.pivot.set(FEET.x, FEET.y);
 
-    this.aura = new Sprite(tex.glow);
-    this.aura.anchor.set(0.5);
-    this.aura.position.set(200, 300);
-    this.aura.width = 560;
-    this.aura.height = 680;
-    this.aura.blendMode = 'add';
-    this.aura.tint = 0x8e0f26;
-    this.aura.alpha = 0.35;
+    this.aura = glow(HEAD.x, HEAD.y + 40, 640, GOLD);
+    this.aura.alpha = 0.25;
 
-    this.cloak = new MeshPlane({ texture: t.cloak, verticesX: 9, verticesY: 16 });
-    this.cloak.autoResize = false;
-    this.cloak.scale.set(k);
-    this.basePos = new Float32Array(this.cloak.geometry.positions);
+    this.ring = art(tex.ring);
+    this.ring.anchor.set(0.5);
+    this.ringGlow = art(tex.ring);
+    this.ringGlow.anchor.set(0.5);
+    this.ringGlow.blendMode = 'add';
+    this.ringC.position.set(HEAD.x, HEAD.y);
+    this.ringC.addChild(this.ring, this.ringGlow);
 
-    this.horns = sprite(tex.inhuman.horns);
-    this.horns.anchor.set(0.5, 80 / SH);
-    this.horns.position.set(SW / 2, 80);
-    this.horns.alpha = 0;
+    this.body = art(tex.body);
+    this.cracks = art(tex.cracks);
+    this.cracksGlow = art(tex.cracksGlow);
+    this.cracksGlow.blendMode = 'add';
+    this.cracks.alpha = this.cracksGlow.alpha = 0;
+    this.mouthGlow = glow(MOUTH[0], MOUTH[1] + 8, 120, GOLD);
+    this.mouthGlow.alpha = 0;
+    this.jaw = art(tex.jaw);
 
-    this.face = sprite(t.face);
-    this.jaw = sprite(t.jaw);
-    // eye layers pivot on the eye line so a blink squashes them in place
-    this.eyeArt = sprite(t.eyeArt);
-    this.eyeArt.anchor.set(0.5, EYE_Y / SH);
-    this.eyeArt.position.set(SW / 2, EYE_Y);
-    this.eyes = sprite(t.eyes);
-    this.eyes.anchor.set(0.5, EYE_Y / SH);
-    this.eyes.position.set(SW / 2, EYE_Y);
-    this.eyes.blendMode = 'add';
-    this.faceC.addChild(this.face, this.jaw, this.eyeArt, this.eyes);
+    for (const [ex, ey] of EYES) {
+      const halo = glow(ex, ey, 70, GOLD);
+      const iris = new Sprite(tex.iris);
+      iris.anchor.set(0.5);
+      iris.position.set(ex, ey);
+      iris.width = iris.height = 26;
+      iris.blendMode = 'add';
+      const beam = new Sprite(tex.glow);
+      beam.anchor.set(0, 0.5);
+      beam.position.set(ex, ey);
+      beam.blendMode = 'add';
+      beam.alpha = 0;
+      this.halos.push(halo);
+      this.irises.push(iris);
+      this.beams.push(beam);
+    }
+    this.uraeus = glow(URAEUS[0], URAEUS[1], 50, 0xff5a3a);
+    this.uraeus.alpha = 0.3;
 
-    this.handLs = sprite(t.handL);
-    this.handLs.position.set(-SHOULDER_L.x, -SHOULDER_L.y);
-    this.handL.position.set(SHOULDER_L.x, SHOULDER_L.y);
-    this.handL.addChild(this.handLs);
-    this.handRs = sprite(t.handR);
-    this.handRs.position.set(-SHOULDER_R.x, -SHOULDER_R.y);
-    this.handR.position.set(SHOULDER_R.x, SHOULDER_R.y);
-    this.orbGlow = new Sprite(tex.glow);
-    this.orbGlow.anchor.set(0.5);
-    this.orbGlow.width = this.orbGlow.height = 150;
-    this.orbGlow.blendMode = 'add';
-    this.orb = sprite(t.orb);
-    this.orb.anchor.set(0.5);
-    this.orbC.position.set(ORB.x - SHOULDER_R.x, ORB.y - SHOULDER_R.y);
-    this.orbC.addChild(this.orbGlow, this.orb);
-    this.handR.addChild(this.handRs, this.orbC);
+    this.bookGlow = glow(0, 0, 220, GOLD);
+    this.bookGlow.alpha = 0.4;
+    this.bookC.position.set(48, 392);
+    this.bookC.addChild(this.bookGlow);
+    this.bookC.visible = false;
 
-    this.rig.addChild(this.aura, this.smokeBack, this.cloak, this.horns, this.faceC, this.handL, this.handR, this.smokeFront);
+    this.sparks.blendMode = 'add';
+    this.rig.addChild(
+      this.aura,
+      this.motesBack,
+      this.ringC,
+      this.body,
+      this.cracks,
+      this.cracksGlow,
+      this.mouthGlow,
+      this.jaw,
+      ...this.halos,
+      ...this.irises,
+      ...this.beams,
+      this.uraeus,
+      this.bookC,
+      this.sparks,
+      this.motesFront,
+    );
     this.float.addChild(this.rig);
     this.grow.addChild(this.float);
     this.addChild(this.grow);
-    this.applyTint();
     if (custom) {
-      // professional artwork: a still image that keeps the hover, aura, smoke and reactions
-      for (const c of [this.cloak, this.horns, this.faceC, this.handL, this.handR]) c.visible = false;
-      const art = new Sprite(Texture.from(custom));
-      art.anchor.set(0.5, 1);
-      art.position.set(FEET.x, FEET.y);
-      art.scale.set(560 / custom.naturalHeight);
-      this.rig.addChildAt(art, this.rig.getChildIndex(this.cloak));
+      // professional artwork: a still image that keeps the hover, ring, aura and reactions
+      for (const c of [this.body, this.jaw, this.cracks, this.cracksGlow, this.mouthGlow, this.uraeus, ...this.irises, ...this.halos]) c.visible = false;
+      const img = new Sprite(Texture.from(custom));
+      img.anchor.set(0.5, 1);
+      img.position.set(FEET.x, FEET.y);
+      img.scale.set(PH / custom.naturalHeight);
+      this.rig.addChildAt(img, this.rig.getChildIndex(this.body));
     }
 
     gsap.ticker.add(this.tick);
-    this.scheduleBlink();
     this.scheduleTell();
+  }
+
+  /** The Book of Infection floats beside the pharaoh, toward the reels. */
+  setBook(t: Texture): void {
+    this.book?.destroy();
+    this.book = new Sprite(t);
+    this.book.anchor.set(0.5);
+    this.book.width = this.book.height = 128;
+    this.bookC.addChild(this.book);
+    this.bookC.visible = true;
   }
 
   override destroy(options?: Parameters<Container['destroy']>[0]): void {
     gsap.ticker.remove(this.tick);
     super.destroy(options);
-  }
-
-  private apply(f: Form): void {
-    const t = this.tex[f];
-    this.cloak.texture = t.cloak;
-    this.face.texture = t.face;
-    this.jaw.texture = t.jaw;
-    this.eyeArt.texture = t.eyeArt;
-    this.eyes.texture = t.eyes;
-    this.handLs.texture = t.handL;
-    this.handRs.texture = t.handR;
-    this.orb.texture = t.orb;
-    this.horns.alpha = f === 'inhuman' ? 1 : 0;
-    this.applyTint(f);
-  }
-
-  private applyTint(f: Form = this.form): void {
-    const rage = f === 'inhuman';
-    this.aura.tint = rage ? 0xff2a3a : 0x8e0f26;
-    this.orbGlow.tint = rage ? 0xff5a2a : 0x7dff5a;
   }
 
   /* ------------------------------------------------------------ per-frame */
@@ -224,45 +216,65 @@ export class Mascot extends Container {
     const dt = Math.min(0.05, gsap.ticker.deltaRatio() / 60);
     this.t += dt;
     const t = this.t;
-    const rage = this.form === 'inhuman' ? 1 : 0;
-    this.rage += (rage - this.rage) * Math.min(1, dt * 3);
+    this.rage += ((this.form === 'inhuman' ? 1 : 0) - this.rage) * Math.min(1, dt * 2.5);
     const r = this.rage;
+    const fx = this.fx;
+    const beat = Math.pow(Math.max(0, Math.sin(t * (2.2 + r * 1.6))), 10);
 
-    // hover + sway
-    this.float.y = Math.sin(t * 1.7) * (8 + r * 4) + this.lift.y;
-    this.rig.rotation = Math.sin(t * 0.9) * 0.015 + this.lift.lean;
-    // cloak rippling: anchored at the hood, free at the hem
-    const pos = this.cloak.geometry.positions;
-    const base = this.basePos;
-    const H = SH * SRES;
-    const amp = (11 + r * 10) * SRES * this.lift.wind;
-    for (let i = 0; i < pos.length; i += 2) {
-      const x = base[i];
-      const y = base[i + 1];
-      const ny = y / H;
-      const free = Math.pow(Math.max(0, (ny - 0.3) / 0.7), 1.5);
-      pos[i] = x + Math.sin(t * (2.2 + r) + ny * 6 + x * 0.004) * amp * free;
-      pos[i + 1] = y + Math.sin(t * 1.6 + x * 0.01) * amp * 0.22 * free;
-    }
-    this.cloak.geometry.getBuffer('aPosition').update();
+    this.float.y = Math.sin(t * 1.4) * (7 + r * 3) + fx.y;
+    this.rig.rotation = Math.sin(t * 0.8) * 0.012 + fx.lean;
+    this.ringC.rotation += dt * (0.1 + r * 0.25 + fx.spin);
+    fx.spin *= Math.pow(0.3, dt);
+    this.ringGlow.alpha = 0.12 + r * 0.25 + fx.flare * 0.7 + beat * 0.15 * r;
+    const tint = lerpColor(GOLD, RED, r);
+    this.ringGlow.tint = tint;
+    this.ring.tint = lerpColor(0xffffff, 0xff9a8a, r);
+    this.aura.tint = tint;
+    this.aura.alpha = 0.2 + r * 0.15 + fx.flare * 0.35 + beat * 0.1;
+    this.body.tint = this.jaw.tint = lerpColor(0xffffff, 0xffb8a8, r * 0.6);
+    this.cracks.alpha = r;
+    this.cracksGlow.alpha = r * (0.45 + beat * 0.55 + fx.flare * 0.5);
 
-    // hands, orb, eyes, aura
-    this.handL.rotation = Math.sin(t * 1.5 + 1) * 0.035;
-    this.handR.rotation = Math.sin(t * 1.9) * 0.05;
-    this.orbC.y = ORB.y - SHOULDER_R.y + Math.sin(t * 3) * 5;
-    this.orb.rotation += dt * (0.6 + r * 2);
-    const pulse = 0.5 + 0.5 * Math.sin(t * (3 + r * 3));
-    this.orbGlow.alpha = 0.55 + pulse * 0.4;
-    this.orbGlow.width = this.orbGlow.height = (140 + pulse * 40) * this.lift.flare;
-    this.eyes.alpha = (0.45 + 0.3 * Math.sin(t * 5.3) * Math.sin(t * 2.1) + r * 0.3) * (Math.random() < 0.02 ? 0.3 : 1);
-    this.aura.alpha = 0.28 + r * 0.25 + pulse * 0.1;
+    // eyes: ease toward the look target; the glow breathes and blazes with the flare
+    this.look.x += (this.look.tx - this.look.x) * Math.min(1, dt * 7);
+    this.look.y += (this.look.ty - this.look.y) * Math.min(1, dt * 7);
+    const flick = Math.random() < 0.015 ? 0.4 : 1;
+    this.irises.forEach((iris, i) => {
+      const [ex, ey] = EYES[i];
+      iris.position.set(ex + this.look.x * 8, ey + this.look.y * 3);
+      const s = (24 + fx.flare * 14 + Math.sin(t * 3 + i) * 1.5) / 64;
+      iris.scale.set(s * 1.25, s);
+      iris.tint = lerpColor(0xffffff, 0xff8a70, r);
+      iris.alpha = flick;
+      const halo = this.halos[i];
+      halo.position.copyFrom(iris.position);
+      halo.tint = tint;
+      halo.alpha = (0.45 + r * 0.35 + 0.15 * Math.sin(t * 2.3) + fx.flare * 0.6) * flick;
+      halo.scale.set(((70 + fx.flare * 90) / 256) * 1.3, (70 + fx.flare * 90) / 256);
+      const beam = this.beams[i];
+      beam.position.copyFrom(iris.position);
+      beam.alpha = fx.beam * (0.8 + Math.random() * 0.2);
+      beam.tint = tint;
+      beam.scale.set(900 / 256, (16 + Math.random() * 6) / 256);
+      beam.rotation = Math.PI + 0.12 + Math.sin(t * 6) * 0.02;
+    });
+    this.uraeus.alpha = 0.25 + r * 0.4 + fx.flare * 0.6;
 
-    // smoke from the hem, embers rising
+    this.jaw.y = fx.jaw;
+    this.mouthGlow.alpha = Math.min(1, fx.jaw / 8);
+    this.mouthGlow.tint = tint;
+    this.mouthGlow.scale.set(((90 + fx.jaw * 6) / 256) * 1.4, (90 + fx.jaw * 6) / 256);
+
+    this.bookC.y = 392 + Math.sin(t * 2.1 + 1) * 7;
+    this.bookC.rotation = Math.sin(t * 1.3) * 0.06 - 0.08;
+    this.bookGlow.tint = tint;
+    this.bookGlow.alpha = 0.3 + fx.flare * 0.5 + beat * 0.2 * r;
+
+    // gold dust rising around the mask, infected embers in the free spins
     this.emitIn -= dt;
     if (this.emitIn <= 0) {
-      this.emitIn = 0.09 - r * 0.03;
-      this.spawnSmoke();
-      if (Math.random() < 0.6 + r * 0.4) this.spawnEmber();
+      this.emitIn = 0.12 - r * 0.06;
+      this.spawnMote();
     }
     for (let i = this.motes.length - 1; i >= 0; i--) {
       const m = this.motes[i];
@@ -273,76 +285,88 @@ export class Mascot extends Container {
         this.motes.splice(i, 1);
         continue;
       }
-      m.s.x += m.vx * dt;
+      m.s.x += (m.vx + Math.sin(t * 2 + i) * 10) * dt;
       m.s.y += m.vy * dt;
-      m.s.rotation += m.spin * dt;
-      m.s.scale.set(m.s.scale.x + m.grow * dt);
-      m.s.alpha = m.a0 * (k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85);
+      m.s.alpha = m.a0 * (k < 0.2 ? k / 0.2 : 1 - (k - 0.2) / 0.8);
     }
   };
 
-  private spawnSmoke(): void {
-    const s = new Sprite(this.tex.puff);
-    s.anchor.set(0.5);
-    const x = 50 + Math.random() * 300;
-    s.position.set(x, 556 + Math.random() * 34);
-    s.scale.set(0.25 + Math.random() * 0.25);
-    s.tint = this.form === 'inhuman' ? 0x8a3a4a : 0x6a5a86;
-    (Math.random() < 0.55 ? this.smokeBack : this.smokeFront).addChild(s);
-    this.motes.push({ s, vx: (x - 200) * 0.25 + (Math.random() - 0.5) * 30, vy: 6 + Math.random() * 18, life: 1.4 + Math.random() * 0.8, age: 0, grow: 0.35, spin: (Math.random() - 0.5) * 1.2, a0: 0.85 });
-  }
-
-  private spawnEmber(): void {
+  private spawnMote(x = 40 + Math.random() * 320, y = 300 + Math.random() * 200, burst = 0): void {
     const s = new Sprite(this.tex.glow);
     s.anchor.set(0.5);
-    s.position.set(60 + Math.random() * 280, 470 + Math.random() * 110);
-    s.scale.set(0.03 + Math.random() * 0.04);
+    s.position.set(x, y);
+    s.scale.set((3 + Math.random() * 7) / 256);
     s.blendMode = 'add';
-    s.tint = Math.random() < 0.5 ? 0xff5a2a : 0xff2a44;
-    this.smokeFront.addChild(s);
-    this.motes.push({ s, vx: (Math.random() - 0.5) * 30, vy: -(40 + Math.random() * 60), life: 1.6 + Math.random(), age: 0, grow: 0, spin: 0, a0: 1 });
+    s.tint = this.form === 'inhuman' ? (Math.random() < 0.7 ? RED : 0xffa070) : Math.random() < 0.7 ? GOLD : 0xfff0c0;
+    (Math.random() < 0.5 ? this.motesBack : this.motesFront).addChild(s);
+    const a = Math.random() * Math.PI * 2;
+    this.motes.push({
+      s,
+      vx: burst ? Math.cos(a) * burst : (Math.random() - 0.5) * 16,
+      vy: burst ? Math.sin(a) * burst - 40 : -(30 + Math.random() * 50),
+      life: 1.4 + Math.random() * 1.2,
+      age: 0,
+      a0: 0.9,
+    });
+  }
+
+  private burst(n: number, x = HEAD.x, y = HEAD.y, speed = 160): void {
+    for (let i = 0; i < n; i++) this.spawnMote(x + (Math.random() - 0.5) * 60, y + (Math.random() - 0.5) * 60, speed * (0.4 + Math.random() * 0.8));
+  }
+
+  /** Crawling lightning around the head: a few jagged arcs that flicker out. */
+  private crackle(power = 1): void {
+    const g = this.sparks;
+    g.clear();
+    for (let k = 0; k < 3 + power * 3; k++) {
+      const a0 = Math.random() * Math.PI * 2;
+      const r0 = 150 + Math.random() * 90;
+      let x = HEAD.x + Math.cos(a0) * r0;
+      let y = HEAD.y + Math.sin(a0) * r0;
+      g.moveTo(x, y);
+      const steps = 6 + Math.floor(Math.random() * 4);
+      const da = (Math.random() < 0.5 ? -1 : 1) * (0.08 + Math.random() * 0.1);
+      for (let i = 1; i <= steps; i++) {
+        const a = a0 + da * i;
+        const rr = r0 + (Math.random() - 0.5) * 40;
+        x = HEAD.x + Math.cos(a) * rr;
+        y = HEAD.y + Math.sin(a) * rr;
+        g.lineTo(x, y);
+      }
+    }
+    g.stroke({ width: 7, color: RED, alpha: 0.35, join: 'round', cap: 'round' });
+    g.stroke({ width: 2, color: 0xffd0c0, alpha: 1, join: 'round', cap: 'round' });
+    gsap.killTweensOf(g);
+    gsap.fromTo(g, { alpha: 1 }, { alpha: 0, duration: 0.35, ease: 'steps(5)' });
   }
 
   /* ------------------------------------------------------------ behaviour */
 
-  private scheduleBlink(): void {
-    gsap.delayedCall(2.5 + Math.random() * 3.5, () => {
-      if (this.destroyed) return;
-      const blink = () => gsap.timeline().to([this.eyeArt.scale, this.eyes.scale], { y: 0.05 / SRES, duration: 0.06 }).to([this.eyeArt.scale, this.eyes.scale], { y: 1 / SRES, duration: 0.1 });
-      blink();
-      if (Math.random() < 0.3) gsap.delayedCall(0.22, blink);
-      this.scheduleBlink();
-    });
-  }
-
-  /** Idle "tells": a glance at the reels, a hungry chomp, the orb flaring. */
+  /** Idle "tells": a glance at the reels or at the player, a whisper of light, the ring surging. */
   private scheduleTell(): void {
     gsap.delayedCall(4 + Math.random() * 5, () => {
       if (this.destroyed) return;
       if (!this.busy?.isActive()) {
         const roll = Math.random();
-        if (roll < 0.4) this.play(gsap.timeline().to(this.faceC, { x: 7, duration: 0.25, ease: 'power2.out' }).to(this.faceC, { x: -4, duration: 0.3 }, '+=0.6').to(this.faceC, { x: 0, duration: 0.3 }, '+=0.4'));
-        else if (roll < 0.75) this.play(this.chomp(this.form === 'inhuman' ? 3 : 2));
-        else this.play(this.orbFlare(0.6));
+        const tl = gsap.timeline();
+        if (roll < 0.45) {
+          const dir = Math.random() < 0.6 ? -1 : 1;
+          tl.add(() => this.lookAt(dir, 0.2)).add(() => this.lookAt(0, 0), 1.2 + Math.random());
+        } else if (roll < 0.75) {
+          tl.to(this.fx, { jaw: 4, flare: 0.3, duration: 0.25, ease: 'power2.out' }).to(this.fx, { jaw: 0, flare: 0, duration: 0.4 }, '+=0.25');
+        } else {
+          tl.to(this.fx, { spin: 1.2, flare: 0.45, duration: 0.2 }).to(this.fx, { flare: 0, duration: 0.8 });
+          if (this.form === 'inhuman') this.crackle(0.6);
+        }
+        this.play(tl);
       }
       this.scheduleTell();
     });
   }
 
-  private chomp(n: number): gsap.core.Timeline {
-    const tl = gsap.timeline();
-    const open = this.form === 'inhuman' ? 16 : 9;
-    for (let i = 0; i < n; i++) tl.to(this.jaw, { y: open, duration: 0.08, ease: 'power2.out' }).to(this.jaw, { y: 0, duration: 0.09, ease: 'power3.in' });
-    return tl;
-  }
-
-  private orbFlare(power: number): gsap.core.Timeline {
-    return gsap
-      .timeline()
-      .to(this.orb.scale, { x: (1 + 0.35 * power) / SRES, y: (1 + 0.35 * power) / SRES, duration: 0.15, ease: 'back.out(3)' })
-      .to(this.lift, { flare: 1 + 0.8 * power, duration: 0.15 }, 0)
-      .to(this.orb.scale, { x: 1 / SRES, y: 1 / SRES, duration: 0.5, ease: 'elastic.out(1, 0.4)' })
-      .to(this.lift, { flare: 1, duration: 0.5 }, '<');
+  lookAt(x: number, y: number): void {
+    this.look.tx = x;
+    this.look.ty = y;
   }
 
   private play(tl: gsap.core.Timeline): void {
@@ -350,74 +374,88 @@ export class Mascot extends Container {
     this.busy = tl;
   }
 
-  /** Unleash (or calm) the wraith with a glitchy transformation. */
+  /** Infect (or heal) the pharaoh with a glitchy, crackling transformation. */
   setForm(to: Form, animate = true): void {
     if (to === this.form) return;
     const scale = to === 'inhuman' ? RAGE_SCALE : 1;
     if (!animate) {
       this.form = to;
-      this.apply(to);
+      this.rage = to === 'inhuman' ? 1 : 0;
       this.grow.scale.set(scale);
       return;
     }
     this.filters = [this.split];
     const tl = gsap.timeline({ onComplete: () => (this.filters = []) });
-    tl.to(this.lift, { wind: 3, duration: 0.3 }, 0).to(this.rig.scale, { x: 0.9, y: 1.1, duration: 0.3, ease: 'power2.out' }, 0);
+    tl.to(this.fx, { flare: 0.8, jaw: 6, lean: 0, duration: 0.3 }, 0).to(this.rig.scale, { x: 0.94, y: 1.06, duration: 0.3, ease: 'power2.out' }, 0);
     for (let i = 0; i < 6; i++) {
       tl.add(() => {
-        this.apply(i % 2 ? this.form : to);
-        this.split.red = { x: (Math.random() - 0.5) * 24, y: (Math.random() - 0.5) * 6 };
-        this.split.blue = { x: (Math.random() - 0.5) * 24, y: 0 };
+        this.rage = i % 2 ? (to === 'inhuman' ? 0.2 : 0.8) : to === 'inhuman' ? 0.9 : 0.1;
+        this.split.red = { x: (Math.random() - 0.5) * 22, y: (Math.random() - 0.5) * 6 };
+        this.split.blue = { x: (Math.random() - 0.5) * 22, y: 0 };
+        if (to === 'inhuman') this.crackle(0.7);
       }, 0.1 + i * 0.07);
     }
     tl.add(() => {
       this.form = to;
-      this.apply(to);
       this.split.red = { x: 0, y: 0 };
       this.split.blue = { x: 0, y: 0 };
-      for (let i = 0; i < 16; i++) this.spawnSmoke();
+      this.burst(26);
+      if (to === 'inhuman') this.crackle(1.4);
       this.onTransform?.(to);
     }, 0.55)
-      .fromTo(this.rig.scale, { x: 1.2, y: 0.82 }, { x: 1, y: 1, duration: 0.7, ease: 'elastic.out(1.2, 0.35)' }, 0.55)
+      .fromTo(this.rig.scale, { x: 1.12, y: 0.9 }, { x: 1, y: 1, duration: 0.7, ease: 'elastic.out(1.2, 0.35)' }, 0.55)
       .to(this.grow.scale, { x: scale, y: scale, duration: 0.5, ease: 'back.out(2)' }, 0.55)
-      .fromTo(this.horns.scale, { x: 0.2 / SRES, y: 0.2 / SRES }, { x: 1 / SRES, y: 1 / SRES, duration: 0.5, ease: 'back.out(3)' }, 0.55)
-      .to(this.jaw, { y: to === 'inhuman' ? 22 : 6, duration: 0.15 }, 0.55)
-      .add(this.orbFlare(1.2), 0.55)
-      .to(this.jaw, { y: 0, duration: 0.25 }, 1.4)
-      .to(this.lift, { wind: 1, duration: 1 }, 1.2);
+      .to(this.fx, { jaw: to === 'inhuman' ? 20 : 8, flare: 1.2, spin: 4, duration: 0.15 }, 0.55)
+      .to(this.fx, { jaw: 0, flare: 0, duration: 0.6 }, 1.5);
     this.play(tl);
   }
 
   react(kind: Reaction): void {
-    const monster = this.form === 'inhuman';
     const tl = gsap.timeline();
     switch (kind) {
       case 'spin':
-        // lean toward the reels (the art is mirrored on screen) and flare the orb
-        tl.to(this.lift, { lean: 0.07, duration: 0.25, ease: 'back.out(2)' }).add(this.orbFlare(0.5), 0).to(this.lift, { lean: 0, duration: 0.7, ease: 'sine.inOut' }, '+=0.6');
+        // the eyes follow the reels (to the left of the pharaoh on screen), the ring surges
+        this.lookAt(-1, 0.25);
+        tl.to(this.fx, { lean: -0.035, spin: 1.6, flare: 0.25, duration: 0.25, ease: 'back.out(2)' })
+          .to(this.fx, { lean: 0, flare: 0, duration: 0.7, ease: 'sine.inOut' }, '+=0.5')
+          .add(() => this.lookAt(-0.6, 0.1), '<');
         break;
       case 'win':
-        tl.to(this.lift, { y: -26, duration: 0.2, ease: 'power2.out' })
-          .add(this.chomp(3), 0)
-          .add(this.orbFlare(1), 0)
-          .to(this.lift, { y: 0, duration: 0.6, ease: 'bounce.out' }, 0.5);
+        this.lookAt(0, 0);
+        this.burst(14);
+        tl.to(this.fx, { y: -18, jaw: 9, flare: 0.9, spin: 2.5, duration: 0.2, ease: 'power2.out' })
+          .to(this.fx, { y: 0, duration: 0.6, ease: 'bounce.out' }, 0.45)
+          .to(this.fx, { jaw: 0, flare: 0, duration: 0.5 }, 0.7);
+        if (this.book) tl.fromTo(this.bookC.scale, { x: 1, y: 1 }, { x: 1.18, y: 1.18, duration: 0.15, yoyo: true, repeat: 1 }, 0);
         break;
-      case 'big':
-        if (!monster) {
-          this.setForm('inhuman');
-          gsap.delayedCall(2.6, () => this.setForm('human'));
-          return;
-        }
-        tl.to(this.lift, { y: -34, wind: 2.5, duration: 0.25, ease: 'power2.out' })
-          .add(this.chomp(5), 0)
-          .add(this.orbFlare(1.4), 0)
-          .to(this.rig, { x: 6, duration: 0.04, yoyo: true, repeat: 15 }, 0.15)
-          .to(this.lift, { y: 0, wind: 1, duration: 0.8, ease: 'bounce.out' }, 0.9);
+      case 'big': {
+        this.lookAt(-1, 0.4);
+        tl.to(this.fx, { y: -30, jaw: 22, flare: 1.4, spin: 6, duration: 0.25, ease: 'power2.out' }, 0)
+          .to(this.fx, { beam: 1, duration: 0.12 }, 0.1)
+          .add(() => {
+            this.burst(40, MOUTH[0], MOUTH[1], 220);
+            this.crackle(1.2);
+          }, 0.1)
+          .to(this.rig, { x: '+=5', duration: 0.04, yoyo: true, repeat: 15 }, 0.1)
+          .to(this.fx, { beam: 0, duration: 0.4 }, 1.1)
+          .to(this.fx, { y: 0, jaw: 0, flare: 0, duration: 0.8, ease: 'bounce.out' }, 1.2)
+          .add(() => this.lookAt(0, 0), 1.6);
         break;
+      }
       case 'feature':
+        this.lookAt(0, 0);
         this.setForm('inhuman');
         return;
     }
     this.play(tl);
   }
+}
+
+function lerpColor(a: number, b: number, k: number): number {
+  const ch = (s: number) => {
+    const x = (a >> s) & 255;
+    const y = (b >> s) & 255;
+    return Math.round(x + (y - x) * k) << s;
+  };
+  return ch(16) | ch(8) | ch(0);
 }
