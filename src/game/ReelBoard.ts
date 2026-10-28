@@ -781,6 +781,11 @@ export class ReelBoard extends Container {
     this.cycleTl = tl;
   }
 
+  /** Gold coins spraying out of the win plaque. */
+  coinBurst(n: number): void {
+    this.fx.coins(BOARD_W / 2, BOARD_H + FRAME_PAD + 10, n, 0.85);
+  }
+
   /** Total-win plaque hanging under the reels. */
   showPlaque(amount: number, label: string): void {
     this.hidePlaque();

@@ -18,7 +18,7 @@ import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintEgyptFrame, paintStonePanel, redCrack } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintStonePanel, redCrack } from './art/egyptFrame';
 
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
@@ -53,6 +53,7 @@ export interface SymbolTextures {
   puff: Texture;
   shine: Texture;
   sunburst: Texture;
+  coin: Texture;
 }
 
 type Deco = 'blood' | 'steel' | 'toxic' | 'slime' | 'rust';
@@ -315,5 +316,6 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     puff: Texture.from(paintPuff()),
     shine: Texture.from(paintShine()),
     sunburst: Texture.from(paintSunburst()),
+    coin: Texture.from(paintCoin()),
   };
 }

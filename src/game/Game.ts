@@ -493,6 +493,7 @@ export class Game {
       if (celebrate) {
         this.audio.win(size);
         this.bg.flare(0.45 + size * 0.2);
+        this.board.coinBurst(6 + size * 8);
       }
       else this.audio.tick();
       shown += lineSum;

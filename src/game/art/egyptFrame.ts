@@ -287,3 +287,82 @@ export function paintStonePanel(w: number, h: number, seed: number): HTMLCanvasE
   ctx.fillRect(w - 3, 0, 3, h);
   return c;
 }
+
+/** Gold coin for the win showers: milled rim, stamped Eye of Horus, glossy highlight (128 px). */
+export function paintCoin(): HTMLCanvasElement {
+  const S = 128;
+  const [c, ctx] = makeCanvas(S, S);
+  const m = S / 2;
+  ctx.beginPath();
+  ctx.arc(m, m, 60, 0, Math.PI * 2);
+  ctx.fillStyle = '#2a1404';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(m, m, 57, 0, Math.PI * 2);
+  ctx.fillStyle = goldGrad(ctx, 10, 10, 118, 118);
+  ctx.fill();
+  // milled edge
+  ctx.strokeStyle = 'rgba(70,36,4,0.55)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(m + Math.cos(a) * 50, m + Math.sin(a) * 50);
+    ctx.lineTo(m + Math.cos(a) * 56, m + Math.sin(a) * 56);
+    ctx.stroke();
+  }
+  // inner field
+  ctx.beginPath();
+  ctx.arc(m, m, 46, 0, Math.PI * 2);
+  const f = ctx.createRadialGradient(m - 14, m - 16, 4, m, m, 48);
+  f.addColorStop(0, '#fff2c0');
+  f.addColorStop(0.5, '#e8b44a');
+  f.addColorStop(1, '#8a5410');
+  ctx.fillStyle = f;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(60,30,4,0.7)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  // stamped Eye of Horus (engraved: dark stroke + light offset)
+  const eye = (dx: number, dy: number, col: string, w: number) => {
+    ctx.save();
+    ctx.translate(dx, dy);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(m - 30, m - 4);
+    ctx.quadraticCurveTo(m, m - 26, m + 30, m - 4);
+    ctx.quadraticCurveTo(m, m + 16, m - 30, m - 4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(m, m - 5, 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(m - 30, m - 20);
+    ctx.quadraticCurveTo(m, m - 34, m + 32, m - 20);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(m - 4, m + 8);
+    ctx.lineTo(m - 8, m + 30);
+    ctx.moveTo(m + 8, m + 6);
+    ctx.quadraticCurveTo(m + 24, m + 30, m + 8, m + 30);
+    ctx.stroke();
+    ctx.restore();
+  };
+  eye(1.5, 1.5, 'rgba(255,240,190,0.7)', 4);
+  eye(0, 0, 'rgba(70,34,2,0.85)', 4);
+  // gloss
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(m, m, 57, 0, Math.PI * 2);
+  ctx.clip();
+  const gl = ctx.createLinearGradient(0, 0, S, S);
+  gl.addColorStop(0, 'rgba(255,255,255,0.55)');
+  gl.addColorStop(0.3, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gl;
+  ctx.fillRect(0, 0, S, S);
+  ctx.restore();
+  return c;
+}

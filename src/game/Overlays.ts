@@ -324,10 +324,14 @@ export class Overlays extends Container {
       .roundRect(-width / 2, -height / 2 + 10, width, height, 26)
       .fill(COLORS.ink)
       .roundRect(-width / 2, -height / 2, width, height, 26)
-      .fill(0x1e0f24)
+      .fill(0x120605)
       .stroke({ width: 9, color: COLORS.ink })
-      .roundRect(-width / 2 + 12, -height / 2 + 10, width - 24, 12, 6)
-      .fill({ color: 0xffffff, alpha: 0.12 });
+      .roundRect(-width / 2 + 5, -height / 2 + 5, width - 10, height - 10, 22)
+      .stroke({ width: 5, color: 0xd8a03a })
+      .roundRect(-width / 2 + 13, -height / 2 + 13, width - 26, height - 26, 16)
+      .stroke({ width: 1.5, color: 0x7a4a10 })
+      .roundRect(-width / 2 + 16, -height / 2 + 14, width - 32, 10, 5)
+      .fill({ color: 0xffe2a0, alpha: 0.1 });
   }
 
   private popIn(o: Container, delay = 0, from = 0.2): void {
