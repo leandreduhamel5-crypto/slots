@@ -117,10 +117,11 @@ export class Game {
     codexCanvas: HTMLCanvasElement,
     mascotTex: MascotTextures,
     assets: LoadedAssets,
-    temple: HTMLImageElement,
+    templeNight: HTMLImageElement,
+    templeInfected: HTMLImageElement,
   ) {
-    this.bg = new Background(tex.spore, tex.glow, temple, assets.background);
-    this.bg.onLightning = () => this.audio.thunder();
+    this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, assets.background);
+    this.bg.onLightning = (power) => this.audio.lightning(power);
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
     this.board.onAnticipate = (on) => this.pushIn(on);
@@ -522,6 +523,7 @@ export class Game {
         this.audio.win(size);
         this.bg.flare(0.45 + size * 0.2);
         this.board.coinBurst(6 + size * 8);
+        this.audio.coins(6 + size * 8);
       }
       else this.audio.tick();
       shown += lineSum;

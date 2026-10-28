@@ -378,6 +378,7 @@ export class Overlays extends Container {
     this.fx.thump(0.35);
     this.particles.impact(this.w / 2, this.h / 2, 1.6);
     this.particles.startFountain(this.w / 2, this.h * 0.7, 30);
+    this.audio.coins(24);
     this.particles.startRain([Sym.CODEX, Sym.ANTIDOTE, Sym.BLOOD, Sym.ZERO].map((s) => this.tex.normal[s]), this.w, 6);
     this.fx.punch(1);
 
@@ -394,7 +395,7 @@ export class Overlays extends Container {
         onTick?.(counter.v);
         const now = performance.now();
         if (now - lastTick > 70) {
-          this.audio.tick();
+          this.audio.tick(counter.v / win);
           lastTick = now;
         }
         const t = winTier(counter.v, bet);
@@ -591,7 +592,10 @@ export class Overlays extends Container {
     this.popIn(head, 0.05);
     this.popIn(plate, 0.15);
     this.popIn(amount, 0.2);
-    if (total > 0) this.particles.startFountain(this.w / 2, this.h * 0.7, 30);
+    if (total > 0) {
+      this.particles.startFountain(this.w / 2, this.h * 0.7, 30);
+      this.audio.coins(20);
+    }
     const counter = { v: 0 };
     const tween = gsap.to(counter, {
       v: total,

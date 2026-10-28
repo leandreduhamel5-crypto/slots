@@ -5,9 +5,7 @@ import { downsample } from './game/art/paint';
 import { ORB, SRES, paintSpectre } from './game/art/spectre';
 import { paintRoyal } from './game/art/royals';
 import { Audio } from './game/Audio';
-import { paintTempleHD } from './game/art/templeHD';
-import anubisUrl from './game/art/egypt/anubis.webp';
-import anubis2Url from './game/art/egypt/anubis2.webp';
+import { paintTemple } from './game/art/templeHD';
 
 /** Dev-only: renders the painted premium symbols large and at reel size. ?only=blood to focus one. */
 async function run(): Promise<void> {
@@ -15,12 +13,15 @@ async function run(): Promise<void> {
   const out = document.getElementById('out')!;
   const only = new URLSearchParams(location.search).get('only');
   if (only === 'temple') {
-    const load = (u: string) => new Promise<HTMLImageElement>((r) => { const i = new Image(); i.onload = () => r(i); i.src = u; });
-    const [a1, a2] = await Promise.all([load(anubisUrl), load(anubis2Url)]);
     const t0 = performance.now();
-    const c = paintTempleHD(a1, a2);
-    (window as unknown as { templeMs: number }).templeMs = performance.now() - t0;
-    (window as unknown as { templePng: string }).templePng = c.toDataURL('image/png');
+    const c = paintTemple('night');
+    const c2 = paintTemple('infected');
+    const w = window as unknown as Record<string, unknown>;
+    w.templeMs = performance.now() - t0;
+    w.templeNight = c.toDataURL('image/png');
+    w.templeInfected = c2.toDataURL('image/png');
+    c2.style.width = '1920px';
+    out.append(c2);
     c.style.width = '1920px';
     document.body.style.margin = '0';
     out.style.padding = '0';
@@ -41,7 +42,10 @@ async function run(): Promise<void> {
       ['win 3', (a) => a.win(3), 3.5],
       ['tick', (a) => a.tick(), 0.4],
       ['expand', (a) => a.expand(), 2],
-      ['thunder', (a) => a.thunder(), 4],
+      ['lightning 1', (a) => a.lightning(1), 4],
+      ['lightning .3', (a) => a.lightning(0.3), 4],
+      ['coins 20', (a) => a.coins(20), 1.5],
+      ['tick .8', (a) => a.tick(0.8), 0.5],
       ['stinger 0', (a) => a.stinger(0), 3],
       ['stinger 3', (a) => a.stinger(3), 3.5],
       ['featureStart', (a) => a.featureStart(), 4.5],

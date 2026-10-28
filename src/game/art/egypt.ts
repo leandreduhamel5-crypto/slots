@@ -13,7 +13,8 @@ import j from './egypt/j.webp';
 import ten from './egypt/ten.webp';
 import pyramid from './egypt/pyramid.webp';
 import virus from './egypt/virus.webp';
-import temple from './egypt/temple.webp';
+import templeNight from './egypt/temple_night.webp';
+import templeInfected from './egypt/temple_infected.webp';
 
 export const SYMBOL_ART_URLS: Record<string, string> = {
   zero: pharaoh,
@@ -27,7 +28,7 @@ export const SYMBOL_ART_URLS: Record<string, string> = {
   ten,
 };
 
-export const EXTRA_ART_URLS = { pyramid, virus, temple };
+export const EXTRA_ART_URLS = { pyramid, virus, templeNight, templeInfected };
 
 function load(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -41,6 +42,8 @@ function load(url: string): Promise<HTMLImageElement> {
 export async function loadEgyptArt(): Promise<{ symbols: Map<string, HTMLImageElement>; extra: Record<keyof typeof EXTRA_ART_URLS, HTMLImageElement> }> {
   const symbols = new Map<string, HTMLImageElement>();
   await Promise.all(Object.entries(SYMBOL_ART_URLS).map(async ([key, url]) => symbols.set(key, await load(url))));
-  const [p, v, t] = await Promise.all([load(EXTRA_ART_URLS.pyramid), load(EXTRA_ART_URLS.virus), load(EXTRA_ART_URLS.temple)]);
-  return { symbols, extra: { pyramid: p, virus: v, temple: t } };
+  const keys = Object.keys(EXTRA_ART_URLS) as (keyof typeof EXTRA_ART_URLS)[];
+  const imgs = await Promise.all(keys.map((k) => load(EXTRA_ART_URLS[k])));
+  const extra = Object.fromEntries(keys.map((k, i) => [k, imgs[i]])) as Record<keyof typeof EXTRA_ART_URLS, HTMLImageElement>;
+  return { symbols, extra };
 }

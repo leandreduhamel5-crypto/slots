@@ -545,70 +545,134 @@ export class Audio {
     this.voice({ at, f: 260, to: 170, glide: 0.06, vol: 0.22, r: 0.08, a: 0.002, dest: this.ui });
   }
 
+  /** Lever "ka-chunk", a short whoosh and a pinch of gold shimmer: pleasant enough to hear 500 times. */
   spinStart(): void {
     if (!this.ctx) return;
     const at = this.t;
-    // lever clunk + whoosh
-    this.boom(at, 0.35, 70);
-    this.hiss({ at, dur: 0.5, type: 'bandpass', f0: 300, f1: 2800, q: 0.8, vol: 0.2, a: 0.04, pan: -0.4, pan1: 0.4 });
-    this.voice({ at, f: 900, to: 300, glide: 0.08, type: 'square', vol: 0.03, r: 0.08, a: 0.001, lp: 3000 });
-    this.startSpinLoop(at + 0.05);
+    this.voice({ at, f: 130, to: 58, glide: 0.1, vol: 0.22, r: 0.14, a: 0.002 });
+    this.hiss({ at, dur: 0.03, type: 'bandpass', f0: 2600, q: 3, vol: 0.1, a: 0.001 });
+    this.voice({ at: at + 0.065, f: 96, to: 46, glide: 0.1, vol: 0.2, r: 0.16, a: 0.002 });
+    this.hiss({ at: at + 0.065, dur: 0.035, type: 'bandpass', f0: 1700, q: 3, vol: 0.09, a: 0.001 });
+    this.hiss({ at: at + 0.04, dur: 0.38, type: 'bandpass', f0: 380, f1: 2400, q: 0.9, vol: 0.09, a: 0.08, pan: -0.5, pan1: 0.5 });
+    [88, 89, 92, 93].forEach((n, i) =>
+      this.voice({ at: at + 0.05 + i * 0.03, f: midi(n), vol: 0.018, r: 0.35, a: 0.002, pan: (i - 1.5) * 0.3, echo: 0.3, dest: this.ui }),
+    );
+    this.startSpinLoop(at + 0.08);
   }
 
-  /** Reels spinning: a ratcheting rattle that stops with the last reel. */
+  /** One second of reels rolling: soft symbol ticks over a low whir, seamless when looped. */
+  private spinBuffer: AudioBuffer | null = null;
+
+  private makeSpinBuffer(): AudioBuffer {
+    const ctx = this.ctx!;
+    const sr = ctx.sampleRate;
+    const N = sr;
+    const F = Math.floor(sr * 0.05);
+    const b = ctx.createBuffer(2, N, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const raw = new Float32Array(N + F);
+      let lp = 0;
+      let lp2 = 0;
+      for (let i = 0; i < raw.length; i++) {
+        lp = lp * 0.985 + (Math.random() * 2 - 1) * 0.015;
+        lp2 = lp2 * 0.9 + (Math.random() * 2 - 1) * 0.1;
+        raw[i] = lp * 2.2 + lp2 * 0.05;
+      }
+      const ticks = 18;
+      for (let k = 0; k < ticks; k++) {
+        const t0 = Math.floor(((k + 0.5) / ticks + (Math.random() - 0.5) * 0.006) * N) + (ch ? 37 : 0);
+        const amp = 0.55 + Math.random() * 0.35;
+        const f1 = 1500 + Math.random() * 300;
+        for (let j = 0; j < sr * 0.03 && t0 + j < raw.length; j++) {
+          const t = j / sr;
+          raw[t0 + j] +=
+            amp * (Math.exp(-t / 0.005) * (Math.sin(2 * Math.PI * f1 * t) * 0.5 + Math.sin(2 * Math.PI * f1 * 1.9 * t) * 0.22) + (Math.random() * 2 - 1) * Math.exp(-t / 0.0015) * 0.35);
+        }
+      }
+      const d = b.getChannelData(ch);
+      for (let i = 0; i < N; i++) d[i] = i < F ? raw[i] * (i / F) + raw[N + i] * (1 - i / F) : raw[i];
+    }
+    return b;
+  }
+
+  private spinGain: GainNode | null = null;
+
+  /** Reels spinning: the roll thins out as each reel stops. */
   private startSpinLoop(at: number): void {
     this.spinLoop?.stop(at);
     const ctx = this.ctx!;
-    const n = ctx.createBufferSource();
-    n.buffer = this.noise;
-    n.loop = true;
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 1400;
-    bp.Q.value = 1.4;
-    const am = ctx.createGain();
-    am.gain.value = 0.5;
-    const lfo = ctx.createOscillator();
-    lfo.type = 'square';
-    lfo.frequency.value = 17;
-    const lfoG = ctx.createGain();
-    lfoG.gain.value = 0.5;
-    lfo.connect(lfoG).connect(am.gain);
+    this.spinBuffer ??= this.makeSpinBuffer();
+    const src = ctx.createBufferSource();
+    src.buffer = this.spinBuffer;
+    src.loop = true;
+    src.playbackRate.setValueAtTime(0.85, at);
+    src.playbackRate.linearRampToValueAtTime(1.1, at + 0.4);
+    const tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 5200;
     const out = ctx.createGain();
     out.gain.setValueAtTime(0.0001, at);
-    out.gain.exponentialRampToValueAtTime(0.05, at + 0.15);
-    n.connect(bp).connect(am).connect(out).connect(this.sfx);
-    // low motor hum underneath
-    const hum = ctx.createOscillator();
-    hum.type = 'triangle';
-    hum.frequency.value = 58;
-    const hg = ctx.createGain();
-    hg.gain.value = 0.5;
-    hum.connect(hg).connect(out);
-    n.start(at);
-    lfo.start(at);
-    hum.start(at);
+    out.gain.exponentialRampToValueAtTime(0.075, at + 0.2);
+    src.connect(tone).connect(out).connect(this.sfx);
+    src.start(at);
+    this.spinGain = out;
     const kill = window.setTimeout(() => this.spinLoop?.stop(this.t), 12000);
     this.spinLoop = {
       stop: (t: number) => {
         clearTimeout(kill);
         out.gain.cancelScheduledValues(t);
-        out.gain.setTargetAtTime(0.0001, t, 0.05);
-        for (const s of [n, lfo, hum]) s.stop(t + 0.4);
+        out.gain.setTargetAtTime(0.0001, t, 0.04);
+        src.stop(t + 0.3);
         this.spinLoop = null;
+        this.spinGain = null;
       },
     };
   }
 
+  /** Reel lands: a stone "thock" and a plucked note that climbs the Hijaz scale reel after reel. */
   reelStop(i: number): void {
     if (!this.ctx) return;
     const at = this.t;
     const pan = (i - 2) * 0.3;
-    const pitch = 1 + (Math.random() - 0.5) * 0.06;
-    this.voice({ at, f: (150 - i * 8) * pitch, to: 48, glide: 0.12, vol: 0.42, r: 0.18, a: 0.002, pan });
-    this.voice({ at, f: 2400 * pitch, to: 900, glide: 0.02, type: 'square', vol: 0.025, r: 0.03, a: 0.001, lp: 4000, pan });
-    this.hiss({ at, dur: 0.08, type: 'bandpass', f0: 2600, f1: 900, q: 1.5, vol: 0.1, a: 0.001, pan });
+    this.voice({ at, f: 128 - i * 5, to: 52, glide: 0.09, vol: 0.34, r: 0.16, a: 0.002, pan });
+    this.hiss({ at, dur: 0.045, type: 'bandpass', f0: 950, q: 3.5, vol: 0.13, a: 0.001, pan });
+    this.hiss({ at, dur: 0.02, type: 'highpass', f0: 4500, vol: 0.05, a: 0.001, pan });
+    const f = midi([64, 65, 68, 69, 71][Math.min(4, i)] + 12);
+    this.voice({ at, f, vol: 0.075, r: 0.38, a: 0.002, pan, echo: 0.2 });
+    this.voice({ at, f: f * 4.01, vol: 0.018, r: 0.07, a: 0.001, pan });
+    this.voice({ at, f: f * 2, type: 'triangle', vol: 0.02, r: 0.18, a: 0.002, pan });
     if (i >= 4) this.spinLoop?.stop(at);
+    else if (this.spinGain) this.spinGain.gain.setTargetAtTime(0.075 * ((4 - i) / 5), at, 0.03);
+  }
+
+  /** A single gold coin: inharmonic ring, tiny strike transient and a quieter second bounce. */
+  private coin(at: number, vol: number, pan: Pan, pitch = 1, dest: AudioNode = this.sfx): void {
+    const f = 2650 * pitch;
+    const partials: [number, number, number][] = [
+      [1, 1, 0.32],
+      [1.505, 0.55, 0.2],
+      [2.13, 0.42, 0.14],
+      [2.71, 0.28, 0.09],
+      [3.42, 0.16, 0.06],
+    ];
+    for (const bounce of [0, 1]) {
+      const t = at + bounce * (0.05 + Math.random() * 0.05);
+      const v = vol * (bounce ? 0.35 : 1);
+      for (const [r, g, d] of partials) this.voice({ at: t, f: f * r * (1 + (Math.random() - 0.5) * 0.01), vol: v * g, r: d * (bounce ? 0.6 : 1), a: 0.0008, pan, dest });
+      this.hiss({ at: t, dur: 0.008, type: 'highpass', f0: 6000, vol: v * 0.6, a: 0.0005, pan, dest });
+    }
+  }
+
+  /** A shower of coins spilling out; n scales the amount. */
+  coins(n: number): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    const count = Math.min(16, 3 + Math.round(n * 0.6));
+    for (let k = 0; k < count; k++) {
+      const dt = Math.pow(Math.random(), 1.4) * (0.35 + count * 0.04);
+      this.coin(at + dt, 0.045 + Math.random() * 0.04, (Math.random() - 0.5) * 1.4, 0.85 + Math.random() * 0.4);
+    }
+    this.hiss({ at, dur: 0.25 + count * 0.04, type: 'highpass', f0: 5200, vol: 0.025, a: 0.04 });
   }
 
   /** Codex lands: tolling bell, pitch climbing with each one, plus a choir breath. */
@@ -724,13 +788,12 @@ export class Audio {
     if (size >= 3) this.choir(at + 0.2, [midi(45), midi(52), midi(57)], 2.2, 0.08);
   }
 
-  /** Count-up tick (coin-like), slightly randomised. */
-  tick(): void {
+  /** Count-up tick: a small coin; give it progress (0..1) and it climbs in pitch as the total grows. */
+  tick(progress = -1): void {
     if (!this.ctx) return;
     const at = this.t;
-    const f = 2300 + Math.random() * 400;
-    this.voice({ at, f, vol: 0.12, r: 0.06, a: 0.001, dest: this.ui, pan: (Math.random() - 0.5) * 0.4 });
-    this.voice({ at, f: f * 1.5, vol: 0.05, r: 0.04, a: 0.001, dest: this.ui });
+    if (progress >= 0) this.coin(at, 0.06, (Math.random() - 0.5) * 0.5, 0.8 + Math.min(1, progress) * 0.55, this.ui);
+    else this.coin(at, 0.05, (Math.random() - 0.5) * 0.4, 0.95 + Math.random() * 0.15, this.ui);
   }
 
   /** Strain expands over a reel: slimy splash, rising whoosh, sub hit. */
@@ -744,16 +807,19 @@ export class Audio {
     this.boom(at + 0.42, 0.6, 45);
   }
 
-  /** Power outage: electric zap, buzz, a fading whine, then distant thunder. */
-  thunder(): void {
+  /** Lightning: a whip-crack and crackle for a close strike, then thunder rolling across the stereo field. */
+  lightning(power = 1): void {
     if (!this.ctx) return;
     const at = this.t;
-    this.hiss({ at, dur: 0.12, type: 'highpass', f0: 2500, vol: 0.12, a: 0.001 });
-    this.voice({ at, f: 120, type: 'square', vol: 0.05, r: 0.5, a: 0.002, lp: 1800 });
-    this.voice({ at, f: 3200, to: 180, glide: 0.9, type: 'sine', vol: 0.03, r: 0.9, a: 0.01 });
-    const t2 = at + 0.35;
-    this.hiss({ at: t2, dur: 2.8, type: 'lowpass', f0: 800, f1: 50, vol: 0.28, a: 0.05, pan: -0.5, pan1: 0.5 });
-    this.voice({ at: t2, f: 34, vol: 0.3, r: 2.2, a: 0.05, dest: this.music });
+    const pan = (Math.random() - 0.5) * 0.8;
+    if (power >= 0.5) {
+      this.hiss({ at, dur: 0.05, type: 'highpass', f0: 1200, vol: 0.42 * power, a: 0.0008, pan });
+      for (let k = 0; k < 7; k++) this.hiss({ at: at + 0.02 + Math.random() * 0.18, dur: 0.015, type: 'highpass', f0: 2500, vol: 0.2 * power, a: 0.0008, pan: pan + (Math.random() - 0.5) * 0.4 });
+      this.boom(at, 0.55 * power, 36, pan);
+    }
+    const t2 = at + (power >= 0.5 ? 0.08 : 0.6);
+    this.hiss({ at: t2, dur: 2.2 + power, type: 'lowpass', f0: 500 + power * 400, f1: 45, vol: 0.12 + power * 0.22, a: power >= 0.5 ? 0.05 : 0.4, pan: pan - 0.5, pan1: pan + 0.5 });
+    this.voice({ at: t2, f: 38, to: 30, glide: 2, vol: 0.1 + power * 0.18, r: 1.8 + power, a: 0.1 });
   }
 
   /** Monster roar + sub boom + dissonant cluster; level 0..3 scales it. */
