@@ -39,6 +39,7 @@ interface Rig {
 /** Tint of the star-burst behind each winning symbol. */
 /** Glowing eyes / gems on the painted symbols: [x, y, radius, tint] in texture px from the centre. */
 const EYES: Partial<Record<Sym, [number, number, number, number][]>> = {
+  [Sym.CODEX]: [[2, -178, 20, 0xff4a2a]],
   [Sym.ZERO]: [[-24, -10, 9, 0xff3a2a], [25, -10, 9, 0xff3a2a]],
   [Sym.MASK]: [[20, -20, 10, 0xff2a2a]],
   [Sym.ANTIDOTE]: [[0, -90, 13, 0xff3040]],

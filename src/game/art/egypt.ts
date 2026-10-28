@@ -17,6 +17,8 @@ import templeNight from './egypt/temple_night.webp';
 import templeInfected from './egypt/temple_infected.webp';
 
 export const SYMBOL_ART_URLS: Record<string, string> = {
+  // the red pyramid from the concept sheet is the wild/scatter
+  codex: pyramid,
   zero: pharaoh,
   mask: anubis,
   antidote: scarab,

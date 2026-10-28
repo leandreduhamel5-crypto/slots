@@ -25,8 +25,8 @@ export function showIntro(logo: string, images: string[], onStart: () => void): 
       <div class="intro-cards">
         <div class="intro-card">
           <div class="intro-art"><img src="${images[Sym.CODEX]}" alt=""><img src="${images[Sym.CODEX]}" alt=""><img src="${images[Sym.CODEX]}" alt=""></div>
-          <h3>3 Livres</h3>
-          <p>déclenchent <b>10 tours gratuits</b>. Le Livre est aussi joker.</p>
+          <h3>3 Pyramides</h3>
+          <p>déclenchent <b>10 tours gratuits</b>. La Pyramide est aussi joker.</p>
         </div>
         <div class="intro-card featured">
           <div class="intro-art expand"><img src="${images[Sym.ZERO]}" alt=""><img src="${images[Sym.ZERO]}" alt=""><img src="${images[Sym.ZERO]}" alt=""></div>

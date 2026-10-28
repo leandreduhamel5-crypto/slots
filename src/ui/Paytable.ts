@@ -41,17 +41,17 @@ export class Paytable {
         <section class="pt-codex">
           <img src="${this.images[Sym.CODEX]}" alt="Codex">
           <div>
-            <h3>Le Livre : joker et scatter</h3>
+            <h3>La Pyramide : joker et scatter</h3>
             <p>Il remplace tous les symboles sur une ligne. Il paie aussi n'importe où sur les rouleaux, multiplié par la mise totale.</p>
-            <p><b>3 Livres ou plus</b> déclenchent <b>10 tours gratuits</b>.</p>
+            <p><b>3 Pyramides ou plus</b> déclenchent <b>10 tours gratuits</b>.</p>
             <ul class="pt-inline"><li><b>5×</b> ${fmt(200 * bet)}</li><li><b>4×</b> ${fmt(20 * bet)}</li><li><b>3×</b> ${fmt(2 * bet)}</li></ul>
           </div>
         </section>
 
         <section>
           <h3>Tours gratuits : la souche</h3>
-          <p>Avant les tours gratuits, le Livre choisit au hasard un <b>symbole infecté</b>, la souche. Quand elle apparaît sur assez de rouleaux pour payer, elle <b>s'étend sur toute la hauteur de chaque rouleau</b>. Elle paie alors sur les 10 lignes, même si les rouleaux ne sont pas côte à côte.</p>
-          <p><b>Mutation</b> : chaque fois que 3 Livres retombent pendant les tours gratuits, vous gagnez <b>+10 tours</b> et une <b>souche supplémentaire</b> s'ajoute (jusqu'à ${MAX_EXPANDING} souches actives en même temps).</p>
+          <p>Avant les tours gratuits, la Pyramide choisit au hasard un <b>symbole infecté</b>, la souche. Quand elle apparaît sur assez de rouleaux pour payer, elle <b>s'étend sur toute la hauteur de chaque rouleau</b>. Elle paie alors sur les 10 lignes, même si les rouleaux ne sont pas côte à côte.</p>
+          <p><b>Mutation</b> : chaque fois que 3 Pyramides retombent pendant les tours gratuits, vous gagnez <b>+10 tours</b> et une <b>souche supplémentaire</b> s'ajoute (jusqu'à ${MAX_EXPANDING} souches actives en même temps).</p>
         </section>
 
         <section>

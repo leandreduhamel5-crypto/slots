@@ -91,6 +91,8 @@ function drawRoyal(key: string): HTMLCanvasElement {
   return c;
 }
 
+/** painted art from the concept sheet framed with too much margin */
+const OVERRIDE_ZOOM: Record<string, number> = { codex: 1.28 };
 const PREMIUM_ZOOM: Record<string, number> = { codex: 1.1, zero: 1.12, mask: 1.12, antidote: 1.08, blood: 1.08 };
 
 const PREMIUM_AURA: Record<string, string> = {
@@ -230,6 +232,24 @@ function framed(): HTMLCanvasElement {
   return paintEgyptFrame({ boardW: BOARD_W, boardH: BOARD_H, pad: FRAME_PAD, bleed: FRAME_BLEED });
 }
 
+/** The procedural Book art (whatever the reel symbol uses): the logo cuts its eye out of it. */
+export function bookCanvas(): HTMLCanvasElement {
+  const painted = PAINTED.codex();
+  const [full, f] = makeCanvas(TEX_SIZE, TEX_SIZE);
+  const k = PREMIUM_ZOOM.codex;
+  const draw = (src: HTMLCanvasElement) => {
+    const small = downsample(src, TEX_SIZE);
+    f.save();
+    f.translate(TEX_SIZE / 2, TEX_SIZE / 2);
+    f.scale(k, k);
+    f.drawImage(small, -TEX_SIZE / 2, -TEX_SIZE / 2);
+    f.restore();
+  };
+  draw(painted.base);
+  for (const [name, pc] of Object.entries(painted.parts)) if (name !== 'lid') draw(pc);
+  return full;
+}
+
 export async function buildSymbolTextures(overrides: Map<string, HTMLImageElement> = new Map()): Promise<SymbolTextures> {
   const canvases: HTMLCanvasElement[] = [];
   const glowCanvases: HTMLCanvasElement[] = [];
@@ -238,7 +258,15 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     const custom = overrides.get(def.key);
     if (custom) {
       // professional artwork from public/assets: used as-is, no procedural rig
-      const c = containCanvas(custom, TEX_SIZE);
+      let c = containCanvas(custom, TEX_SIZE);
+      const k = OVERRIDE_ZOOM[def.key] ?? 1;
+      if (k !== 1) {
+        const [z, zc] = makeCanvas(TEX_SIZE, TEX_SIZE);
+        zc.translate(TEX_SIZE / 2, TEX_SIZE / 2 + TEX_SIZE * 0.04);
+        zc.scale(k, k);
+        zc.drawImage(c, -TEX_SIZE / 2, -TEX_SIZE / 2);
+        c = z;
+      }
       canvases.push(c);
       glowCanvases.push(softGlow(c, 12));
     } else if (PAINTED[def.key]) {

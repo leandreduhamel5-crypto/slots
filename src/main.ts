@@ -9,7 +9,7 @@ import './style.css';
 import { Application } from 'pixi.js';
 import gsap from 'gsap';
 import { Game } from './game/Game';
-import { buildSymbolTextures } from './game/textures';
+import { bookCanvas, buildSymbolTextures } from './game/textures';
 import { buildMascotTextures } from './game/Mascot';
 import { warmDigits } from './game/Digits';
 import { loadAssets } from './game/assets';
@@ -48,7 +48,7 @@ async function boot(): Promise<void> {
   warmDigits([118, 114, 56, 54]);
   setProgress(1);
 
-  const game = new Game(app, tex, tex.canvases[0], mascot, assets, egypt.extra.templeNight, egypt.extra.templeInfected);
+  const game = new Game(app, tex, bookCanvas(), mascot, assets, egypt.extra.templeNight, egypt.extra.templeInfected);
   if (import.meta.env.DEV) Object.assign(window, { game, app, gsap });
 
   const loader = document.getElementById('loader');

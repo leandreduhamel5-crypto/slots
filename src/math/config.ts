@@ -25,7 +25,7 @@ export interface SymbolDef {
 }
 
 export const SYMBOLS: SymbolDef[] = [
-  { id: Sym.CODEX, key: 'codex', name: "Livre de l'Infection", pays: [0, 0, 0, 2, 20, 200] },
+  { id: Sym.CODEX, key: 'codex', name: "Pyramide de l'Infection", pays: [0, 0, 0, 2, 20, 200] },
   { id: Sym.ZERO, key: 'zero', name: 'Pharaon', pays: [0, 0, 10, 100, 1000, 5000] },
   { id: Sym.MASK, key: 'mask', name: 'Anubis', pays: [0, 0, 5, 40, 400, 2000] },
   { id: Sym.ANTIDOTE, key: 'antidote', name: 'Scarabée', pays: [0, 0, 0, 30, 100, 750] },

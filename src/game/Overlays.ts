@@ -501,7 +501,7 @@ export class Overlays extends Container {
     await this.waitOrSkip(1700);
 
     gsap.to(book, { alpha: 0, duration: 0.3 });
-    const caption = new Text({ text: 'LE LIVRE CHOISIT UNE SOUCHE…', style: title(42, '#ffb0b8', '#ff3347') });
+    const caption = new Text({ text: 'LA PYRAMIDE CHOISIT UNE SOUCHE…', style: title(42, '#ffb0b8', '#ff3347') });
     caption.anchor.set(0.5);
     caption.y = 230;
     this.content.addChild(caption);
