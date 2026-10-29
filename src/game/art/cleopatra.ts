@@ -335,8 +335,8 @@ function face(): HTMLCanvasElement {
   const faceP = path((p) => {
     p.moveTo(262, 120);
     p.bezierCurveTo(312, 120, 336, 156, 336, 206);
-    p.bezierCurveTo(336, 252, 312, 290, 262, 306);
-    p.bezierCurveTo(212, 290, 188, 252, 188, 206);
+    p.bezierCurveTo(336, 258, 306, 298, 262, 306);
+    p.bezierCurveTo(218, 298, 188, 258, 188, 206);
     p.bezierCurveTo(188, 156, 212, 120, 262, 120);
     p.closePath();
   });
@@ -375,8 +375,8 @@ function face(): HTMLCanvasElement {
   ctx.bezierCurveTo(268, 248, 268, 232, 270, 214);
   ctx.fill();
   ctx.restore();
-  ctx.strokeStyle = 'rgba(255,236,210,0.55)';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,236,210,0.28)';
+  ctx.lineWidth = 3;
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(258, 218);
@@ -467,6 +467,8 @@ function eyesBase(): HTMLCanvasElement {
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = '#0c0608';
+    ctx.lineWidth = 1.2;
+    ctx.lineCap = 'round';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(ex - s * 20, ey + 3);
@@ -484,8 +486,8 @@ function irises(): HTMLCanvasElement {
   for (const [ex, ey] of EYE0) {
     ctx.save();
     ctx.beginPath();
-    ctx.arc(ex, ey - 1, 8, 0, Math.PI * 2);
-    ctx.fillStyle = rg(ctx, ex, ey - 1, 1, 8, [[0, '#f6c040'], [0.55, '#b0681a'], [1, '#3a1a06']]);
+    ctx.arc(ex, ey - 1, 9, 0, Math.PI * 2);
+    ctx.fillStyle = rg(ctx, ex, ey - 1, 1, 9, [[0, '#f6c040'], [0.55, '#b0681a'], [1, '#3a1a06']]);
     ctx.fill();
     ctx.beginPath();
     ctx.arc(ex, ey - 1, 3.4, 0, Math.PI * 2);
