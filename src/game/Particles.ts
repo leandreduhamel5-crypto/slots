@@ -137,6 +137,11 @@ export class Particles extends Container {
     this.rainState = { textures, width, rate, acc: 0 };
   }
 
+  /** Heavier rain (big-win tiers escalate it). */
+  setRainRate(rate: number): void {
+    if (this.rainState) this.rainState.rate = rate;
+  }
+
   stopRain(): void {
     this.rainState = null;
   }
@@ -159,7 +164,7 @@ export class Particles extends Container {
         const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.4;
         const v = 800 + Math.random() * 700;
         const r = Math.random();
-        const kind: Kind = this.tex.coin ? (r < 0.7 ? 'coin' : r < 0.85 ? 'drop' : 'spark') : r < 0.55 ? 'drop' : r < 0.75 ? 'cyan' : 'star';
+        const kind: Kind = this.tex.coin ? (r < 0.82 ? 'coin' : r < 0.92 ? 'star' : 'spark') : r < 0.55 ? 'drop' : r < 0.75 ? 'cyan' : 'star';
         const size = kind === 'coin' ? 40 + Math.random() * 24 : kind === 'star' ? 50 : 34 + Math.random() * 20;
         this.add(kind, f.x + (Math.random() - 0.5) * 80, f.y, Math.cos(a) * v, Math.sin(a) * v, 1.5 + Math.random(), size);
       }
@@ -169,7 +174,7 @@ export class Particles extends Container {
       r.acc += r.rate * dt;
       while (r.acc >= 1) {
         r.acc--;
-        if (this.tex.coin && Math.random() < 0.55) {
+        if (this.tex.coin && Math.random() < 0.88) {
           this.add('coin', Math.random() * r.width, -60, (Math.random() - 0.5) * 80, 150 + Math.random() * 250, 2.6, 44 + Math.random() * 26);
           continue;
         }

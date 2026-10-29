@@ -19,7 +19,8 @@ export const COLORS = {
 
 /** One colour per payline so overlapping wins stay readable. */
 export const LINE_COLORS = [
-  0xffd23f, 0xff3347, 0x2ad0c8, 0x3a6cff, 0xff8a1a, 0xf6e6c0, 0xd81b60, 0x9ae05a, 0xc78bff, 0xffa8a0,
+  // warm temple palette: golds, ambers, embers and reds, distinct enough to tell lines apart
+  0xffd23f, 0xff3a2a, 0xffa030, 0xfff0c0, 0xff6a50, 0xe8b860, 0xff2a6a, 0xffc890, 0xd88a2a, 0xff8a7a,
 ];
 
 export function reelX(reel: number): number {

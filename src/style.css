@@ -1760,3 +1760,324 @@ button {
   padding-left: 16px;
   padding-right: 16px;
 }
+
+/* =====================================================================
+   Console v2: clean three-zone layout (desktop) / two rows (portrait)
+   ===================================================================== */
+#hud.console {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-areas: 'left center right';
+  align-items: center;
+  gap: 24px;
+  height: calc(104px + var(--safe-b));
+  padding: 0 28px var(--safe-b);
+}
+#hud.console .c-parts {
+  display: none;
+}
+#hud.console .c-row {
+  display: none;
+}
+#hud.console .c-zone {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+#hud.console .c-left {
+  grid-area: left;
+  justify-content: flex-start;
+}
+#hud.console .c-center {
+  grid-area: center;
+  justify-content: center;
+}
+#hud.console .c-right {
+  grid-area: right;
+  justify-content: flex-end;
+}
+#hud.console .c-sys,
+#hud.console .c-bet,
+#hud.console .c-play {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#hud.console .c-play {
+  gap: 18px;
+}
+
+/* cartouche meters */
+#hud.console .c-meter {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+  height: 62px;
+  padding: 0 26px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 0%, rgba(255, 200, 120, 0.1), transparent 70%) padding-box,
+    linear-gradient(180deg, #170908, #070203) padding-box,
+    var(--gold-metal) border-box;
+  box-shadow:
+    0 0 0 2px #0a0405,
+    0 6px 14px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.9),
+    inset 0 0 0 3px rgba(242, 194, 90, 0.3),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+#hud.console .c-meter::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 2px;
+  height: 38%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 240, 210, 0.1), transparent);
+  pointer-events: none;
+}
+#hud.console .c-meter label {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #e8b850;
+  text-shadow: 0 1px 0 #000;
+  margin-bottom: 4px;
+}
+#hud.console .c-meter span {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #fffaf0 0%, #ffe6b0 45%, #e2a848 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 0 #000);
+}
+#hud.console .c-betmeter {
+  min-width: 112px;
+  padding: 0 18px;
+}
+#hud.console .c-win {
+  min-width: 190px;
+}
+#hud.console .c-win.lit {
+  background:
+    radial-gradient(ellipse 80% 90% at 50% 40%, rgba(255, 180, 50, 0.38), transparent 75%) padding-box,
+    linear-gradient(180deg, #2a1406, #0e0603) padding-box,
+    var(--gold-metal) border-box;
+  animation: cartouche-lit 0.5s ease-out;
+}
+#hud.console .c-win.lit span {
+  background: linear-gradient(180deg, #fffbe8 0%, #ffd65a 50%, #ff9a1a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 2px 0 #000) drop-shadow(0 0 10px rgba(255, 190, 60, 0.7));
+}
+#hud.console .c-win.lit::after {
+  left: -60%;
+  right: auto;
+  width: 40%;
+  height: 100%;
+  top: 0;
+  border-radius: 0;
+  background: linear-gradient(100deg, transparent, rgba(255, 245, 210, 0.45), transparent);
+  animation: sheen 1.6s ease-in-out infinite;
+}
+#hud.console.feature .c-win label {
+  color: #ff6a50;
+}
+
+/* medallion buttons */
+#hud.console .c-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 60%, rgba(31, 66, 168, 0.85) 62% 68%, transparent 70%) padding-box,
+    var(--lacquer) padding-box,
+    var(--gold-ring) border-box;
+  box-shadow:
+    0 0 0 1.5px #0a0405,
+    0 4px 0 #040101,
+    0 6px 12px rgba(0, 0, 0, 0.55),
+    inset 0 2px 0 rgba(255, 230, 170, 0.18),
+    inset 0 -6px 10px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  transition: transform 0.08s, filter 0.2s, box-shadow 0.08s, opacity 0.2s;
+}
+#hud.console .c-btn::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 240, 200, 0.35) 50%, transparent 65%);
+  transform: translateX(-80%);
+  transition: transform 0.45s ease;
+  pointer-events: none;
+}
+#hud.console .c-btn:hover:not(:disabled)::after {
+  transform: translateX(80%);
+}
+#hud.console .c-btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+#hud.console .c-btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 1.5px #0a0405, 0 1px 0 #040101, inset 0 2px 0 rgba(255, 230, 170, 0.18);
+}
+#hud.console .c-btn:disabled {
+  opacity: 0.35;
+  filter: grayscale(0.7);
+  cursor: default;
+}
+#hud.console .c-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: url(#hud-gold);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1.5px 0 #000);
+}
+#hud.console .c-step svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 3;
+}
+#hud.console .c-btn.active {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 120, 90, 0.9), #b0141c 55%, #3a0206 100%) padding-box,
+    var(--gold-ring) border-box;
+  box-shadow: 0 0 0 1.5px #0a0405, 0 4px 0 #040101, 0 0 18px rgba(255, 50, 40, 0.65);
+}
+#hud.console .c-btn.active svg {
+  stroke: #fff6e8;
+}
+#hud.console .c-turbo.active svg {
+  fill: #ffe6a0;
+}
+
+/* spin: sits fully inside the console */
+#hud.console .spin {
+  width: 92px;
+  height: 92px;
+  margin: 0;
+}
+#hud.console .spin-icon svg {
+  width: 46px;
+  height: 46px;
+}
+#hud.console.spinning .c-step,
+#hud.console.locked .c-btn {
+  pointer-events: none;
+}
+#hud.console.locked .c-zone,
+#hud.console.locked .c-row {
+  opacity: 0.55;
+}
+
+/* ---- portrait phones ---- */
+#hud.console.mobile {
+  grid-template-columns: 1fr;
+  grid-template-areas: 'r1' 'r2';
+  height: auto;
+  gap: 10px;
+  padding: 12px 10px calc(12px + var(--safe-b));
+}
+#hud.console.mobile .c-zone {
+  display: none;
+}
+#hud.console.mobile .c-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#hud.console.mobile .c-row1 {
+  grid-area: r1;
+}
+#hud.console.mobile .c-row1 .c-meter {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+}
+#hud.console.mobile .c-row2 {
+  grid-area: r2;
+}
+#hud.console.mobile .c-sys {
+  flex-direction: column;
+  gap: 8px;
+}
+#hud.console.mobile .c-btn {
+  width: 40px;
+  height: 40px;
+}
+#hud.console.mobile .c-btn svg {
+  width: 18px;
+  height: 18px;
+}
+#hud.console.mobile .c-bet {
+  gap: 5px;
+}
+#hud.console.mobile .c-betmeter {
+  min-width: 74px;
+  padding: 0 8px;
+  height: 52px;
+}
+#hud.console.mobile .c-meter span {
+  font-size: 21px;
+}
+#hud.console.mobile .c-play {
+  display: grid;
+  grid-template-areas: 'spin auto' 'spin turbo';
+  gap: 8px 6px;
+}
+#hud.console.mobile .c-play .spin {
+  grid-area: spin;
+  width: 86px;
+  height: 86px;
+}
+#hud.console.mobile .c-auto {
+  grid-area: auto;
+}
+#hud.console.mobile .c-turbo {
+  grid-area: turbo;
+}
+@media (max-width: 360px) {
+  #hud.console.mobile .c-btn {
+    width: 36px;
+    height: 36px;
+  }
+  #hud.console.mobile .c-play .spin {
+    width: 78px;
+    height: 78px;
+  }
+  #hud.console.mobile .c-betmeter {
+    min-width: 66px;
+  }
+}
+#hud.console .c-step svg {
+  stroke: #f4c752;
+}
+#hud.console .c-btn:disabled svg {
+  stroke: #8a6a3a;
+}

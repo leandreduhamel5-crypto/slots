@@ -1,5 +1,5 @@
 import { Container, FillGradient, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
-import { MATERIALS, render3DText } from './art/painters';
+import { BLOOD_METAL, GOLD, IVORY, metalTitle, textMask } from './art/logoArt';
 import { paintArrowHead, paintBanner, paintCartouche, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
 import { Digits } from './Digits';
 import gsap from 'gsap';
@@ -89,12 +89,29 @@ export class Overlays extends Container {
     const key = `${text}|${size}|${material}`;
     let t = this.headCache.get(key);
     if (!t) {
-      t = Texture.from(render3DText(text, { size, material: MATERIALS[material] }));
+      // cast-metal lettering like the logo, painted at 2x
+      const spec = material === 'infection' || material === 'blood' ? BLOOD_METAL : material === 'bone' ? IVORY : GOLD;
+      const mask = textMask(text, 'Cinzel, serif', size * 2, size * 0.12, size * 0.5);
+      const cracks = spec === BLOOD_METAL ? Math.max(4, Math.round(text.length * 1.4)) : 0;
+      t = Texture.from(metalTitle(mask, { ...spec, bevel: size * 0.11 }, { outline: size * 0.11, cracks, seed: text.length * 7 }));
       this.headCache.set(key, t);
     }
     const s = new Sprite(t);
     s.anchor.set(0.5);
+    s.scale.set(0.5);
     return s;
+  }
+
+  /** Paint the big titles ahead of time, a frame apart, so nothing hitches when they appear. */
+  private warmTitles(): void {
+    const jobs: [string, number, string][] = [...WIN_TIERS.map((t) => [t.name, 104, t.material] as [string, number, string]), ['10 TOURS GRATUITS', 88, 'gold']];
+    const next = () => {
+      const j = jobs.shift();
+      if (!j) return;
+      this.head3d(...j);
+      setTimeout(next, 120);
+    };
+    setTimeout(next, 1500);
   }
 
   constructor(
@@ -104,8 +121,7 @@ export class Overlays extends Container {
   ) {
     super();
     this.particles = new Particles(tex);
-    for (const t of WIN_TIERS) this.head3d(t.name, 104, t.material);
-    this.head3d('10 TOURS GRATUITS', 88, 'gold');
+    this.warmTitles();
     this.addChild(this.dim, this.back, this.emberLayer, this.particles, this.content);
     this.visible = false;
     this.eventMode = 'static';
@@ -284,6 +300,24 @@ export class Overlays extends Container {
 
   private bannerCache = new Map<string, { tex: Texture; cy: number }>();
   private shrineTex: Texture | null = null;
+  private band: Texture | null = null;
+  private bandTex(): Texture {
+    if (!this.band) {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 64;
+      const ctx = c.getContext('2d')!;
+      const g = ctx.createRadialGradient(128, 32, 4, 128, 32, 128);
+      g.addColorStop(0, 'rgba(4,1,2,0.75)');
+      g.addColorStop(0.6, 'rgba(4,1,2,0.45)');
+      g.addColorStop(1, 'rgba(4,1,2,0)');
+      ctx.setTransform(1, 0, 0, 0.25, 0, 24);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, -96, 256, 256);
+      this.band = Texture.from(c);
+    }
+    return this.band;
+  }
   private arrowTex: Texture | null = null;
 
   /** Gold-railed lacquer banner crowned by a winged sun (painted once per size). */
@@ -354,17 +388,19 @@ export class Overlays extends Container {
     this.popIn(heading, 0.15);
     this.popIn(plate, 0.2);
     this.popIn(amount, 0.25);
-    this.audio.stinger(0);
+    this.audio.impact(1);
+    this.audio.tierUp(0);
     this.fx.shockwave();
     this.fx.shake(10);
     this.fx.thump(0.35);
     this.particles.impact(this.w / 2, this.h / 2, 1.6);
     this.particles.startFountain(this.w / 2, this.h * 0.7, 30);
     this.audio.coins(24);
-    this.particles.startRain([Sym.CODEX, Sym.ANTIDOTE, Sym.BLOOD, Sym.ZERO].map((s) => this.tex.normal[s]), this.w, 6);
+    this.particles.startRain([Sym.CODEX].map((s) => this.tex.normal[s]), this.w, 10);
     this.fx.punch(1);
 
     const duration = 2.1 * (top + 1);
+    this.audio.timpaniRoll(duration);
     const counter = { v: 0 };
     let tier = 0;
     let lastTick = 0;
@@ -402,40 +438,46 @@ export class Overlays extends Container {
   private upgrade(heading: Sprite, tier: number): void {
     const t = WIN_TIERS[tier];
     heading.texture = this.head3d(t.name, 104, t.material).texture;
-    gsap.fromTo(heading.scale, { x: 1.7, y: 0.6 }, { x: 1, y: 1, duration: 0.6, ease: 'elastic.out(1.2, 0.4)' });
+    gsap.fromTo(heading.scale, { x: 0.85, y: 0.3 }, { x: 0.5, y: 0.5, duration: 0.6, ease: 'elastic.out(1.2, 0.4)' });
     if (this.burstRays) this.retint(this.burstRays, t.ray);
-    this.audio.stinger(tier);
+    this.audio.tierUp(tier);
     this.fx.shockwave();
     this.fx.shake(10 + tier * 6);
     this.fx.glitch(1 + tier);
     this.fx.thump(0.3 + tier * 0.1);
     this.particles.impact(this.w / 2, this.h * 0.38, 1.2 + tier * 0.3);
     this.particles.burst(this.w / 2, this.h * 0.45, 30 + tier * 20, 1 + tier * 0.2);
-    this.particles.startRain([Sym.CODEX, Sym.ANTIDOTE, Sym.BLOOD, Sym.ZERO].map((s) => this.tex.normal[s]), this.w, 6 + tier * 6);
+    this.particles.setRainRate(10 + tier * 9);
     this.fx.punch(1 + tier * 0.3);
   }
 
   /** Cartoon slot-window roulette that lands on the chosen strain. */
+  /**
+   * The strain draw as a carousel: the premium symbols race sideways through a gold reliquary,
+   * scaled and dimmed with their distance from it, decelerate, and lock onto the strain with a
+   * flash and a shockwave.
+   */
   private async roulette(y: number, final: Sym, exclude: Sym[] = []): Promise<void> {
     const pool = PREMIUM_EXPANDERS.filter((s) => s === final || !exclude.includes(s));
     const box = new Container();
     box.y = y;
     const aura = new Sprite(this.tex.glow);
     aura.anchor.set(0.5);
-    aura.width = aura.height = 560;
+    aura.width = aura.height = 620;
     aura.tint = COLORS.infection;
     aura.blendMode = 'add';
-    aura.alpha = 0.55;
-    gsap.to(aura.scale, { x: aura.scale.x * 1.12, y: aura.scale.y * 1.12, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    aura.alpha = 0.45;
+    gsap.to(aura.scale, { x: aura.scale.x * 1.1, y: aura.scale.y * 1.1, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    // a dark band the carousel runs along
+    const band = new Sprite(this.bandTex());
+    band.anchor.set(0.5);
+    band.width = 1600;
+    band.height = 300;
     this.shrineTex ??= Texture.from(paintShrineFrame(300, 290));
     const frame = new Sprite(this.shrineTex);
     frame.anchor.set(0.5);
     frame.scale.set(0.5);
     frame.y = -5;
-    const sprite = new Sprite(this.tex.normal[pool[0]]);
-    sprite.anchor.set(0.5);
-    sprite.width = sprite.height = 220;
-    sprite.y = -6;
     this.arrowTex ??= Texture.from(paintArrowHead());
     const arrowL = new Sprite(this.arrowTex);
     const arrowR = new Sprite(this.arrowTex);
@@ -443,35 +485,86 @@ export class Overlays extends Container {
       a.anchor.set(0.5);
       a.scale.set(-0.5 * d, 0.5);
       a.position.set(d * 186, -6);
-      gsap.to(a, { x: d * 176, duration: 0.35, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
-    box.addChild(aura);
-    box.addChild(frame, sprite, arrowL, arrowR);
+    const strip = new Container();
+    const spacing = 250;
+    const count = pool.length * 6;
+    const items: Sprite[] = [];
+    const startIndex = Math.floor(Math.random() * pool.length);
+    for (let k = 0; k < count; k++) {
+      const sp = new Sprite(this.tex.normal[pool[(startIndex + k) % pool.length]]);
+      sp.anchor.set(0.5);
+      items.push(sp);
+      strip.addChild(sp);
+    }
+    // land on a copy of the final symbol in the last third of the strip
+    let target = count - 1;
+    for (let k = count - pool.length * 2; k < count - pool.length; k++) if (pool[(startIndex + k) % pool.length] === final) target = k;
+    const flash = new Sprite(this.tex.glow);
+    flash.anchor.set(0.5);
+    flash.blendMode = 'add';
+    flash.alpha = 0;
+    box.addChild(aura, band, frame, strip, arrowL, arrowR, flash);
+    box.y = y - 6;
     this.content.addChild(box);
-    this.popIn(box);
+    gsap.fromTo(box, { alpha: 0 }, { alpha: 1, duration: 0.3 });
+    this.popIn(frame, 0, 0.4);
 
-    let i = Math.floor(Math.random() * pool.length);
-    let delay = 40;
-    const steps = 22 + Math.floor(Math.random() * 4);
-    for (let k = 0; k < steps; k++) {
-      i = (i + 1) % pool.length;
-      const s = k === steps - 1 ? final : pool[i];
-      sprite.texture = this.tex.normal[s];
-      sprite.width = sprite.height = 220;
-      gsap.fromTo(sprite, { y: -36 }, { y: -6, duration: Math.min(0.12, delay / 1000), ease: 'power1.out' });
-      this.audio.tick();
-      await new Promise((r) => setTimeout(r, delay));
-      delay *= 1.08;
-    }
+    const state = { off: 0 };
+    let lastIdx = -1;
+    const layout = () => {
+      for (let k = 0; k < count; k++) {
+        const sp = items[k];
+        const d = k * spacing - state.off;
+        const ad = Math.abs(d);
+        const near = Math.max(0, 1 - ad / 760);
+        sp.visible = ad < 900;
+        sp.x = d * (0.85 + near * 0.15);
+        const size = 120 + 110 * Math.pow(near, 2);
+        sp.width = sp.height = size;
+        sp.alpha = Math.min(1, near * 1.6);
+        const v = Math.round(90 + 165 * Math.pow(near, 3));
+        sp.tint = (v << 16) | (v << 8) | v;
+      }
+      const idx = Math.round(state.off / spacing);
+      if (idx !== lastIdx) {
+        lastIdx = idx;
+        this.audio.tick(Math.min(1, state.off / (target * spacing)));
+        gsap.fromTo(frame.scale, { x: 0.515, y: 0.49 }, { x: 0.5, y: 0.5, duration: 0.12 });
+        for (const ar of [arrowL, arrowR]) gsap.fromTo(ar, { alpha: 1 }, { alpha: 0.55, duration: 0.15 });
+      }
+    };
+    layout();
+    await new Promise<void>((resolve) => {
+      this.audio.riser(3.1, 0.8);
+      gsap.to(state, { off: target * spacing, duration: 3.4, ease: 'power4.out', onUpdate: layout, onComplete: resolve });
+      const skipWatch = () => {
+        if (this.skipRequested) {
+          this.skipRequested = false;
+          gsap.killTweensOf(state);
+          state.off = target * spacing;
+          layout();
+          resolve();
+        } else if (gsap.isTweening(state)) requestAnimationFrame(skipWatch);
+      };
+      requestAnimationFrame(skipWatch);
+    });
+    // lock: everything else falls away, the strain blazes
+    const chosen = items[target];
+    for (const sp of items) if (sp !== chosen) gsap.to(sp, { alpha: 0, duration: 0.35 });
+    this.audio.impact(1.2);
     this.audio.codex(4);
     this.fx.shockwave();
-    this.fx.thump(0.35);
-    const sx = sprite.scale.x;
-    gsap.fromTo(sprite.scale, { x: sx * 1.5, y: sx * 0.7 }, { x: sx, y: sx, duration: 0.7, ease: 'elastic.out(1.2, 0.35)' });
-    gsap.fromTo(frame.scale, { x: 1.1, y: 0.92 }, { x: 1, y: 1, duration: 0.5, ease: 'elastic.out(1.2, 0.4)' });
+    this.fx.thump(0.45);
+    this.fx.shake(14);
+    gsap.fromTo(flash, { alpha: 1, width: 200, height: 200 }, { alpha: 0, width: 900, height: 900, duration: 0.6, ease: 'power2.out' });
+    gsap.fromTo(chosen, { width: 330, height: 330 }, { width: 240, height: 240, duration: 0.7, ease: 'elastic.out(1.2, 0.35)' });
+    gsap.fromTo(frame.scale, { x: 0.56, y: 0.46 }, { x: 0.5, y: 0.5, duration: 0.5, ease: 'elastic.out(1.2, 0.4)' });
+    gsap.to(aura, { alpha: 0.85, duration: 0.2 });
+    gsap.to(band, { alpha: 0, duration: 0.4 });
     const sc = this.content.scale.y;
-    this.particles.impact(this.w / 2, this.h / 2 + y * sc, 1.2);
-    this.particles.burst(this.w / 2, this.h / 2 + y * sc, 30, 0.8);
+    this.particles.impact(this.w / 2, this.h / 2 + y * sc, 1.4);
+    this.particles.burst(this.w / 2, this.h / 2 + y * sc, 40, 0.9);
   }
 
   async featureIntro(special: Sym, spins: number): Promise<void> {
@@ -480,46 +573,81 @@ export class Overlays extends Container {
     this.fx.shake(16);
     this.fx.glitch(3);
     this.sunburst(0x46060c);
-    const book = new Sprite(this.tex.normal[Sym.CODEX]);
-    book.anchor.set(0.5);
-    book.width = book.height = 440;
-    book.y = 10;
-    const ribbon = this.ribbon(1120, 150, 0x8a0f26);
-    ribbon.y = -300;
+    // the pyramid rises out of a pillar of light
+    const pillar = new Sprite(this.tex.glow);
+    pillar.anchor.set(0.5);
+    pillar.blendMode = 'add';
+    pillar.tint = 0xff4a30;
+    pillar.width = 260;
+    pillar.height = 1400;
+    pillar.alpha = 0;
+    const ring = new Sprite(this.tex.glow);
+    ring.anchor.set(0.5);
+    ring.blendMode = 'add';
+    ring.tint = 0xffc870;
+    const pyr = new Sprite(this.tex.normal[Sym.CODEX]);
+    pyr.anchor.set(0.5);
+    pyr.width = pyr.height = 420;
+    pyr.y = 30;
     const head = this.head3d(`${spins} TOURS GRATUITS`, 88, 'gold');
-    head.y = -312;
-    this.content.addChild(book, ribbon, head);
-    gsap.fromTo(book, { y: -700 }, { y: 10, duration: 0.45, ease: 'power3.in' });
-    gsap.delayedCall(0.45, () => {
-      this.fx.shake(22);
+    head.y = -330;
+    this.content.addChild(pillar, ring, pyr, head);
+    gsap.fromTo(pillar, { alpha: 0, width: 40 }, { alpha: 0.9, width: 300, duration: 0.35, ease: 'power2.out' });
+    gsap.to(pillar, { alpha: 0, duration: 0.8, delay: 0.6 });
+    gsap.fromTo(pyr, { y: 500, alpha: 0 }, { y: 30, alpha: 1, duration: 0.55, ease: 'power3.out', delay: 0.15 });
+    const ps = pyr.scale.x;
+    gsap.fromTo(pyr.scale, { x: ps * 0.4, y: ps * 0.4 }, { x: ps, y: ps, duration: 0.55, ease: 'back.out(1.6)', delay: 0.15 });
+    gsap.delayedCall(0.7, () => {
+      this.fx.shake(20);
+      this.fx.shockwave();
       this.particles.impact(this.w / 2, this.h / 2, 1.8);
-      const s = book.scale.x;
-      gsap.fromTo(book.scale, { x: s * 1.35, y: s * 0.7 }, { x: s, y: s, duration: 0.6, ease: 'elastic.out(1.2, 0.35)' });
+      gsap.fromTo(ring, { alpha: 1, width: 100, height: 100 }, { alpha: 0, width: 1100, height: 1100, duration: 0.8, ease: 'power2.out' });
     });
-    this.popIn(ribbon, 0.6);
-    this.popIn(head, 0.65);
-    await this.waitOrSkip(1700);
+    // the title slams in
+    head.alpha = 0;
+    gsap.delayedCall(0.75, () => {
+      head.alpha = 1;
+      gsap.fromTo(head.scale, { x: 1.3, y: 1.3 }, { x: 0.5, y: 0.5, duration: 0.35, ease: 'power3.in', onComplete: () => this.fx.shake(10) });
+    });
+    gsap.to(pyr, { rotation: 0.04, duration: 1.2, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.7 });
+    await this.waitOrSkip(1900);
 
-    gsap.to(book, { alpha: 0, duration: 0.3 });
-    const caption = new Text({ text: 'LA PYRAMIDE CHOISIT UNE SOUCHE…', style: title(42, '#ffb0b8', '#ff3347') });
+    // the pyramid rises above the reliquary and pours its light into it
+    gsap.to(pyr, { y: -175, duration: 0.5, ease: 'power2.inOut' });
+    gsap.to(pyr.scale, { x: ps * 0.42, y: ps * 0.42, duration: 0.5, ease: 'power2.inOut' });
+    const beam = new Sprite(this.tex.glow);
+    beam.anchor.set(0.5, 0);
+    beam.blendMode = 'add';
+    beam.tint = 0xff3a24;
+    beam.position.set(0, -150);
+    beam.width = 90;
+    beam.height = 0;
+    this.content.addChildAt(beam, this.content.getChildIndex(pyr));
+    gsap.to(beam, { height: 220, alpha: 0.8, duration: 0.5, delay: 0.3 });
+    await this.waitOrSkip(450);
+    const caption = new Text({ text: 'LA PYRAMIDE CHOISIT UNE SOUCHE…', style: body(30, 0xffb0a0) });
     caption.anchor.set(0.5);
-    caption.y = 230;
+    caption.y = 210;
     this.content.addChild(caption);
-    this.popIn(caption);
-    await this.roulette(-20, special);
+    gsap.fromTo(caption, { alpha: 0 }, { alpha: 1, duration: 0.4 });
+    gsap.to(caption, { alpha: 0.5, duration: 0.6, yoyo: true, repeat: -1, delay: 0.4 });
+    await this.roulette(40, special);
+    gsap.killTweensOf(caption);
     caption.destroy();
+    gsap.to(beam, { alpha: 0, duration: 0.4 });
     const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 54, 'blood');
-    strain.y = 228;
+    strain.y = 236;
     this.content.addChild(strain);
     this.popIn(strain);
-    const rule = new Text({ text: 'elle envahit tout le rouleau et paie sur les 10 lignes', style: body(30, 0xe8dcf0) });
+    const rule = new Text({ text: 'ELLE ENVAHIT TOUT LE ROULEAU ET PAIE SUR LES 10 LIGNES', style: body(22, 0xe8d8c0) });
     rule.anchor.set(0.5);
-    rule.y = 295;
-    const go = new Text({ text: 'TOUCHEZ POUR COMMENCER', style: title(32, '#ffffff', '#ff7a86') });
+    rule.y = 298;
+    const go = new Text({ text: 'TOUCHEZ POUR COMMENCER', style: body(26, 0xffd27a) });
     go.anchor.set(0.5);
-    go.y = 360;
-    gsap.to(go.scale, { x: 1.08, y: 1.08, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    go.y = 352;
+    gsap.to(go, { alpha: 0.4, duration: 0.7, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.content.addChild(rule, go);
+    gsap.fromTo([rule, go], { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.3 });
     await this.waitOrSkip(4500);
     await this.close();
   }

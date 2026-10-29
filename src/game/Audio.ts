@@ -283,7 +283,7 @@ export class Audio {
   /** Metallic inharmonic bell (codex). */
   private bell(at: number, f: number, vol: number, pan: Pan = 0): void {
     [1, 2.76, 5.4, 8.93, 13.34].forEach((r, k) =>
-      this.voice({ at, f: f * r, vol: vol / (k + 1.2), r: 2.4 - k * 0.4, a: 0.002, pan, echo: 0.35, detune: (Math.random() - 0.5) * 8 }),
+      f * r < 16000 && this.voice({ at, f: f * r, vol: vol / (k + 1.2), r: 2.4 - k * 0.4, a: 0.002, pan, echo: 0.35, detune: (Math.random() - 0.5) * 8 }),
     );
   }
 
@@ -763,29 +763,113 @@ export class Audio {
     for (let k = 0; k < dur / 0.42; k++) this.voice({ at: at + k * 0.42, f: 70, to: 34, glide: 0.15, vol: 0.3, r: 0.2, a: 0.006 });
   }
 
-  /** Win jingle; size 0..3 scales length, layers and brightness. */
+  /* ---------------------------------------------------------------- cinematic toolkit */
+
+  /** Plucked string (harp / oud): bright attack, quick decay, a little body resonance. */
+  private pluck(at: number, f: number, vol: number, pan: Pan = 0, len = 1.2): void {
+    this.voice({ at, f, type: 'triangle', vol, r: len, a: 0.002, pan, echo: 0.25, lp: 4200 });
+    this.voice({ at, f: f * 2, vol: vol * 0.35, r: len * 0.5, a: 0.001, pan });
+    this.voice({ at, f: f * 3.01, vol: vol * 0.15, r: len * 0.25, a: 0.001, pan });
+    this.hiss({ at, dur: 0.012, type: 'bandpass', f0: f * 4, q: 3, vol: vol * 0.5, a: 0.0005, pan });
+  }
+
+  /** Brass stab: detuned saws through a filter that opens and closes. */
+  private brass(at: number, freqs: number[], vol: number, len = 0.9): void {
+    const ctx = this.ctx!;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = 2;
+    f.frequency.setValueAtTime(400, at);
+    f.frequency.exponentialRampToValueAtTime(3200, at + 0.08);
+    f.frequency.exponentialRampToValueAtTime(900, at + len);
+    const g = this.env(at, 0.03, vol, len, 0.05);
+    f.connect(g).connect(this.sfx);
+    const e = ctx.createGain();
+    e.gain.value = 0.2;
+    g.connect(e).connect(this.echoIn);
+    for (const fr of freqs) {
+      for (const det of [-9, 0, 9]) {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(fr * 0.985, at);
+        o.frequency.exponentialRampToValueAtTime(fr, at + 0.06);
+        o.detune.value = det;
+        o.connect(f);
+        o.start(at);
+        o.stop(at + len + 0.2);
+      }
+    }
+  }
+
+  /** Timpani hit: pitched membrane with a soft mallet noise. */
+  private timpani(at: number, f: number, vol: number): void {
+    this.voice({ at, f: f * 1.5, to: f, glide: 0.05, vol, r: 1.1, a: 0.004 });
+    this.voice({ at, f: f * 2.4, to: f * 2.2, glide: 0.1, vol: vol * 0.25, r: 0.5, a: 0.003 });
+    this.hiss({ at, dur: 0.12, type: 'lowpass', f0: 900, f1: 200, vol: vol * 0.35, a: 0.002 });
+  }
+
+  /** Cinematic impact: sub drop, crack, metallic ring and a long dark tail. */
+  impact(power = 1): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    this.voice({ at, f: 110, to: 32, glide: 0.5, vol: 0.55 * power, r: 1.2, a: 0.002 });
+    this.hiss({ at, dur: 0.08, type: 'highpass', f0: 1800, vol: 0.35 * power, a: 0.0008 });
+    this.hiss({ at, dur: 1.6, type: 'lowpass', f0: 1200, f1: 60, vol: 0.2 * power, a: 0.01 });
+    for (const [r, v] of [[1, 0.06], [2.32, 0.04], [3.71, 0.03], [5.4, 0.02]]) this.voice({ at, f: 196 * r, vol: v * power, r: 1.8, a: 0.002, echo: 0.4 });
+  }
+
+  /** Rising tension: noise sweep and a climbing detuned saw. */
+  riser(dur: number, power = 1): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    this.hiss({ at, dur, type: 'bandpass', f0: 300, f1: 6000, q: 1.5, vol: 0.2 * power, a: dur * 0.9, pan: -0.4, pan1: 0.4 });
+    for (const det of [-12, 12]) this.voice({ at, f: 110, to: 440, glide: dur, type: 'sawtooth', vol: 0.05 * power, r: 0.15, a: dur, lp: 2400, detune: det });
+  }
+
+  /** Each big-win tier: timpani, a brass chord climbing the Hijaz scale, a shower of sparkle. */
+  tierUp(tier: number): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    const roots = [52, 55, 57, 59];
+    const r = roots[Math.min(tier, roots.length - 1)];
+    this.timpani(at, midi(r - 24), 0.5);
+    this.brass(at, [midi(r - 12), midi(r - 5), midi(r), midi(r + 4)], 0.07 + tier * 0.01, 1.1);
+    for (let i = 0; i < 8; i++) this.bell(at + 0.05 + i * 0.045, midi(r + 12 + [0, 4, 5, 7, 11, 12, 16, 19][i]), 0.05, (i - 3.5) * 0.2);
+    this.impact(0.5 + tier * 0.15);
+  }
+
+  /** Rolling timpani under a big-win count-up, swelling over `dur` seconds. */
+  timpaniRoll(dur: number): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    const n = Math.floor(dur / 0.07);
+    for (let i = 0; i < n; i++) {
+      const k = i / n;
+      this.timpani(at + i * 0.07 + Math.random() * 0.01, midi(28), 0.03 + k * 0.12);
+    }
+  }
+
+  /** Win: harp glissando up the Hijaz scale, a bell sparkle, then a warm chord. size 0..3. */
   win(size: number): void {
     if (!this.ctx) return;
     const at = this.t;
-    const up = [64, 65, 68, 71, 72, 76, 77, 80, 83, 88];
-    const count = 3 + size * 2;
+    const scale = [64, 65, 68, 69, 71, 72, 75, 76, 77, 80, 81, 83, 84, 88];
+    const count = 5 + size * 3;
     for (let i = 0; i < count; i++) {
-      const t = at + i * 0.075;
-      const f = midi(up[i % up.length]);
-      const p = (i / count - 0.5) * 0.9;
-      // marimba-ish body + glassy overtone
-      this.voice({ at: t, f, vol: 0.19, r: 0.45, a: 0.002, pan: p, echo: 0.25 });
-      this.voice({ at: t, f: f * 3.99, vol: 0.04, r: 0.12, a: 0.001, pan: p });
-      this.voice({ at: t, f: f * 2, type: 'triangle', vol: 0.05, r: 0.3, a: 0.002, pan: p });
+      const t = at + i * (0.055 - size * 0.006);
+      this.pluck(t, midi(scale[i % scale.length]), 0.13, (i / count - 0.5) * 1.1, 0.9);
     }
+    const end = at + count * (0.055 - size * 0.006);
+    for (let i = 0; i < 3 + size * 2; i++) this.bell(end + i * 0.06, midi(88 + [0, 4, 7, 11, 12, 16, 19][i % 7]), 0.035, (Math.random() - 0.5) * 1.2);
     if (size >= 1) {
-      // closing chord with sparkle
-      const t = at + count * 0.075;
-      for (const n of [52, 64, 68, 71]) this.voice({ at: t, f: midi(n), type: 'triangle', vol: 0.07, r: 1.2, a: 0.01, echo: 0.3 });
-      this.hiss({ at: t, dur: 0.8, type: 'highpass', f0: 6000, vol: 0.05, a: 0.05 });
+      for (const n of [52, 59, 64, 68, 71]) this.voice({ at: end, f: midi(n), type: 'triangle', vol: 0.05, r: 1.6, a: 0.02, echo: 0.3, lp: 2600 });
+      this.hiss({ at: end, dur: 1, type: 'highpass', f0: 7000, vol: 0.05, a: 0.05 });
     }
-    if (size >= 2) this.boom(at, 0.4, 55);
-    if (size >= 3) this.choir(at + 0.2, [midi(45), midi(52), midi(57)], 2.2, 0.08);
+    if (size >= 2) {
+      this.brass(end, [midi(40), midi(47), midi(52), midi(56)], 0.06, 1.2);
+      this.timpani(end, midi(28), 0.45);
+    }
+    if (size >= 3) this.choir(end, [midi(45), midi(52), midi(57)], 2.4, 0.08);
   }
 
   /** Count-up tick: a small coin; give it progress (0..1) and it climbs in pitch as the total grows. */

@@ -34,6 +34,21 @@ export const GOLD: MetalSpec = {
   spec: 0.9,
 };
 
+export const IVORY: MetalSpec = {
+  ramp: [
+    [0, '#ffffff'],
+    [0.18, '#f6ecd6'],
+    [0.36, '#cdb48a'],
+    [0.5, '#6a5236'],
+    [0.62, '#3e2e1e'],
+    [0.76, '#bfa27a'],
+    [0.9, '#fff4dc'],
+    [1, '#6a5236'],
+  ],
+  bevel: 8,
+  spec: 0.9,
+};
+
 export const BLOOD_METAL: MetalSpec = {
   ramp: [
     [0, '#ffd8c8'],

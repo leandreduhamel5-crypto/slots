@@ -10,6 +10,8 @@ const ICONS = {
   auto: '<svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 0 1-13.1 5"/><path d="M4.5 12a7.5 7.5 0 0 1 13.1-5"/><path d="M17.8 3.2v4.1h-4.1M6.2 20.8v-4.1h4.1"/></svg>',
   spin: '<svg viewBox="0 0 64 64"><path d="M49 34a17 17 0 1 1-5-13"/><path d="M47.5 10.5v11.2H36.3"/></svg>',
   stop: '<svg viewBox="0 0 64 64"><rect x="22" y="22" width="20" height="20" rx="3"/></svg>',
+  minus: '<svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg>',
 };
 
 /** Shared gradients for the gold line icons (referenced from CSS as url(#hud-gold)). */
@@ -56,25 +58,29 @@ export class Hud {
   constructor(h: HudHandlers) {
     this.root = document.createElement('div');
     this.root.id = 'hud';
+    this.root.className = 'console';
     this.root.innerHTML = `${DEFS}
-      <div class="hud-meters">
-        <div class="meter"><label>Solde</label><span data-k="balance">0,00</span></div>
-        <div class="meter meter-win"><label data-k="winLabel">Gain</label><span data-k="win">0,00</span></div>
-      </div>
-      <div class="hud-controls">
-        <div class="hud-side">
-          <button class="icon" data-k="info" aria-label="Règles et paiements">${ICONS.info}</button>
-          <button class="icon" data-k="sound" aria-label="Son">${ICONS.sound}</button>
+      <div class="c-zone c-left"></div>
+      <div class="c-zone c-center"></div>
+      <div class="c-zone c-right"></div>
+      <div class="c-row c-row1"></div>
+      <div class="c-row c-row2"></div>
+      <div class="c-parts">
+        <div class="c-sys" data-k="sys">
+          <button class="c-btn" data-k="info" aria-label="Règles et paiements">${ICONS.info}</button>
+          <button class="c-btn" data-k="sound" aria-label="Son">${ICONS.sound}</button>
         </div>
-        <div class="bet">
-          <button class="step" data-k="betDec" aria-label="Diminuer la mise">−</button>
-          <div class="meter"><label>Mise</label><span data-k="bet">0,00</span></div>
-          <button class="step" data-k="betInc" aria-label="Augmenter la mise">+</button>
+        <div class="c-meter" data-k="balanceBox"><label>Solde</label><span data-k="balance">0,00</span></div>
+        <div class="c-meter c-win" data-k="winBox"><label data-k="winLabel">Gain</label><span data-k="win">0,00</span></div>
+        <div class="c-bet" data-k="betBox">
+          <button class="c-btn c-step" data-k="betDec" aria-label="Diminuer la mise">${ICONS.minus}</button>
+          <div class="c-meter c-betmeter"><label>Mise</label><span data-k="bet">0,00</span></div>
+          <button class="c-btn c-step" data-k="betInc" aria-label="Augmenter la mise">${ICONS.plus}</button>
         </div>
-        <button class="spin" data-k="spin" aria-label="Lancer"><span class="spin-halo"></span><span class="spin-ring">${glyphRing()}</span><span class="spin-dome"></span><span class="spin-icon" data-k="spinIcon">${ICONS.spin}</span><span class="spin-count" data-k="autoCount"></span></button>
-        <div class="hud-side">
-          <button class="icon" data-k="auto" aria-label="Jeu automatique">${ICONS.auto}</button>
-          <button class="icon" data-k="turbo" aria-label="Turbo">${ICONS.turbo}</button>
+        <div class="c-play" data-k="play">
+          <button class="c-btn c-auto" data-k="auto" aria-label="Jeu automatique">${ICONS.auto}</button>
+          <button class="spin" data-k="spin" aria-label="Lancer"><span class="spin-halo"></span><span class="spin-ring">${glyphRing()}</span><span class="spin-dome"></span><span class="spin-icon" data-k="spinIcon">${ICONS.spin}</span><span class="spin-count" data-k="autoCount"></span></button>
+          <button class="c-btn c-turbo" data-k="turbo" aria-label="Turbo">${ICONS.turbo}</button>
         </div>
       </div>
       <div class="auto-menu" data-k="autoMenu">
@@ -105,6 +111,24 @@ export class Hud {
       }),
     );
     document.addEventListener('click', () => this.autoMenu.classList.remove('open'));
+    this.arrange();
+    window.addEventListener('resize', () => this.arrange());
+  }
+
+  /** Desktop: three zones on one row. Portrait phones: meters on top, controls below. */
+  private arrange(): void {
+    const mobile = window.matchMedia('(max-aspect-ratio: 1/1), (max-width: 760px)').matches;
+    const q = (c: string) => this.root.querySelector<HTMLElement>(c)!;
+    const e = this.el;
+    if (mobile) {
+      q('.c-row1').append(e.balanceBox, e.winBox);
+      q('.c-row2').append(e.sys, e.betBox, e.play);
+    } else {
+      q('.c-left').append(e.sys, e.balanceBox);
+      q('.c-center').append(e.play);
+      q('.c-right').append(e.betBox, e.winBox);
+    }
+    this.root.classList.toggle('mobile', mobile);
   }
 
   setBalance(v: number): void {
