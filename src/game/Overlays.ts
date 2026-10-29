@@ -1,4 +1,4 @@
-import { Container, FillGradient, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
 import { BLOOD_METAL, GOLD, IVORY, metalTitle, textMask } from './art/logoArt';
 import { paintArrowHead, paintBanner, paintCartouche, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
 import { Digits } from './Digits';
@@ -26,31 +26,7 @@ export function winTier(win: number, bet: number): number {
   return t;
 }
 
-/** Two-tone hard-stop fill: the cartoon cel-shading look for text. */
-function cel(light: string, base: string): FillGradient {
-  return new FillGradient({
-    type: 'linear',
-    start: { x: 0, y: 0 },
-    end: { x: 0, y: 1 },
-    colorStops: [
-      { offset: 0, color: light },
-      { offset: 0.48, color: light },
-      { offset: 0.52, color: base },
-      { offset: 1, color: base },
-    ],
-    textureSpace: 'local',
-  });
-}
 
-const title = (size: number, light = '#fff6c0', base = '#ffd23f'): TextStyleOptions => ({
-  fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
-  fontSize: size,
-  fill: cel(light, base),
-  stroke: { color: 0x1a0604, width: Math.max(4, size * 0.1), join: 'round' },
-  dropShadow: { color: 0x000000, blur: size * 0.12, distance: size * 0.06, angle: Math.PI / 2, alpha: 0.85 },
-  letterSpacing: size * 0.04,
-  align: 'center',
-});
 
 const body = (size: number, fill = 0xffffff): TextStyleOptions => ({
   fontFamily: 'Cinzel, serif',
@@ -658,7 +634,7 @@ export class Overlays extends Container {
     this.fx.shake(14);
     this.fx.glitch(2);
     this.sunburst(0x3e1806);
-    const ribbon = this.ribbon(820, 150, 0x8a0f26);
+    const ribbon = this.ribbon(1120, 150, 0x8a0f26);
     ribbon.y = mutation !== null ? -290 : -20;
     const head = this.head3d(`+${spins} TOURS GRATUITS`, 84, 'gold');
     head.y = ribbon.y - 10;
@@ -667,7 +643,7 @@ export class Overlays extends Container {
     this.popIn(head, 0.05);
     this.particles.impact(this.w / 2, this.h / 2, 1.4);
     if (mutation !== null) {
-      const sub = new Text({ text: 'MUTATION ! UNE NOUVELLE SOUCHE', style: title(44, '#ffb0b8', '#ff3347') });
+      const sub = new Text({ text: 'MUTATION ! UNE NOUVELLE SOUCHE', style: body(30, 0xff8a70) });
       sub.anchor.set(0.5);
       sub.y = -185;
       this.content.addChild(sub);

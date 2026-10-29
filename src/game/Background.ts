@@ -8,6 +8,18 @@ import { Fire, paintFlameBlob } from './Fire';
 import { TempleFx } from './TempleFx';
 import { COLORS } from './layout';
 
+/** Soft disc for the spreading-infection mask: opaque core, feathered rim. */
+function revealCanvas(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(256, 256);
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.72, 'rgba(255,255,255,1)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  return c;
+}
+
 /** Tileable value-noise fog. */
 function paintFog(size = 512): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(size, size);
@@ -154,6 +166,10 @@ export class Background extends Container {
   private feature = 0;
   private nextStrike = 9;
   templeFx: TempleFx | null = null;
+  /** soft circle growing from the capstone: the infection spreading over the night scene */
+  private reveal: Sprite | null = null;
+  private spread = { r: 0 };
+  private groundFog: TilingSprite | null = null;
   private fires: Fire[] = [];
   private stars: { s: Sprite; f: number; p: number; a: number }[] = [];
   private clouds: TilingSprite | null = null;
@@ -189,7 +205,17 @@ export class Background extends Container {
         s.alpha = 0;
       }
       this.infectedPulse.blendMode = 'add';
-      this.sceneC.addChild(this.infected, this.infectedPulse);
+      this.reveal = new Sprite(Texture.from(revealCanvas()));
+      this.reveal.anchor.set(0.5);
+      this.reveal.position.set(APEX[0] - W / 2, APEX[1] - H / 2);
+      this.reveal.renderable = true;
+      this.sceneC.addChild(this.infected, this.infectedPulse, this.reveal);
+      this.infected.mask = this.reveal;
+      // low mist drifting over the polished floor
+      this.groundFog = new TilingSprite({ texture: Texture.from(paintFog()), width: W * 1.2, height: 260 });
+      this.groundFog.position.set(-W * 0.6, H / 2 - 330);
+      this.groundFog.tileScale.set(2.2, 0.7);
+      this.groundFog.alpha = 0.16;
 
       // the capstone: a lighthouse of gold at night, the infection's heart in the bonus
       this.heart = new Sprite(glowTex);
@@ -250,6 +276,7 @@ export class Background extends Container {
         this.sceneC.addChild(g);
       }
     }
+    if (this.groundFog) this.sceneC.addChild(this.groundFog);
     if (!custom) {
       this.templeFx = new TempleFx(glowTex);
       this.templeFx.onCharge = (p) => this.flare(p * 0.5);
@@ -305,6 +332,9 @@ export class Background extends Container {
   /** Free spins: the pyramid turns red under a barrage of lightning. */
   setFeature(on: boolean): void {
     gsap.to(this, { feature: on ? 1 : 0, duration: on ? 0.9 : 1.6, ease: 'power2.inOut' });
+    // the infection spreads outward from the capstone (and recedes back into it)
+    gsap.killTweensOf(this.spread);
+    gsap.to(this.spread, { r: on ? 1 : 0, duration: on ? 1.6 : 1.4, ease: on ? 'power2.in' : 'power2.inOut' });
     if (on) {
       this.strike(1, APEX);
       this.templeFx?.surge(1);
@@ -403,7 +433,12 @@ export class Background extends Container {
     this.fog.alpha = 0.07 + f * 0.05;
     this.redWash.alpha = f * (0.1 + beat * 0.1);
     if (this.infected && this.infectedPulse) {
-      this.infected.alpha = f;
+      this.infected.alpha = Math.min(1, f * 3);
+      if (this.reveal) {
+        // the mask texture fades to transparent at its rim: scale so it covers the screen at r=1
+        const size = 80 + this.spread.r * 5200;
+        this.reveal.width = this.reveal.height = size;
+      }
       this.infectedPulse.alpha = f * (beat * 0.22 + this.boltLight * 0.5 + this.flareV * 0.25);
     }
     this.flareV *= Math.pow(0.25, dt);
@@ -425,6 +460,11 @@ export class Background extends Container {
     if (this.templeFx) {
       this.templeFx.feature = f;
       this.templeFx.update(dt, this.boltLight);
+    }
+    if (this.groundFog) {
+      this.groundFog.tilePosition.x += dt * 18;
+      this.groundFog.tint = f > 0.5 ? 0xa02020 : 0x8a7a9a;
+      this.groundFog.alpha = 0.14 + f * 0.08;
     }
     for (const fire of this.fires) {
       fire.hot = f;
