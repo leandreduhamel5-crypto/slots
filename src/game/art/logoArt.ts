@@ -89,6 +89,18 @@ function blurred(c: HTMLCanvasElement, r: number): HTMLCanvasElement {
   return b;
 }
 
+/** Blur a canvas cheaply: shrink it 4x, blur the small copy, let the caller scale it back up. */
+export function cheapBlur(src: HTMLCanvasElement, r: number): HTMLCanvasElement {
+  const f = 4;
+  const [s, ctx] = makeCanvas(Math.ceil(src.width / f), Math.ceil(src.height / f));
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, 0, 0, s.width, s.height);
+  const [b, bctx] = makeCanvas(s.width, s.height);
+  bctx.filter = `blur(${Math.max(0.5, r / f)}px)`;
+  bctx.drawImage(s, 0, 0);
+  return b;
+}
+
 /** Grows a mask by r px, filled with a solid colour. */
 export function dilateMask(c: HTMLCanvasElement, r: number, color: string): HTMLCanvasElement {
   const [d, ctx] = makeCanvas(c.width, c.height);
@@ -194,9 +206,12 @@ export function moltenCracks(mask: HTMLCanvasElement, seed: number, density: num
   stroke(cc, 7, 'rgba(30,0,2,0.85)');
   stroke(cc, 3.6, '#ff6a20');
   stroke(cc, 1.4, '#fff0b0');
+  // stroke everything sharp, then blur once (blurring each stroke is very slow)
+  const [sharp, sc] = makeCanvas(w, h);
+  stroke(sc, 14, 'rgba(255,90,20,1)');
   const [glow, gc] = makeCanvas(w, h);
   gc.filter = 'blur(7px)';
-  stroke(gc, 14, 'rgba(255,90,20,1)');
+  gc.drawImage(sharp, 0, 0);
   for (const ctx of [cc, gc]) {
     ctx.globalCompositeOperation = 'destination-in';
     ctx.filter = 'none';
@@ -231,11 +246,11 @@ export function metalTitle(mask: HTMLCanvasElement, m: MetalSpec, o: { outline: 
   const w = mask.width;
   const h = mask.height;
   const [c, ctx] = makeCanvas(w, h);
-  // drop shadow
+  // drop shadow (blurred at quarter size: same look, a fraction of the cost)
   ctx.save();
-  ctx.filter = `blur(${o.outline * 2.4}px)`;
   ctx.globalAlpha = 0.85;
-  ctx.drawImage(dilateMask(mask, o.outline * 1.5, '#000'), 0, o.outline * 1.6);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(cheapBlur(dilateMask(mask, o.outline * 1.5, '#000'), o.outline * 2.4), 0, o.outline * 1.6, w, h);
   ctx.restore();
   // dark backing and a gold outline ring
   const goldRim = dilateMask(mask, o.outline, '#000');

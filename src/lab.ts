@@ -26,6 +26,22 @@ async function run(): Promise<void> {
     document.body.dataset.ready = '1';
     return;
   }
+  if (only === 'cleo') {
+    const { paintCleopatra, EARRINGS, CRES } = await import('./game/art/cleopatra');
+    const a = paintCleopatra();
+    const c = document.createElement('canvas');
+    c.width = a.flat.width;
+    c.height = a.flat.height;
+    const x = c.getContext('2d')!;
+    x.fillStyle = '#1a1420';
+    x.fillRect(0, 0, c.width, c.height);
+    x.drawImage(a.flat, 0, 0);
+    for (const [ex, ey] of EARRINGS) x.drawImage(a.earring, (ex - 20) * CRES, (ey - 4) * CRES);
+    c.style.width = c.width / 2 + 'px';
+    out.append(c);
+    document.body.dataset.ready = '1';
+    return;
+  }
   if (only === 'audio') {
     // render every sound offline, report levels and draw a spectrogram for each
     const tests: [string, (a: Audio) => void, number][] = [

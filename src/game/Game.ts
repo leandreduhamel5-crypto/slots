@@ -21,8 +21,8 @@ import type { SymbolTextures } from './textures';
 const BOARD_Y = 152;
 const WORLD_TOP = -140;
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
-const MASCOT_X = 236;
-const MASCOT_SCALE = 0.95;
+const MASCOT_X = 248;
+const MASCOT_SCALE = 0.74;
 const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 200;
 
@@ -148,7 +148,7 @@ export class Game {
       this.bg.thump(to === 'inhuman' ? 0.4 : 0.15);
       this.shake(to === 'inhuman' ? 16 : 6);
     };
-    this.world.addChild(this.mascot, this.logo, this.banner, this.board, this.teaser, this.mascotFx);
+    this.world.addChild(this.logo, this.banner, this.board, this.mascot, this.teaser, this.mascotFx);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       shake: (p) => this.shake(p),
@@ -293,7 +293,7 @@ export class Game {
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
-    const mascotRight = (BOARD_W + MASCOT_X + 236 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
+    const mascotRight = (BOARD_W + MASCOT_X + 250 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
     this.mascot.visible = SHOW_MASCOT && !portrait && mascotRight < w;
     this.bg.resize(w, h);
     this.overlays.resize(w, h);
@@ -496,6 +496,7 @@ export class Game {
           if (s === Sym.CODEX) {
             landedCodex++;
             this.audio.codex(landedCodex);
+            this.mascot.react('codex');
             this.board.popCell(r, row);
             if (landedCodex === 3) this.triggerHit(r === REELS - 1);
             else if (landedCodex > 3) this.bg.thump(0.25);
