@@ -21,8 +21,9 @@ import type { SymbolTextures } from './textures';
 const BOARD_Y = 152;
 const WORLD_TOP = -140;
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
-const MASCOT_X = 248;
-const MASCOT_SCALE = 0.74;
+/** Cleopatra stands left of the reels, her cobra staff right beside the frame */
+const MASCOT_X = -330;
+const MASCOT_SCALE = 1;
 const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 200;
 
@@ -135,13 +136,13 @@ export class Game {
     this.teaser = this.buildTeaser(tex);
     this.mascot = new Mascot(mascotTex, assets.mascot);
     this.mascot.scale.set(MASCOT_SCALE);
-    this.mascot.position.set(BOARD_W + MASCOT_X, BOARD_Y + BOARD_H + 24);
+    this.mascot.position.set(MASCOT_X, BOARD_Y + BOARD_H + 190);
     this.mascot.setBook(tex.normal[Sym.CODEX]);
     this.mascotFx = new Particles(tex);
     this.mascot.onTransform = (to) => {
       if (!this.mascot.visible) return;
-      const x = this.mascot.x;
-      const y = this.mascot.y - 280;
+      const x = this.mascot.x + 110 * MASCOT_SCALE;
+      const y = this.mascot.y - 830 * MASCOT_SCALE;
       this.mascotFx.impact(x, y, 1.6);
       this.mascotFx.burst(x, y, 30, 1.1);
       this.audio.stinger(to === 'inhuman' ? 2 : 0);
@@ -293,8 +294,9 @@ export class Game {
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     this.world.position.set(w / 2, availH / 2);
-    const mascotRight = (BOARD_W + MASCOT_X + 250 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
-    this.mascot.visible = SHOW_MASCOT && !portrait && mascotRight < w;
+    // shown when her face is on screen (the veil and arm may run off the left edge)
+    const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
+    this.mascot.visible = SHOW_MASCOT && !portrait && faceX > 40;
     this.bg.resize(w, h);
     this.overlays.resize(w, h);
   }

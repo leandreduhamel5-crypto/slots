@@ -44,7 +44,7 @@ async function boot(): Promise<void> {
   const [assets, egypt] = await Promise.all([loadAssets(), loadEgyptArt()]);
   // built-in painted art first, then anything the user dropped into public/assets wins
   const symbolArt = new Map([...egypt.symbols, ...assets.symbols]);
-  const [tex, mascot] = await Promise.all([buildSymbolTextures(symbolArt), buildMascotTextures()]);
+  const [tex, mascot] = await Promise.all([buildSymbolTextures(symbolArt), buildMascotTextures(egypt.extra.cleopatra)]);
   warmDigits([118, 114, 56, 54]);
   setProgress(1);
 
