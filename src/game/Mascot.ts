@@ -2,40 +2,63 @@ import { Container, DisplacementFilter, Graphics, MeshPlane, Sprite, Texture } f
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { makeCanvas } from './art/painters';
+import baseUrl from './art/egypt/cleo/base.webp';
+import armUUrl from './art/egypt/cleo/armU.webp';
+import armFUrl from './art/egypt/cleo/armF.webp';
+import headUrl from './art/egypt/cleo/head.webp';
+import staffUrl from './art/egypt/cleo/staff.webp';
 
 /**
- * Cleopatra from the art-direction sheet (egypt/cleopatra.webp, cut out of the concept), brought
- * to life as a deformable mesh. Coordinates below are pixels in that cutout (805×997).
+ * Cleopatra as a cut-out skeletal character (the way slot studios rig their mascots in Spine):
+ * the painting is split into body, head, upper arm, forearm and the cobra staff, the area
+ * behind each moving part is painted in, and the parts hang on a bone hierarchy. Coordinates
+ * are pixels of the original 805×997 painting.
  */
 export const ART_W = 805;
 export const ART_H = 997;
+const LAYERS = {
+  base: { url: baseUrl, at: [0, 257] },
+  armU: { url: armUUrl, at: [211, 317] },
+  armF: { url: armFUrl, at: [21, 534] },
+  head: { url: headUrl, at: [235, 0] },
+  staff: { url: staffUrl, at: [559, 46] },
+} as const;
+type LayerKey = keyof typeof LAYERS;
+
+/* joints */
+const NECK: [number, number] = [480, 292];
+const SHOULDER: [number, number] = [322, 345];
+const ELBOW: [number, number] = [262, 565];
+const PALM: [number, number] = [92, 850];
+const GRIP: [number, number] = [660, 480];
+const HIPS: [number, number] = [430, 760];
+/* features */
 const EYES: [number, number][] = [
   [500, 127],
   [555, 157],
 ];
-const HEAD_C: [number, number] = [515, 165];
-const NECK: [number, number] = [495, 255];
-const HAIR_C: [number, number] = [400, 220];
 const CHEST: [number, number] = [470, 420];
+const VEIL: [number, number] = [120, 560];
 const COBRA_C: [number, number] = [730, 95];
 const COBRA_NECK: [number, number] = [690, 250];
 const COBRA_EYE: [number, number] = [752, 77];
 const COBRA_MOUTH: [number, number] = [792, 115];
-const VEIL: [number, number] = [120, 560];
+const STAFF_FOOT: [number, number] = [588, 990];
 
 const GOLD = 0xffc860;
 const RED = 0xff2a22;
 
 export interface MascotTextures {
-  art: Texture;
+  layers: Record<LayerKey, Texture>;
+  canvases: Record<LayerKey, HTMLCanvasElement>;
   silhouette: Texture;
-  cracks: Texture;
-  cracksGlow: Texture;
+  headCracks: [Texture, Texture];
+  baseCracks: [Texture, Texture];
   glow: Texture;
   noise: Texture;
   beam: Texture;
-  /** bright golden pixels of the art (ribbons, jewellery) where sparkles appear */
-  sparklePoints: [number, number][];
+  ring: Texture;
+  sparkles: Record<LayerKey, [number, number][]>;
 }
 
 /** 'human' is the queen at peace, 'inhuman' the infected queen of the free spins. */
@@ -125,11 +148,31 @@ function silhouetteCanvas(art: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
-/** Molten cracks over the skin and gold, clipped to the art: [core, glow]. */
-function cracksCanvas(art: HTMLCanvasElement): [HTMLCanvasElement, HTMLCanvasElement] {
-  const w = art.width;
-  const h = art.height;
-  let st = 29;
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = url;
+  });
+}
+
+/** Shockwave ring (thin, bright) for the staff striking the floor. */
+function ringCanvas(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(256, 256);
+  const g = ctx.createRadialGradient(128, 128, 90, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.6, 'rgba(255,255,255,0.9)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  return c;
+}
+
+/** Molten cracks on one layer (seeds in art coordinates), clipped to it: [core, glow]. */
+function cracksFor(layer: HTMLCanvasElement, at: readonly [number, number], seeds: [number, number, number, number][], seed: number): [HTMLCanvasElement, HTMLCanvasElement] {
+  let st = seed;
   const rnd = () => ((st = (st * 16807) % 2147483647) / 2147483647);
   const lines: [number, number][][] = [];
   const grow = (x: number, y: number, a: number, len: number, depth: number) => {
@@ -146,16 +189,7 @@ function cracksCanvas(art: HTMLCanvasElement): [HTMLCanvasElement, HTMLCanvasEle
       grow(q[0], q[1], a + (rnd() < 0.5 ? 0.9 : -0.9), len * 0.5, depth - 1);
     }
   };
-  const seeds: [number, number, number, number][] = [
-    [EYES[0][0], EYES[0][1] + 8, Math.PI * 0.6, 70],
-    [EYES[1][0], EYES[1][1] + 8, Math.PI * 0.45, 60],
-    [NECK[0], NECK[1], Math.PI * 0.5, 110],
-    [CHEST[0] - 80, CHEST[1] - 60, Math.PI * 0.6, 160],
-    [CHEST[0] + 40, CHEST[1] + 60, Math.PI * 0.45, 160],
-    [300, 520, Math.PI * 0.55, 180],
-    [COBRA_C[0], COBRA_C[1] + 30, Math.PI * 0.5, 120],
-  ];
-  for (const [x, y, a, l] of seeds) grow(x, y, a, l, 2);
+  for (const [x, y, a, l] of seeds) grow(x - at[0], y - at[1], a, l, 2);
   const stroke = (ctx: CanvasRenderingContext2D, wd: number, col: string) => {
     ctx.strokeStyle = col;
     ctx.lineCap = 'round';
@@ -170,51 +204,72 @@ function cracksCanvas(art: HTMLCanvasElement): [HTMLCanvasElement, HTMLCanvasEle
       }
     }
   };
-  const [core, cc] = makeCanvas(w, h);
+  const [core, cc] = makeCanvas(layer.width, layer.height);
   stroke(cc, 3.2, 'rgba(40,0,2,0.9)');
   stroke(cc, 1.8, '#ff3a24');
   stroke(cc, 0.7, '#ffd0a0');
-  const [sharp, sc] = makeCanvas(w, h);
+  const [sharp, sc] = makeCanvas(layer.width, layer.height);
   stroke(sc, 9, 'rgba(255,40,30,0.95)');
-  const [glow, gc] = makeCanvas(w, h);
+  const [glow, gc] = makeCanvas(layer.width, layer.height);
   gc.filter = 'blur(6px)';
   gc.drawImage(sharp, 0, 0);
   for (const ctx of [cc, gc]) {
     ctx.filter = 'none';
     ctx.globalCompositeOperation = 'destination-in';
-    ctx.drawImage(art, 0, 0);
+    ctx.drawImage(layer, 0, 0);
   }
   return [core, glow];
 }
 
-/** Samples the brightest golden pixels (the glowing ribbons and jewels). */
-function sparklePoints(art: HTMLCanvasElement): [number, number][] {
-  const d = art.getContext('2d')!.getImageData(0, 0, art.width, art.height).data;
+/** Brightest golden pixels of a layer (ribbons, jewels), in layer coordinates. */
+function sparklePoints(c: HTMLCanvasElement): [number, number][] {
+  const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
   const pts: [number, number][] = [];
-  for (let y = 0; y < art.height; y += 3) {
-    for (let x = 0; x < art.width; x += 3) {
-      const i = (y * art.width + x) * 4;
+  for (let y = 0; y < c.height; y += 3) {
+    for (let x = 0; x < c.width; x += 3) {
+      const i = (y * c.width + x) * 4;
       if (d[i + 3] > 200 && d[i] > 245 && d[i + 1] > 210 && d[i + 2] < 190) pts.push([x, y]);
     }
   }
   return pts;
 }
 
-export async function buildMascotTextures(img: HTMLImageElement): Promise<MascotTextures> {
-  const art = canvasOf(img);
+export async function buildMascotTextures(flat: HTMLImageElement): Promise<MascotTextures> {
+  const keys = Object.keys(LAYERS) as LayerKey[];
+  const imgs = await Promise.all(keys.map((k) => loadImage(LAYERS[k].url)));
+  const canvases = {} as Record<LayerKey, HTMLCanvasElement>;
+  const layers = {} as Record<LayerKey, Texture>;
+  const sparkles = {} as Record<LayerKey, [number, number][]>;
+  keys.forEach((k, i) => {
+    canvases[k] = canvasOf(imgs[i]);
+    layers[k] = Texture.from(canvases[k]);
+    sparkles[k] = sparklePoints(canvases[k]);
+  });
   const t = (c: HTMLCanvasElement) => Texture.from(c);
-  const [cracks, cracksGlow] = cracksCanvas(art);
+  const hc = cracksFor(canvases.head, LAYERS.head.at, [
+    [EYES[0][0], EYES[0][1] + 8, Math.PI * 0.6, 70],
+    [EYES[1][0], EYES[1][1] + 8, Math.PI * 0.45, 60],
+    [NECK[0], NECK[1] - 20, Math.PI * 0.5, 40],
+  ], 29);
+  const bc = cracksFor(canvases.base, LAYERS.base.at, [
+    [NECK[0], NECK[1] + 10, Math.PI * 0.5, 110],
+    [CHEST[0] - 80, CHEST[1] - 60, Math.PI * 0.6, 160],
+    [CHEST[0] + 40, CHEST[1] + 60, Math.PI * 0.45, 160],
+    [HIPS[0], HIPS[1], Math.PI * 0.55, 180],
+  ], 17);
   const noise = t(noiseCanvas());
   noise.source.addressMode = 'repeat';
   return {
-    art: Texture.from(img),
-    silhouette: t(silhouetteCanvas(art)),
-    cracks: t(cracks),
-    cracksGlow: t(cracksGlow),
+    layers,
+    canvases,
+    silhouette: t(silhouetteCanvas(canvasOf(flat))),
+    headCracks: [t(hc[0]), t(hc[1])],
+    baseCracks: [t(bc[0]), t(bc[1])],
     glow: t(glowCanvas()),
     noise,
     beam: t(beamCanvas()),
-    sparklePoints: sparklePoints(art),
+    ring: t(ringCanvas()),
+    sparkles,
   };
 }
 
@@ -233,28 +288,57 @@ const smooth = (e0: number, e1: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
+/** A bone: a container whose origin is the joint, holding a part drawn at its art position. */
+class Bone extends Container {
+  constructor(joint: readonly [number, number], parentJoint: readonly [number, number] = [0, 0]) {
+    super();
+    this.position.set(joint[0] - parentJoint[0], joint[1] - parentJoint[1]);
+    this.pivot.set(0, 0);
+    this.joint = joint;
+  }
+  joint: readonly [number, number];
+  /** add a display object positioned in art coordinates */
+  place<T extends Container>(o: T, at: readonly [number, number]): T {
+    o.position.set(at[0] - this.joint[0], at[1] - this.joint[1]);
+    this.addChild(o);
+    return o;
+  }
+}
+
 /**
- * Cleopatra, alive. The painted cutout is a 24×30 mesh warped every frame by weighted regions:
- * her chest breathes, her head turns and tilts toward the reels, her hair and veil sway, and the
- * golden cobra of her staff sways on its neck, rears up and strikes. Her eyes and the cobra's
- * eye glow, sparkles run along the gold, a heat-hazed aura burns around her silhouette, and in
- * the free spins molten cracks spread over her as the infection takes her.
+ * Cleopatra, alive. Bones: hips → torso (breathing mesh) → head (turns, tilts, hair sways),
+ * shoulder → upper arm → forearm with an energy orb in her palm, and the hand gripping the
+ * cobra staff, whose snake head sways, rears and strikes (a warped mesh). Gestures are full
+ * poses blended over the idle: she strikes the floor with her staff when the reels spin,
+ * raises her hand with a flare of magic on wins, lifts the staff to the sky while the cobra
+ * spits light on big wins, and in the free spins the infection cracks her open.
  */
 export class Mascot extends Container {
   private float = new Container();
-  private rig = new Container();
+  private rig: Bone;
+  private torso: Bone;
+  private head: Bone;
+  private armU: Bone;
+  private armF: Bone;
+  private staff: Bone;
+  private baseMesh: MeshPlane;
+  private baseRest: Float32Array;
+  private headMesh: MeshPlane;
+  private headRest: Float32Array;
+  private staffMesh: MeshPlane;
+  private staffRest: Float32Array;
   private auraOuter: Sprite;
-  private auraInner: Sprite;
   private noise: Sprite;
   private displace: DisplacementFilter;
-  private body: MeshPlane;
-  private basePos: Float32Array;
-  private cracks: Sprite;
-  private cracksGlow: Sprite;
   private eyeGlows: Sprite[] = [];
+  private headCracks: Sprite[] = [];
+  private baseCracks: Sprite[] = [];
   private cobraEye: Sprite;
   private mouthOrb: Sprite;
   private beam: Sprite;
+  private orb: Sprite;
+  private orbCore: Sprite;
+  private shock: Sprite;
   private sparks = new Graphics();
   private front = new Container();
   private motes: Mote[] = [];
@@ -264,9 +348,24 @@ export class Mascot extends Container {
   private rage = 0;
   private emitIn = 0;
   private look = { x: 0, y: 0, tx: 0, ty: 0 };
-  private fx = { y: 0, lean: 0, flare: 0, beam: 0, shake: 0, strike: 0, rear: 0 };
+  /** pose channels, animated by gestures */
+  private fx = {
+    y: 0,
+    flare: 0,
+    beam: 0,
+    shake: 0,
+    strike: 0,
+    rear: 0,
+    /** 0 hanging … 1 hand raised with the orb */
+    raise: 0,
+    /** 0 rest … 1 staff lifted to the sky */
+    lift: 0,
+    /** staff driven down into the floor */
+    thump: 0,
+    orb: 0,
+    bow: 0,
+  };
   form: Form = 'human';
-  /** called at the climax of a transformation (particles, sound…) */
   onTransform: ((to: Form) => void) | null = null;
 
   constructor(
@@ -274,54 +373,97 @@ export class Mascot extends Container {
     custom: HTMLImageElement | null = null,
   ) {
     super();
-    const glow = (x: number, y: number, size: number, tint: number) => {
+    void custom;
+    const glow = (size: number, tint: number) => {
       const s = new Sprite(tex.glow);
       s.anchor.set(0.5);
-      s.position.set(x, y);
       s.width = s.height = size;
       s.tint = tint;
       s.blendMode = 'add';
       return s;
     };
-    // the rig stands on the bottom-centre of the art
-    this.rig.pivot.set(ART_W / 2, ART_H);
+    const mesh = (k: LayerKey, vx: number, vy: number): [MeshPlane, Float32Array] => {
+      const m = new MeshPlane({ texture: tex.layers[k], verticesX: vx, verticesY: vy });
+      m.autoResize = false;
+      return [m, new Float32Array(m.geometry.positions)];
+    };
 
+    // bones (positions relative to the parent joint)
+    this.rig = new Bone(HIPS);
+    this.rig.position.set(0, 0);
+    this.rig.pivot.set(0, 0);
+    this.torso = new Bone(HIPS, HIPS);
+    this.head = new Bone(NECK, HIPS);
+    this.armU = new Bone(SHOULDER, HIPS);
+    this.armF = new Bone(ELBOW, SHOULDER);
+    this.staff = new Bone(GRIP, HIPS);
+
+    // aura behind everything
     this.auraOuter = new Sprite(tex.silhouette);
     this.auraOuter.anchor.set(0.5);
-    this.auraOuter.position.set(ART_W / 2, ART_H / 2);
-    this.auraOuter.scale.set(1.04);
     this.auraOuter.blendMode = 'add';
-    this.auraInner = new Sprite(tex.silhouette);
-    this.auraInner.anchor.set(0.5);
-    this.auraInner.position.set(ART_W / 2, ART_H / 2);
-    this.auraInner.blendMode = 'add';
     this.noise = new Sprite(tex.noise);
     this.noise.renderable = false;
     this.noise.scale.set(1.8);
     this.displace = new DisplacementFilter({ sprite: this.noise, scale: 24 });
     const aura = new Container();
-    aura.addChild(this.auraOuter, this.auraInner);
+    aura.addChild(this.auraOuter);
     aura.filters = [this.displace];
+    this.rig.place(aura, [ART_W / 2, ART_H / 2]);
+    this.rig.addChild(this.noise);
 
-    this.body = new MeshPlane({ texture: custom ? Texture.from(custom) : tex.art, verticesX: 24, verticesY: 30 });
-    this.body.autoResize = false;
-    if (custom) this.body.scale.set(ART_W / custom.naturalWidth, ART_H / custom.naturalHeight);
-    this.basePos = new Float32Array(this.body.geometry.positions);
-    this.cracks = new Sprite(tex.cracks);
-    this.cracksGlow = new Sprite(tex.cracksGlow);
-    this.cracksGlow.blendMode = 'add';
-    this.cracks.alpha = this.cracksGlow.alpha = 0;
-    for (const [ex, ey] of EYES) this.eyeGlows.push(glow(ex, ey, 40, GOLD));
-    this.cobraEye = glow(COBRA_EYE[0], COBRA_EYE[1], 46, RED);
-    this.mouthOrb = glow(COBRA_MOUTH[0], COBRA_MOUTH[1], 20, GOLD);
+    // torso
+    [this.baseMesh, this.baseRest] = mesh('base', 20, 24);
+    this.torso.place(this.baseMesh, LAYERS.base.at);
+    for (const ct of tex.baseCracks) {
+      const s = this.torso.place(new Sprite(ct), LAYERS.base.at);
+      s.alpha = 0;
+      this.baseCracks.push(s);
+    }
+    this.baseCracks[1].blendMode = 'add';
+
+    // left arm: upper arm then forearm with the palm orb
+    this.armU.place(new Sprite(tex.layers.armU), LAYERS.armU.at);
+    this.armF.place(new Sprite(tex.layers.armF), LAYERS.armF.at);
+    this.orb = this.armF.place(glow(120, GOLD), PALM);
+    this.orbCore = this.armF.place(glow(40, 0xffffff), PALM);
+    this.orb.alpha = this.orbCore.alpha = 0;
+    this.armU.addChild(this.armF);
+
+    // head
+    [this.headMesh, this.headRest] = mesh('head', 16, 16);
+    this.head.place(this.headMesh, LAYERS.head.at);
+    for (const ct of tex.headCracks) {
+      const s = this.head.place(new Sprite(ct), LAYERS.head.at);
+      s.alpha = 0;
+      this.headCracks.push(s);
+    }
+    this.headCracks[1].blendMode = 'add';
+    for (const e of EYES) this.eyeGlows.push(this.head.place(glow(40, GOLD), e));
+
+    // staff and cobra
+    [this.staffMesh, this.staffRest] = mesh('staff', 10, 30);
+    this.staff.place(this.staffMesh, LAYERS.staff.at);
+    this.cobraEye = this.staff.place(glow(46, RED), COBRA_EYE);
+    this.mouthOrb = this.staff.place(glow(20, GOLD), COBRA_MOUTH);
     this.mouthOrb.alpha = 0;
-    this.beam = new Sprite(tex.beam);
+    this.beam = this.staff.place(new Sprite(tex.beam), COBRA_MOUTH);
     this.beam.anchor.set(0.02, 0.5);
     this.beam.blendMode = 'add';
     this.beam.alpha = 0;
-    this.sparks.blendMode = 'add';
+    this.shock = this.staff.place(new Sprite(tex.ring), STAFF_FOOT);
+    this.shock.anchor.set(0.5);
+    this.shock.blendMode = 'add';
+    this.shock.alpha = 0;
 
-    this.rig.addChild(this.noise, aura, this.body, this.cracks, this.cracksGlow, ...this.eyeGlows, this.cobraEye, this.beam, this.mouthOrb, this.sparks, this.front);
+    this.torso.addChild(this.head);
+    this.sparks.blendMode = 'add';
+    // draw order: torso, head, arm (in front of the veil), staff in front of everything
+    this.rig.addChild(this.torso, this.armU, this.staff, this.sparks, this.front);
+    this.sparks.position.set(-HIPS[0], -HIPS[1]);
+    this.front.position.set(-HIPS[0], -HIPS[1]);
+    // the rig stands on the bottom-centre of the painting
+    this.rig.position.set(HIPS[0] - ART_W / 2, HIPS[1] - ART_H);
     this.float.addChild(this.rig);
     this.addChild(this.float);
 
@@ -337,52 +479,28 @@ export class Mascot extends Container {
     super.destroy(options);
   }
 
-  /* ------------------------------------------------------------ pose */
+  /** Global art-space point of a point attached to a bone (for particles). */
+  private artPoint(bone: Bone, p: readonly [number, number]): [number, number] {
+    const g = bone.toGlobal({ x: p[0] - bone.joint[0], y: p[1] - bone.joint[1] });
+    const l = this.front.toLocal(g);
+    return [l.x, l.y];
+  }
 
-  /** Displacement of an art point for the current pose. */
-  private warp(x: number, y: number, out: [number, number]): void {
-    const t = this.t;
-    const fx = this.fx;
-    const r = this.rage;
-    let ox = 0;
-    let oy = 0;
-    // breathing: the chest and shoulders rise and swell
-    const wc = 1 - smooth(60, 220, Math.hypot(x - CHEST[0], (y - CHEST[1]) * 0.8));
-    const breath = Math.sin(t * 1.6) * (1 + r * 0.4);
-    oy -= breath * 3.2 * wc;
-    ox += (x - CHEST[0]) * 0.006 * breath * wc;
-    // head: turns and tilts around the neck
-    const wh = 1 - smooth(80, 200, Math.hypot(x - HEAD_C[0], y - HEAD_C[1]));
-    if (wh > 0) {
-      const ang = -this.look.x * 0.045 + Math.sin(t * 0.7) * 0.012 + fx.lean * 0.5;
-      const dx = x - NECK[0];
-      const dy = y - NECK[1];
-      ox += (dx * Math.cos(ang) - dy * Math.sin(ang) - dx + this.look.x * 5) * wh;
-      oy += (dx * Math.sin(ang) + dy * Math.cos(ang) - dy + this.look.y * 3 - breath * 1.5) * wh;
+  /* ------------------------------------------------------------ per-frame */
+
+  private warpMesh(m: MeshPlane, rest: Float32Array, at: readonly [number, number], f: (x: number, y: number, o: [number, number]) => void): void {
+    const pos = m.geometry.positions;
+    const o: [number, number] = [0, 0];
+    for (let i = 0; i < pos.length; i += 2) {
+      const x = rest[i] + at[0];
+      const y = rest[i + 1] + at[1];
+      o[0] = 0;
+      o[1] = 0;
+      f(x, y, o);
+      pos[i] = rest[i] + o[0];
+      pos[i + 1] = rest[i + 1] + o[1];
     }
-    // hair sways behind her shoulder
-    const whair = (1 - smooth(60, 200, Math.hypot(x - HAIR_C[0], (y - HAIR_C[1]) * 0.7))) * smooth(150, 330, y);
-    ox += Math.sin(t * 1.1 + y * 0.01) * 5 * whair;
-    // veil and ribbons ripple in the wind
-    const wv = (1 - smooth(120, 360, Math.hypot(x - VEIL[0], (y - VEIL[1]) * 0.6))) * (1 - smooth(200, 420, x));
-    ox += Math.sin(t * 1.8 + y * 0.012 + x * 0.01) * 10 * wv * (1 + r);
-    oy += Math.cos(t * 1.4 + x * 0.015) * 5 * wv;
-    // the cobra: sways on its neck, rears back, strikes toward the reels
-    const wk = 1 - smooth(90, 210, Math.hypot(x - COBRA_C[0], (y - COBRA_C[1]) * 0.8));
-    if (wk > 0) {
-      const ang = Math.sin(t * 1.3) * 0.06 - fx.rear * 0.18 + fx.strike * 0.12;
-      const dx = x - COBRA_NECK[0];
-      const dy = y - COBRA_NECK[1];
-      const sc = 1 + fx.strike * 0.12;
-      ox += (dx * Math.cos(ang) * sc - dy * Math.sin(ang) * sc - dx + fx.strike * 26) * wk;
-      oy += (dx * Math.sin(ang) * sc + dy * Math.cos(ang) * sc - dy - fx.rear * 12 + Math.sin(t * 1.3 + 1) * 3) * wk;
-    }
-    if (fx.shake) {
-      ox += (Math.random() - 0.5) * fx.shake;
-      oy += (Math.random() - 0.5) * fx.shake * 0.5;
-    }
-    out[0] = x + ox;
-    out[1] = y + oy;
+    m.geometry.getBuffer('aPosition').update();
   }
 
   private tick = (): void => {
@@ -395,72 +513,111 @@ export class Mascot extends Container {
     const fx = this.fx;
     const beat = Math.pow(Math.max(0, Math.sin(t * (2.2 + r * 1.8))), 10);
     const tint = lerpColor(GOLD, RED, r);
-
-    this.float.y = Math.sin(t * 1.1) * 4 + fx.y;
+    const shake = fx.shake ? (Math.random() - 0.5) * fx.shake : 0;
     this.look.x += (this.look.tx - this.look.x) * Math.min(1, dt * 4);
     this.look.y += (this.look.ty - this.look.y) * Math.min(1, dt * 4);
+    const breath = Math.sin(t * 1.6);
 
-    const pos = this.body.geometry.positions;
-    const base = this.basePos;
-    const o: [number, number] = [0, 0];
-    const sx = this.body.scale.x;
-    const sy = this.body.scale.y;
-    for (let i = 0; i < pos.length; i += 2) {
-      this.warp(base[i] * sx, base[i + 1] * sy, o);
-      pos[i] = o[0] / sx;
-      pos[i + 1] = o[1] / sy;
-    }
-    this.body.geometry.getBuffer('aPosition').update();
-    this.body.tint = lerpColor(0xffffff, 0xffb8a8, r * 0.55);
+    // whole body: hip sway, weight shift, a bow forward on gestures
+    this.float.y = Math.sin(t * 1.1) * 3 + fx.y;
+    this.rig.rotation = Math.sin(t * 0.55) * 0.012 - fx.bow * 0.04 + fx.lift * 0.02;
+    this.rig.x = HIPS[0] - ART_W / 2 + shake;
+    this.torso.rotation = Math.sin(t * 0.55 + 0.6) * 0.008 - fx.lift * 0.03;
+    this.torso.scale.set(1, 1 + breath * 0.004);
 
-    // overlays follow the warp
-    this.warp(HEAD_C[0], HEAD_C[1], o);
-    this.cracks.position.set((o[0] - HEAD_C[0]) * 0.4, (o[1] - HEAD_C[1]) * 0.4);
-    this.cracksGlow.position.copyFrom(this.cracks.position);
-    this.cracks.alpha = r;
-    this.cracksGlow.alpha = r * (0.4 + beat * 0.6 + fx.flare * 0.4);
-    const flick = Math.random() < 0.012 ? 0.3 : 1;
-    EYES.forEach(([ex, ey], i) => {
-      this.warp(ex, ey, o);
-      const g = this.eyeGlows[i];
-      g.position.set(o[0], o[1]);
-      g.tint = lerpColor(0xffd890, RED, r);
-      g.alpha = (0.18 + r * 0.6 + beat * 0.25 * r + fx.flare * 0.6) * flick;
-      g.scale.set(((30 + fx.flare * 30 + r * 10) / 256) * 1.4, (30 + fx.flare * 30 + r * 10) / 256);
+    // torso mesh: breathing chest, rippling veil
+    this.warpMesh(this.baseMesh, this.baseRest, LAYERS.base.at, (x, y, o) => {
+      const wc = 1 - smooth(60, 220, Math.hypot(x - CHEST[0], (y - CHEST[1]) * 0.8));
+      o[1] -= breath * 3 * wc;
+      o[0] += (x - CHEST[0]) * 0.006 * breath * wc;
+      const wv = (1 - smooth(120, 380, Math.hypot(x - VEIL[0], (y - VEIL[1]) * 0.6))) * (1 - smooth(200, 440, x));
+      o[0] += Math.sin(t * 1.8 + y * 0.012 + x * 0.01) * 12 * wv * (1 + r) + fx.raise * 10 * wv;
+      o[1] += Math.cos(t * 1.4 + x * 0.015) * 6 * wv;
     });
-    this.warp(COBRA_EYE[0], COBRA_EYE[1], o);
-    this.cobraEye.position.set(o[0], o[1]);
-    this.cobraEye.tint = tint === GOLD ? 0xff3a24 : RED;
+
+    // head: looks toward the reels, tilts, nods back on big moments; hair sways
+    this.head.rotation = -this.look.x * 0.06 + Math.sin(t * 0.7) * 0.015 - fx.lift * 0.05 + fx.bow * 0.04;
+    this.head.position.set(NECK[0] - HIPS[0] + this.look.x * 3, NECK[1] - HIPS[1] - breath * 1.5 + this.look.y * 2);
+    this.warpMesh(this.headMesh, this.headRest, LAYERS.head.at, (x, y, o) => {
+      const wh = smooth(150, 330, y) * (1 - smooth(260, 420, x));
+      o[0] += Math.sin(t * 1.2 + y * 0.012) * 6 * wh - this.head.rotation * 40 * wh;
+    });
+
+    // left arm: idle sway, raises with the orb
+    this.armU.rotation = Math.sin(t * 0.9) * 0.025 + fx.raise * 0.03;
+    this.armF.rotation = Math.sin(t * 0.9 + 0.7) * 0.03 + fx.raise * 0.2;
+    this.orb.alpha = Math.min(1, fx.orb * (0.8 + 0.2 * Math.sin(t * 9)) + r * 0.25);
+    this.orbCore.alpha = Math.min(1, fx.orb * 0.9 + r * 0.15);
+    this.orb.tint = tint;
+    this.orb.width = this.orb.height = 90 + fx.orb * 90 + Math.sin(t * 7) * 10;
+
+    // staff: sways in her grip, lifts to the sky, thumps the floor
+    // the rod slides along its own line so the body behind it is never uncovered
+    this.staff.rotation = Math.sin(t * 0.8) * 0.006;
+    const slide = -fx.lift * 80 + fx.thump * 16;
+    this.staff.position.set(GRIP[0] - HIPS[0] - slide * 0.143, GRIP[1] - HIPS[1] + slide);
+    this.warpMesh(this.staffMesh, this.staffRest, LAYERS.staff.at, (x, y, o) => {
+      const wk = 1 - smooth(90, 210, Math.hypot(x - COBRA_C[0], (y - COBRA_C[1]) * 0.8));
+      if (wk <= 0) return;
+      const ang = Math.sin(t * 1.3) * 0.07 - fx.rear * 0.2 + fx.strike * 0.14;
+      const dx = x - COBRA_NECK[0];
+      const dy = y - COBRA_NECK[1];
+      const sc = 1 + fx.strike * 0.14;
+      o[0] += (dx * Math.cos(ang) * sc - dy * Math.sin(ang) * sc - dx + fx.strike * 28) * wk;
+      o[1] += (dx * Math.sin(ang) * sc + dy * Math.cos(ang) * sc - dy - fx.rear * 14 + Math.sin(t * 1.3 + 1) * 3) * wk;
+    });
+    // overlays riding the cobra head
+    const cob = (p: readonly [number, number]): [number, number] => {
+      const wk = 1 - smooth(90, 210, Math.hypot(p[0] - COBRA_C[0], (p[1] - COBRA_C[1]) * 0.8));
+      const ang = Math.sin(t * 1.3) * 0.07 - fx.rear * 0.2 + fx.strike * 0.14;
+      const dx = p[0] - COBRA_NECK[0];
+      const dy = p[1] - COBRA_NECK[1];
+      const sc = 1 + fx.strike * 0.14;
+      return [
+        p[0] + (dx * Math.cos(ang) * sc - dy * Math.sin(ang) * sc - dx + fx.strike * 28) * wk - GRIP[0],
+        p[1] + (dx * Math.sin(ang) * sc + dy * Math.cos(ang) * sc - dy - fx.rear * 14 + Math.sin(t * 1.3 + 1) * 3) * wk - GRIP[1],
+      ];
+    };
+    this.cobraEye.position.set(...cob(COBRA_EYE));
+    this.cobraEye.tint = r > 0.5 ? RED : 0xff3a24;
     this.cobraEye.alpha = 0.55 + 0.25 * Math.sin(t * 3.1) + fx.flare * 0.5 + r * 0.3;
     this.cobraEye.scale.set((34 + fx.flare * 36) / 256);
-    this.warp(COBRA_MOUTH[0], COBRA_MOUTH[1], o);
-    this.mouthOrb.position.set(o[0], o[1]);
+    const mouth = cob(COBRA_MOUTH);
+    this.mouthOrb.position.set(...mouth);
     this.mouthOrb.alpha = Math.min(1, fx.beam * 1.2 + fx.strike * 0.4);
     this.mouthOrb.tint = tint;
-    this.mouthOrb.scale.set((24 + fx.beam * 80 + Math.random() * 10) / 256);
-    this.beam.position.set(o[0], o[1]);
+    this.mouthOrb.scale.set((24 + fx.beam * 90 + Math.random() * 10) / 256);
+    this.beam.position.set(...mouth);
     this.beam.alpha = fx.beam * (0.85 + Math.random() * 0.15);
     this.beam.tint = tint;
-    this.beam.scale.set((1200 * (0.5 + fx.beam * 0.5)) / 512, (280 + Math.random() * 40) / 64);
-    // the stream arcs over the reels toward the sky
-    this.beam.rotation = -0.55 + Math.sin(t * 6) * 0.03;
+    this.beam.scale.set((1300 * (0.5 + fx.beam * 0.5)) / 512, (300 + Math.random() * 40) / 64);
+    this.beam.rotation = -0.75 + Math.sin(t * 6) * 0.03;
 
-    // aura
+    // eyes, cracks, aura
+    const flick = Math.random() < 0.012 ? 0.3 : 1;
+    for (const g of this.eyeGlows) {
+      g.tint = lerpColor(0xffd890, RED, r);
+      g.alpha = (0.15 + r * 0.6 + beat * 0.25 * r + fx.flare * 0.6) * flick;
+      const s = (30 + fx.flare * 30 + r * 10) / 256;
+      g.scale.set(s * 1.4, s);
+    }
+    this.headCracks[0].alpha = this.baseCracks[0].alpha = r;
+    this.headCracks[1].alpha = this.baseCracks[1].alpha = r * (0.4 + beat * 0.6 + fx.flare * 0.4);
     this.noise.x = (this.noise.x + dt * 10) % 256;
     this.noise.y = (this.noise.y - dt * 70) % 256;
     this.displace.scale.x = 14 + r * 14 + fx.flare * 20;
     this.displace.scale.y = 26 + r * 20 + fx.flare * 30;
     this.auraOuter.tint = tint;
-    this.auraInner.tint = lerpColor(0xffd090, 0xff5040, r);
-    this.auraOuter.alpha = 0.32 + r * 0.25 + beat * 0.12 + fx.flare * 0.4;
-    this.auraInner.alpha = 0.06 + r * 0.12 + fx.flare * 0.2;
+    this.auraOuter.alpha = 0.28 + r * 0.25 + beat * 0.1 + fx.flare * 0.35;
+    this.baseMesh.tint = this.headMesh.tint = lerpColor(0xffffff, 0xffb8a8, r * 0.55);
 
-    // sparkles running along the gold, embers drifting up
+    // sparkles on the gold, embers, orb wisps
     this.emitIn -= dt;
     if (this.emitIn <= 0) {
-      this.emitIn = 0.045 - r * 0.015;
+      this.emitIn = 0.04 - r * 0.012;
       this.spawnSparkle();
-      if (Math.random() < 0.5 + r * 0.4) this.spawnEmber();
+      if (Math.random() < 0.45 + r * 0.4) this.spawnEmber();
+      if (fx.orb > 0.3 || r > 0.5) this.spawnOrbWisp();
     }
     for (let i = this.motes.length - 1; i >= 0; i--) {
       const m = this.motes[i];
@@ -478,43 +635,53 @@ export class Mascot extends Container {
     }
   };
 
-  private spawnSparkle(): void {
-    const pts = this.tex.sparklePoints;
-    if (!pts.length) return;
-    const [x, y] = pts[Math.floor(Math.random() * pts.length)];
-    const o: [number, number] = [0, 0];
-    this.warp(x, y, o);
-    const s = new Sprite(this.tex.glow);
-    s.anchor.set(0.5);
-    s.position.set(o[0], o[1]);
-    s.blendMode = 'add';
-    s.tint = this.form === 'inhuman' ? 0xff6a40 : 0xfff0c0;
-    this.front.addChild(s);
-    this.motes.push({ s, vx: 0, vy: -6, life: 0.35 + Math.random() * 0.4, age: 0, a0: 1, size: 12 + Math.random() * 18 });
-  }
-
-  private spawnEmber(x = Math.random() * ART_W, y = ART_H * (0.35 + Math.random() * 0.6), burst = 0): void {
+  private mote(x: number, y: number, tint: number, vx: number, vy: number, life: number, size: number, startScale = 0): void {
     const s = new Sprite(this.tex.glow);
     s.anchor.set(0.5);
     s.position.set(x, y);
-    s.scale.set((3 + Math.random() * 7) / 256);
     s.blendMode = 'add';
-    s.tint = this.form === 'inhuman' ? (Math.random() < 0.7 ? RED : 0xffa070) : Math.random() < 0.6 ? 0xff9a40 : GOLD;
+    s.tint = tint;
+    if (startScale) s.scale.set(startScale);
     this.front.addChild(s);
-    const a = Math.random() * Math.PI * 2;
-    this.motes.push({
-      s,
-      vx: burst ? Math.cos(a) * burst : (Math.random() - 0.5) * 16,
-      vy: burst ? Math.sin(a) * burst - 40 : -(40 + Math.random() * 70),
-      life: 1.4 + Math.random() * 1.2,
-      age: 0,
-      a0: 0.95,
-      size: 0,
-    });
+    this.motes.push({ s, vx, vy, life, age: 0, a0: 1, size });
   }
 
-  private burst(n: number, at: [number, number] = [HEAD_C[0], HEAD_C[1]], speed = 180): void {
-    for (let i = 0; i < n; i++) this.spawnEmber(at[0] + (Math.random() - 0.5) * 40, at[1] + (Math.random() - 0.5) * 40, speed * (0.4 + Math.random() * 0.8));
+  private spawnSparkle(): void {
+    const keys: [LayerKey, Bone][] = [['base', this.torso], ['head', this.head], ['staff', this.staff], ['armU', this.armU], ['armF', this.armF]];
+    const [k, bone] = keys[Math.floor(Math.random() * keys.length)];
+    const pts = this.tex.sparkles[k];
+    if (!pts.length) return;
+    const p = pts[Math.floor(Math.random() * pts.length)];
+    const [x, y] = this.artPoint(bone, [p[0] + LAYERS[k].at[0], p[1] + LAYERS[k].at[1]]);
+    this.mote(x, y, this.form === 'inhuman' ? 0xff6a40 : 0xfff0c0, 0, -6, 0.35 + Math.random() * 0.4, 12 + Math.random() * 18);
+  }
+
+  private spawnEmber(at?: [number, number], speed = 0): void {
+    const [x, y] = at ?? [Math.random() * ART_W, ART_H * (0.35 + Math.random() * 0.6)];
+    const a = Math.random() * Math.PI * 2;
+    const tint = this.form === 'inhuman' ? (Math.random() < 0.7 ? RED : 0xffa070) : Math.random() < 0.6 ? 0xff9a40 : GOLD;
+    this.mote(
+      x + (speed ? (Math.random() - 0.5) * 30 : 0),
+      y,
+      tint,
+      speed ? Math.cos(a) * speed : (Math.random() - 0.5) * 16,
+      speed ? Math.sin(a) * speed - 40 : -(40 + Math.random() * 70),
+      1.4 + Math.random() * 1.2,
+      0,
+      (3 + Math.random() * 7) / 256,
+    );
+  }
+
+  /** Wisps of light spiralling around the orb in her palm. */
+  private spawnOrbWisp(): void {
+    const [x, y] = this.artPoint(this.armF, PALM);
+    const a = Math.random() * Math.PI * 2;
+    const r = 30 + Math.random() * 40;
+    this.mote(x + Math.cos(a) * r, y + Math.sin(a) * r, this.form === 'inhuman' ? RED : 0xffe0a0, -Math.cos(a) * 60, -Math.sin(a) * 60 - 30, 0.6 + Math.random() * 0.4, 14 + Math.random() * 12);
+  }
+
+  private burst(n: number, at: [number, number], speed = 180): void {
+    for (let i = 0; i < n; i++) this.spawnEmber(at, speed * (0.4 + Math.random() * 0.8));
   }
 
   private crackle(power = 1): void {
@@ -543,6 +710,16 @@ export class Mascot extends Container {
     gsap.fromTo(g, { alpha: 1 }, { alpha: 0, duration: 0.35, ease: 'steps(5)' });
   }
 
+  /** The staff strikes the floor: a ring of light and sparks bursting from its foot. */
+  private staffImpact(power: number): void {
+    const s = this.shock;
+    gsap.killTweensOf([s, s.scale]);
+    s.tint = this.form === 'inhuman' ? RED : GOLD;
+    gsap.fromTo(s.scale, { x: 0.3, y: 0.09 }, { x: 1.6 * power, y: 0.45 * power, duration: 0.6, ease: 'power2.out' });
+    gsap.fromTo(s, { alpha: 1 }, { alpha: 0, duration: 0.6, ease: 'power1.in' });
+    this.burst(Math.round(14 * power), this.artPoint(this.staff, STAFF_FOOT), 200);
+  }
+
   /* ------------------------------------------------------------ behaviour */
 
   private scheduleTell(): void {
@@ -551,12 +728,14 @@ export class Mascot extends Container {
       if (!this.busy?.isActive()) {
         const roll = Math.random();
         const tl = gsap.timeline();
-        if (roll < 0.4) {
+        if (roll < 0.35) {
           const dir = Math.random() < 0.65 ? 1 : -0.6;
-          tl.add(() => this.lookAt(dir, Math.random() * 0.5)).add(() => this.lookAt(0, 0), 1.4 + Math.random());
-        } else if (roll < 0.75) {
-          // the cobra rears, then flicks toward the reels
+          tl.add(() => this.lookAt(dir, Math.random() * 0.5)).add(() => this.lookAt(0, 0), 1.6 + Math.random());
+        } else if (roll < 0.65) {
           tl.to(this.fx, { rear: 0.6, duration: 0.35, ease: 'power2.out' }).to(this.fx, { rear: 0, strike: 0.4, duration: 0.14, ease: 'power3.in' }).to(this.fx, { strike: 0, duration: 0.4 });
+        } else if (roll < 0.85) {
+          // she summons a small flame in her palm and closes her hand on it
+          tl.to(this.fx, { raise: 0.45, orb: 0.6, duration: 0.6, ease: 'sine.inOut' }).to(this.fx, { raise: 0, orb: 0, duration: 0.8, ease: 'sine.inOut' }, '+=0.8');
         } else {
           tl.to(this.fx, { flare: 0.4, duration: 0.25 }).to(this.fx, { flare: 0, duration: 0.8 });
           if (this.form === 'inhuman') this.crackle(0.6);
@@ -573,7 +752,9 @@ export class Mascot extends Container {
     this.look.ty = y;
   }
 
-  shockwave(_power = 1): void {}
+  shockwave(power = 1): void {
+    this.staffImpact(power);
+  }
 
   private play(tl: gsap.core.Timeline): void {
     this.busy?.progress(1).kill();
@@ -589,25 +770,26 @@ export class Mascot extends Container {
     }
     this.filters = [this.split];
     const tl = gsap.timeline({ onComplete: () => (this.filters = []) });
-    tl.to(this.fx, { flare: 0.8, rear: 1, shake: 6, duration: 0.3 }, 0);
+    tl.to(this.fx, { flare: 0.8, lift: 1, raise: 1, orb: 1, rear: 1, shake: 6, duration: 0.4, ease: 'power2.out' }, 0);
     for (let i = 0; i < 6; i++) {
       tl.add(() => {
         this.rage = i % 2 ? (to === 'inhuman' ? 0.2 : 0.8) : to === 'inhuman' ? 0.9 : 0.1;
         this.split.red = { x: (Math.random() - 0.5) * 22, y: (Math.random() - 0.5) * 6 };
         this.split.blue = { x: (Math.random() - 0.5) * 22, y: 0 };
         if (to === 'inhuman') this.crackle(0.7);
-      }, 0.1 + i * 0.07);
+      }, 0.15 + i * 0.07);
     }
     tl.add(() => {
       this.form = to;
       this.split.red = { x: 0, y: 0 };
       this.split.blue = { x: 0, y: 0 };
-      this.burst(30);
+      this.burst(30, this.artPoint(this.armF, PALM), 220);
       if (to === 'inhuman') this.crackle(1.4);
       this.onTransform?.(to);
-    }, 0.55)
-      .to(this.fx, { rear: 0, strike: 1, flare: 1.2, duration: 0.15 }, 0.55)
-      .to(this.fx, { strike: 0, flare: 0, shake: 0, duration: 0.7 }, 1.4);
+    }, 0.6)
+      .to(this.fx, { lift: 0, thump: 1, rear: 0, strike: 1, flare: 1.2, duration: 0.14, ease: 'power3.in' }, 0.6)
+      .add(() => this.staffImpact(1.4), 0.74)
+      .to(this.fx, { thump: 0, strike: 0, flare: 0, shake: 0, raise: 0, orb: 0, duration: 0.8, ease: 'power2.out' }, 1.3);
     this.play(tl);
   }
 
@@ -615,33 +797,42 @@ export class Mascot extends Container {
     const tl = gsap.timeline();
     switch (kind) {
       case 'spin':
+        // lift the staff a little and strike the floor with it
         this.lookAt(1, 0.4);
-        tl.to(this.fx, { rear: 0.5, flare: 0.2, duration: 0.2, ease: 'power2.out' })
-          .to(this.fx, { rear: 0, strike: 0.35, duration: 0.12, ease: 'power3.in' })
-          .to(this.fx, { strike: 0, flare: 0, duration: 0.5 })
-          .add(() => this.lookAt(0.7, 0.3), 0.6);
+        tl.to(this.fx, { lift: 0.25, rear: 0.4, duration: 0.16, ease: 'power2.out' })
+          .to(this.fx, { lift: 0, thump: 1, rear: 0, strike: 0.3, duration: 0.1, ease: 'power3.in' })
+          .add(() => this.staffImpact(0.7))
+          .to(this.fx, { thump: 0, strike: 0, duration: 0.4, ease: 'power2.out' })
+          .add(() => this.lookAt(0.7, 0.3));
         break;
       case 'codex':
         tl.to(this.fx, { rear: 0.8, duration: 0.12, ease: 'power2.out' }).to(this.fx, { rear: 0, strike: 0.8, flare: 0.5, duration: 0.1, ease: 'power3.in' }).to(this.fx, { strike: 0, flare: 0, duration: 0.5 });
         break;
       case 'win':
-        this.lookAt(0.3, 0);
-        tl.to(this.fx, { rear: 0.7, flare: 0.6, duration: 0.18, ease: 'power2.out' })
-          .to(this.fx, { rear: 0, strike: 0.8, flare: 0.9, duration: 0.12, ease: 'power3.in' })
-          .add(() => this.burst(18, COBRA_MOUTH, 160))
-          .to(this.fx, { strike: 0, flare: 0, duration: 0.6 }, '+=0.15');
+        // she raises her hand and a flame of gold blooms in her palm
+        this.lookAt(-0.3, 0);
+        tl.to(this.fx, { raise: 1, orb: 1, flare: 0.6, bow: -0.5, duration: 0.45, ease: 'back.out(1.6)' })
+          .add(() => this.burst(18, this.artPoint(this.armF, PALM), 170), 0.35)
+          .to(this.fx, { rear: 0.6, duration: 0.15 }, 0.2)
+          .to(this.fx, { rear: 0, strike: 0.7, duration: 0.1, ease: 'power3.in' }, 0.4)
+          .to(this.fx, { strike: 0, duration: 0.4 }, 0.6)
+          .to(this.fx, { raise: 0, orb: 0, flare: 0, bow: 0, duration: 0.9, ease: 'sine.inOut' }, 1.4)
+          .add(() => this.lookAt(0.5, 0.2));
         break;
       case 'big':
-        this.lookAt(0.6, -0.4);
-        tl.to(this.fx, { rear: 1, flare: 1, y: -10, duration: 0.25, ease: 'power2.out' })
+        // staff to the sky, the cobra spits light, her free hand blazes
+        this.lookAt(0.4, -0.6);
+        tl.to(this.fx, { lift: 1, raise: 0.8, orb: 1, rear: 1, flare: 1, y: -8, duration: 0.4, ease: 'back.out(1.4)' })
           .to(this.fx, { rear: 0, strike: 1, flare: 1.4, shake: 5, duration: 0.12, ease: 'power3.in' })
           .to(this.fx, { beam: 1, duration: 0.15 })
           .add(() => {
-            this.burst(40, COBRA_MOUTH, 240);
+            this.burst(40, this.artPoint(this.staff, COBRA_MOUTH), 240);
             this.crackle(1.2);
           }, '<')
-          .to(this.fx, { beam: 0, shake: 0, duration: 0.45 }, '+=1.1')
-          .to(this.fx, { strike: 0, flare: 0, y: 0, duration: 0.8, ease: 'power2.out' })
+          .to(this.fx, { beam: 0, shake: 0, duration: 0.45 }, '+=1.2')
+          .to(this.fx, { lift: 0, thump: 1, strike: 0, duration: 0.18, ease: 'power3.in' })
+          .add(() => this.staffImpact(1.3))
+          .to(this.fx, { thump: 0, raise: 0, orb: 0, flare: 0, y: 0, duration: 0.8, ease: 'power2.out' })
           .add(() => this.lookAt(0, 0));
         break;
       case 'feature':

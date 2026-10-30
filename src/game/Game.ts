@@ -22,8 +22,8 @@ const BOARD_Y = 152;
 const WORLD_TOP = -140;
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
 /** Cleopatra stands left of the reels, her cobra staff right beside the frame */
-const MASCOT_X = -330;
-const MASCOT_SCALE = 1;
+const MASCOT_X = -255;
+const MASCOT_SCALE = 0.82;
 const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 200;
 
@@ -136,7 +136,7 @@ export class Game {
     this.teaser = this.buildTeaser(tex);
     this.mascot = new Mascot(mascotTex, assets.mascot);
     this.mascot.scale.set(MASCOT_SCALE);
-    this.mascot.position.set(MASCOT_X, BOARD_Y + BOARD_H + 190);
+    this.mascot.position.set(MASCOT_X, BOARD_Y + BOARD_H + 150);
     this.mascot.setBook(tex.normal[Sym.CODEX]);
     this.mascotFx = new Particles(tex);
     this.mascot.onTransform = (to) => {
@@ -293,9 +293,12 @@ export class Game {
     this.baseScale = scale;
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
-    this.world.position.set(w / 2, availH / 2);
+    // on wide screens the reels slide right a little to give Cleopatra the stage on the left
+    const wide = !portrait && w / h > 1.45;
+    const shift = wide ? Math.min(w * 0.06, 140) : 0;
+    this.world.position.set(w / 2 + shift, availH / 2);
     // shown when her face is on screen (the veil and arm may run off the left edge)
-    const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
+    const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2 + shift;
     this.mascot.visible = SHOW_MASCOT && !portrait && faceX > 40;
     this.bg.resize(w, h);
     this.overlays.resize(w, h);
