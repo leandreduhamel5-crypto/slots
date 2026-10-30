@@ -3,125 +3,130 @@ import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { INK, makeCanvas, paintShine, softGlow } from './art/painters';
 import { goldGrad } from './art/egyptFrame';
-import { BLOOD_METAL, GOLD, metalTitle, textMask } from './art/logoArt';
+import { GOLD, cheapBlur, dilateMask, metalTitle, textMask } from './art/logoArt';
 
-/** Eye medallion that replaces an "O" in BOOK: gold ring, red reptile eye. */
-function eyeMedallion(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  const halo = ctx.createRadialGradient(x, y, r * 0.4, x, y, r * 1.9);
-  halo.addColorStop(0, 'rgba(255,40,40,0.75)');
-  halo.addColorStop(1, 'rgba(255,40,40,0)');
-  ctx.fillStyle = halo;
-  ctx.fillRect(x - r * 2, y - r * 2, r * 4, r * 4);
-  ctx.restore();
-  // ring (with ink edge, matching the 3D letters)
-  ctx.beginPath();
-  ctx.arc(x, y, r + 8, 0, Math.PI * 2);
-  ctx.fillStyle = '#0a0204';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = goldGrad(ctx, x - r, y - r, x + r, y + r);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(x, y, r * 0.74, 0, Math.PI * 2);
-  ctx.fillStyle = '#1a0306';
-  ctx.fill();
-  // almond
-  const almond = () => {
-    ctx.beginPath();
-    ctx.moveTo(x - r * 0.66, y);
-    ctx.quadraticCurveTo(x, y - r * 0.7, x + r * 0.66, y);
-    ctx.quadraticCurveTo(x, y + r * 0.7, x - r * 0.66, y);
-    ctx.closePath();
-  };
-  almond();
-  const ig = ctx.createRadialGradient(x, y, 1, x, y, r * 0.6);
-  ig.addColorStop(0, '#ffe8a0');
-  ig.addColorStop(0.35, '#ff7a1a');
-  ig.addColorStop(0.75, '#e01020');
-  ig.addColorStop(1, '#5a0008');
-  ctx.fillStyle = ig;
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = INK;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(x, y, r * 0.09, r * 0.4, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#0a0002';
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.beginPath();
-  ctx.ellipse(x + r * 0.2, y - r * 0.2, r * 0.12, r * 0.07, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-}
 
 /**
- * "BOOK OF INFECTION" as cast metal (art/logoArt.ts): polished-gold BOOK OF with the eye
- * medallion as its second O, and INFECTION in blood-red metal veined with molten cracks,
- * both rimmed in gold. Painted at 2× (2200×760) for crisp edges on any screen.
+ * "BOOK OF INFECTION" in the spirit of the art-direction sheet: an Eye of Horus emblem in
+ * polished gold, BOOK OF in wide-tracked capitals between gold rules, INFECTION in tall
+ * Cinzel cast in gold with molten red veins, and a small subtitle. Painted at 2x.
  */
 export function paintLogo(_eye?: HTMLCanvasElement): HTMLCanvasElement {
   const S = 2;
   const w = 1100 * S;
   const h = 380 * S;
   const [c, ctx] = makeCanvas(w, h);
+  const cx = w / 2;
 
-  // dark smoke behind the title so it reads over anything
+  // a soft dark halo so the title reads over the bright sky
   ctx.save();
   ctx.filter = 'blur(60px)';
-  ctx.fillStyle = 'rgba(20,0,4,0.7)';
+  ctx.fillStyle = 'rgba(10,2,4,0.65)';
   ctx.beginPath();
-  ctx.ellipse(w / 2, h / 2, w * 0.4, h * 0.32, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, h * 0.5, w * 0.36, h * 0.36, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // ---- BOOK OF: one mask, the eye takes the place of the second O
-  const deco = '"Cinzel Decorative", Cinzel, serif';
-  const size = 270;
-  const pad = 40;
-  const [, mx] = makeCanvas(10, 10);
-  mx.font = `900 ${size}px ${deco}`;
-  const wB = mx.measureText('B').width;
-  const wO = mx.measureText('O').width;
-  const wK = mx.measureText('K').width;
-  mx.font = `900 ${size * 0.48}px ${deco}`;
-  const wOF = mx.measureText('OF').width;
-  const gap = 10;
-  const eyeW = wO * 1.08;
-  const total = wB + wO + eyeW + wK + wOF + gap * 5;
-  const [bm, bctx] = makeCanvas(Math.ceil(total + pad * 2), Math.ceil(size * 1.25 + pad * 2));
-  bctx.fillStyle = '#fff';
-  bctx.textBaseline = 'middle';
-  const midY = bm.height / 2 + size * 0.04;
-  let x = pad;
-  bctx.font = `900 ${size}px ${deco}`;
-  bctx.fillText('B', x, midY);
-  x += wB + gap;
-  bctx.fillText('O', x, midY);
-  x += wO + gap;
-  const eyeX = x + eyeW / 2;
-  x += eyeW + gap;
-  bctx.fillText('K', x, midY);
-  x += wK + gap * 2;
-  bctx.font = `900 ${size * 0.48}px ${deco}`;
-  bctx.fillText('OF', x, midY - size * 0.2);
-  const book = metalTitle(bm, GOLD, { outline: 9, tilt: -0.05 });
-  const bookX = w / 2 - bm.width / 2;
-  const bookY = 30;
-  ctx.drawImage(book, bookX, bookY);
-  eyeMedallion(ctx, bookX + eyeX, bookY + midY + 4, size * 0.4);
-
-  // ---- INFECTION: blood metal with molten veins
-  const im = textMask('INFECTION', 'Cinzel, serif', 300, 14, 50);
-  const inf = metalTitle(im, BLOOD_METAL, { outline: 10, cracks: 22, seed: 11 });
-  const k = Math.min(1, (w - 60) / inf.width);
+  // ---- Eye of Horus emblem
+  const [em, ex] = makeCanvas(420, 220);
+  ex.fillStyle = '#fff';
+  ex.strokeStyle = '#fff';
+  ex.lineCap = 'round';
+  ex.lineJoin = 'round';
+  // brow
+  ex.lineWidth = 16;
+  ex.beginPath();
+  ex.moveTo(90, 52);
+  ex.quadraticCurveTo(210, 8, 340, 50);
+  ex.stroke();
+  // almond eye outline with the long kohl tail
+  ex.lineWidth = 14;
+  ex.beginPath();
+  ex.moveTo(100, 112);
+  ex.quadraticCurveTo(205, 40, 320, 104);
+  ex.quadraticCurveTo(205, 160, 100, 112);
+  ex.moveTo(318, 104);
+  ex.lineTo(392, 110);
+  ex.stroke();
+  // the falcon markings: the drop and the spiral
+  ex.lineWidth = 13;
+  ex.beginPath();
+  ex.moveTo(176, 140);
+  ex.lineTo(150, 205);
+  ex.moveTo(240, 140);
+  ex.quadraticCurveTo(250, 200, 300, 196);
+  ex.quadraticCurveTo(330, 190, 316, 168);
+  ex.stroke();
+  const emblem = metalTitle(em, { ...GOLD, bevel: 6 }, { outline: 5 });
+  const emX = cx - em.width / 2;
+  const emY = 8;
+  ctx.drawImage(emblem, emX, emY);
+  // the iris: a glowing ruby
+  const ir = { x: emX + 208, y: emY + 102, r: 30 };
   ctx.save();
-  ctx.translate(w / 2, 520);
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = ctx.createRadialGradient(ir.x, ir.y, 4, ir.x, ir.y, ir.r * 3);
+  halo.addColorStop(0, 'rgba(255,60,40,0.8)');
+  halo.addColorStop(1, 'rgba(255,40,30,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(ir.x - ir.r * 3, ir.y - ir.r * 3, ir.r * 6, ir.r * 6);
+  ctx.restore();
+  const rg = ctx.createRadialGradient(ir.x - 8, ir.y - 8, 2, ir.x, ir.y, ir.r);
+  rg.addColorStop(0, '#ffd8c8');
+  rg.addColorStop(0.35, '#ff3a2a');
+  rg.addColorStop(1, '#5a0008');
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.arc(ir.x, ir.y, ir.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.beginPath();
+  ctx.ellipse(ir.x - 9, ir.y - 10, 8, 5, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ---- BOOK OF between gold rules
+  const bm = textMask('BOOK OF', 'Cinzel, serif', 96, 34, 24, 700);
+  const book = metalTitle(bm, { ...GOLD, bevel: 5 }, { outline: 5 });
+  const bookY = 210;
+  ctx.drawImage(book, cx - bm.width / 2, bookY);
+  const ruleY = bookY + bm.height / 2;
+  const rule = (x0: number, x1: number) => {
+    const g = ctx.createLinearGradient(x0, 0, x1, 0);
+    const outward = x0 < cx ? [0, 1] : [1, 0];
+    g.addColorStop(outward[0], 'rgba(242,194,90,0)');
+    g.addColorStop(outward[1], 'rgba(255,226,150,1)');
+    ctx.fillStyle = g;
+    ctx.fillRect(Math.min(x0, x1), ruleY - 2, Math.abs(x1 - x0), 4);
+    const d = x0 < cx ? x1 : x1;
+    ctx.save();
+    ctx.translate(d, ruleY);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = goldGrad(ctx, -9, -9, 9, 9);
+    ctx.fillRect(-8, -8, 16, 16);
+    ctx.restore();
+  };
+  rule(cx - bm.width / 2 - 360, cx - bm.width / 2 + 10);
+  rule(cx + bm.width / 2 + 360, cx + bm.width / 2 - 10);
+
+  // ---- INFECTION: tall cast gold with molten veins
+  const im = textMask('INFECTION', 'Cinzel, serif', 290, 26, 50, 700);
+  const inf = metalTitle(im, GOLD, { outline: 9, cracks: 16, seed: 11 });
+  const k = Math.min(1, (w - 80) / inf.width);
+  ctx.save();
+  ctx.translate(cx, 480);
   ctx.scale(k, k);
+  // red ember glow behind the letters
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.55;
+  const gp = 220;
+  const [padded, px] = makeCanvas(im.width + gp * 2, im.height + gp * 2);
+  px.drawImage(im, gp, gp);
+  ctx.drawImage(cheapBlur(dilateMask(padded, 10, '#ff2a14'), 44), -inf.width / 2 - gp, -inf.height / 2 - gp, padded.width, padded.height);
+  ctx.restore();
   ctx.drawImage(inf, -inf.width / 2, -inf.height / 2);
   ctx.restore();
+
   return c;
 }
 

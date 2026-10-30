@@ -221,13 +221,13 @@ export function moltenCracks(mask: HTMLCanvasElement, seed: number, density: num
 }
 
 /** Text mask with letter spacing, centred. */
-export function textMask(text: string, font: string, size: number, spacing: number, pad: number): HTMLCanvasElement {
+export function textMask(text: string, font: string, size: number, spacing: number, pad: number, weight = 900): HTMLCanvasElement {
   const [, mctx] = makeCanvas(10, 10);
-  mctx.font = `900 ${size}px ${font}`;
+  mctx.font = `${weight} ${size}px ${font}`;
   const widths = [...text].map((ch) => mctx.measureText(ch).width);
   const total = widths.reduce((a, b) => a + b, 0) + spacing * (text.length - 1);
   const [c, ctx] = makeCanvas(Math.ceil(total + pad * 2), Math.ceil(size * 1.2 + pad * 2));
-  ctx.font = `900 ${size}px ${font}`;
+  ctx.font = `${weight} ${size}px ${font}`;
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#fff';
   let x = pad;

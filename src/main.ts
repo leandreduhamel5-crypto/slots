@@ -2,6 +2,7 @@ import '@fontsource/luckiest-guy/400.css';
 import '@fontsource/nunito/700.css';
 import '@fontsource/nunito/800.css';
 import '@fontsource/nunito/900.css';
+import '@fontsource/cinzel/700.css';
 import '@fontsource/cinzel/900.css';
 import '@fontsource/cinzel-decorative/900.css';
 import '@fontsource/creepster/400.css';
@@ -24,6 +25,7 @@ async function boot(): Promise<void> {
     document.fonts.load('700 64px Nunito'),
     document.fonts.load('800 64px Nunito'),
     document.fonts.load('900 64px Nunito'),
+    document.fonts.load('700 64px Cinzel'),
     document.fonts.load('900 64px Cinzel'),
     document.fonts.load('900 64px "Cinzel Decorative"'),
     document.fonts.load('400 64px Creepster'),

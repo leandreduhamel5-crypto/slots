@@ -173,19 +173,33 @@ export class ReelBoard extends Container {
       this.frameLayer.addChild(g);
       return g;
     };
-    // red gems on the frame (corner bosses, winged suns) pulse with the infection
+    // rubies on the frame (corner blocks, the crown's sun, the bottom sun) pulse with the infection
+    const colW = FRAME_PAD - 2;
     [
-      [-FRAME_PAD / 2 - 2, -FRAME_PAD / 2 - 2],
-      [BOARD_W + FRAME_PAD / 2 + 2, -FRAME_PAD / 2 - 2],
-      [-FRAME_PAD / 2 - 2, BOARD_H + FRAME_PAD / 2 + 2],
-      [BOARD_W + FRAME_PAD / 2 + 2, BOARD_H + FRAME_PAD / 2 + 2],
-      [-FRAME_PAD / 2 - 2, BOARD_H / 2],
-      [BOARD_W + FRAME_PAD / 2 + 2, BOARD_H / 2],
-      [BOARD_W / 2, BOARD_H + FRAME_PAD / 2 + 2],
+      [-FRAME_PAD + colW / 2, -FRAME_PAD / 2 - 3],
+      [BOARD_W + FRAME_PAD - colW / 2, -FRAME_PAD / 2 - 3],
+      [-FRAME_PAD + colW / 2, BOARD_H + FRAME_PAD / 2 + 3],
+      [BOARD_W + FRAME_PAD - colW / 2, BOARD_H + FRAME_PAD / 2 + 3],
+      [BOARD_W / 2, -FRAME_PAD / 2 - 4 - 380 * 0.11 * 0.35],
+      [BOARD_W / 2, BOARD_H + FRAME_PAD / 2 + 3],
     ].forEach(([x, y], i) => {
-      const eye = light(x, y, 80, COLORS.infection);
-      gsap.fromTo(eye, { alpha: 0.2 }, { alpha: 0.7, duration: 1.1 + i * 0.17, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
+      const eye = light(x, y, i === 4 ? 150 : 80, COLORS.infection);
+      gsap.fromTo(eye, { alpha: 0.25 }, { alpha: 0.8, duration: 1.1 + i * 0.17, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
     });
+    // a glint of light sweeping along the gold rails now and then
+    for (const y of [-FRAME_PAD / 2 - 3, BOARD_H + FRAME_PAD / 2 + 3]) {
+      const glint = light(-FRAME_PAD, y, 90, 0xfff2cc);
+      glint.scale.y *= 0.25;
+      glint.alpha = 0;
+      const run = () =>
+        gsap
+          .timeline({ delay: 3 + Math.random() * 5, onComplete: run })
+          .set(glint, { x: -FRAME_PAD, alpha: 0 })
+          .to(glint, { alpha: 0.9, duration: 0.2 })
+          .to(glint, { x: BOARD_W + FRAME_PAD, duration: 1.4, ease: 'sine.inOut' }, 0)
+          .to(glint, { alpha: 0, duration: 0.25 }, 1.15);
+      run();
+    }
 
     this.addChild(
       this.panels,

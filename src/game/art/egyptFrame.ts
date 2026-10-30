@@ -103,124 +103,207 @@ export function wingedSun(ctx: CanvasRenderingContext2D, x: number, y: number, s
   gem(ctx, x, y, span * 0.14);
 }
 
+/** Brushed-gold fill for a band, lit from the top. */
+function goldBand(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, vertical = false): CanvasGradient {
+  const g = vertical ? ctx.createLinearGradient(x, 0, x + w, 0) : ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, '#fff4c4');
+  g.addColorStop(0.15, '#f6c95a');
+  g.addColorStop(0.42, '#a8661a');
+  g.addColorStop(0.58, '#5a3208');
+  g.addColorStop(0.78, '#d79a34');
+  g.addColorStop(1, '#6a3a08');
+  return g;
+}
+
+/** Big winged sun crowning the frame: three tiers of feathers sweeping up and out, a gold disc, a ruby. */
+function grandWingedSun(ctx: CanvasRenderingContext2D, x: number, y: number, span: number): void {
+  const tiers: [number, string | null][] = [[1, null], [0.78, 'lapis'], [0.56, null]];
+  tiers.forEach(([k, kind], row) => {
+    for (const side of [-1, 1]) {
+      const len = span * k;
+      const n = 10 - row * 2;
+      for (let i = n - 1; i >= 0; i--) {
+        const t = i / (n - 1);
+        // feathers fan out along a gentle upward arc
+        const fx = x + side * (span * 0.1 + t * (len - span * 0.1));
+        const fy = y - 4 - row * 7 - Math.sin(t * Math.PI * 0.9) * span * 0.06 + t * t * span * 0.03;
+        const fh = span * (0.085 - row * 0.012) * (1 - t * 0.5);
+        const fw = (len - span * 0.1) / (n - 1) + 8;
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.rotate(side * (-0.18 + t * 0.32));
+        ctx.beginPath();
+        ctx.moveTo(-fw / 2, fh * 0.35);
+        ctx.lineTo(fw / 2, fh * 0.35);
+        ctx.quadraticCurveTo(fw / 2 + side * fw * 0.25, -fh * 0.4, 0, -fh);
+        ctx.quadraticCurveTo(-fw / 2 - side * fw * 0.1, -fh * 0.4, -fw / 2, fh * 0.35);
+        ctx.closePath();
+        ctx.fillStyle = kind === 'lapis' ? (i % 2 ? '#1f42a8' : '#3060d0') : goldGrad(ctx, -fw, -fh, fw, fh);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(40,18,2,0.85)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,245,210,0.45)';
+        ctx.beginPath();
+        ctx.moveTo(0, fh * 0.2);
+        ctx.lineTo(0, -fh * 0.75);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  });
+  const r = span * 0.11;
+  ctx.beginPath();
+  ctx.arc(x, y - r * 0.35, r, 0, Math.PI * 2);
+  ctx.fillStyle = goldGrad(ctx, x - r, y - r * 1.35, x + r, y + r * 0.65);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(40,18,2,0.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  gem(ctx, x, y - r * 0.35, r * 0.62);
+}
+
+/** Lotus capital / base on the side columns. */
+function capital(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, flip: boolean): void {
+  const h = w * 0.7;
+  const d = flip ? -1 : 1;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1, d);
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.32, 0);
+  ctx.bezierCurveTo(-w * 0.55, -h * 0.3, -w * 0.6, -h * 0.8, -w * 0.5, -h);
+  ctx.lineTo(w * 0.5, -h);
+  ctx.bezierCurveTo(w * 0.6, -h * 0.8, w * 0.55, -h * 0.3, w * 0.32, 0);
+  ctx.closePath();
+  ctx.fillStyle = goldGrad(ctx, -w / 2, -h, w / 2, 0);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(40,18,2,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(60,30,4,0.6)';
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * w * 0.09, -2);
+    ctx.quadraticCurveTo(i * w * 0.16, -h * 0.5, i * w * 0.2, -h + 3);
+    ctx.stroke();
+  }
+  ctx.fillStyle = goldGrad(ctx, -w / 2, -h - 8, w / 2, -h);
+  ctx.fillRect(-w * 0.58, -h - 8, w * 1.16, 9);
+  ctx.restore();
+}
+
 export function paintEgyptFrame(s: EgyptFrameSpec): HTMLCanvasElement {
   const W = s.boardW + s.pad * 2;
   const H = s.boardH + s.pad * 2;
   const [c, ctx] = makeCanvas(W + s.bleed * 2, H + s.bleed * 2);
   ctx.translate(s.bleed, s.bleed);
-  const inner = { x: s.pad - 6, y: s.pad - 6, w: s.boardW + 12, h: s.boardH + 12 };
-  const ring = () => {
-    rr(ctx, 0, 0, W, H, 18);
-    ctx.roundRect(inner.x, inner.y, inner.w, inner.h, 8);
-  };
+  const inner = { x: s.pad - 4, y: s.pad - 4, w: s.boardW + 8, h: s.boardH + 8 };
 
   // drop shadow outside the frame
   ctx.save();
-  ctx.filter = 'blur(18px)';
-  ctx.fillStyle = 'rgba(0,0,0,0.8)';
-  rr(ctx, 6, 16, W, H, 18);
+  ctx.filter = 'blur(20px)';
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  rr(ctx, 4, 18, W, H, 10);
   ctx.fill();
   ctx.restore();
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
-  rr(ctx, inner.x, inner.y, inner.w, inner.h, 8);
+  rr(ctx, inner.x, inner.y, inner.w, inner.h, 4);
   ctx.fill();
   ctx.restore();
 
-  // carved stone body
+  // body: dark lacquer behind the gold work
   ctx.save();
-  ring();
+  rr(ctx, 0, 0, W, H, 10);
+  ctx.roundRect(inner.x, inner.y, inner.w, inner.h, 4);
   ctx.clip('evenodd');
-  const stone = ctx.createLinearGradient(0, 0, 0, H);
-  stone.addColorStop(0, '#3a1e1c');
-  stone.addColorStop(0.5, '#24100f');
-  stone.addColorStop(1, '#140808');
-  ctx.fillStyle = stone;
+  ctx.fillStyle = '#120706';
   ctx.fillRect(0, 0, W, H);
-  const rnd = seeded(91);
-  for (let i = 0; i < 260; i++) {
-    ctx.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.25)' : 'rgba(255,200,170,0.05)';
-    ctx.beginPath();
-    ctx.ellipse(rnd() * W, rnd() * H, 2 + rnd() * 10, 1 + rnd() * 5, rnd() * 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // engraved hieroglyph-like marks along top and bottom bands
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  for (let x = 70; x < W - 70; x += 34) {
-    for (const y of [12, H - 28]) {
-      const k = Math.floor(rnd() * 4);
-      if (k === 0) ctx.fillRect(x, y + 2, 6, 14);
-      else if (k === 1) {
-        ctx.beginPath();
-        ctx.arc(x + 6, y + 9, 6, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (k === 2) ctx.fillRect(x - 2, y + 7, 18, 4);
-      else {
-        ctx.beginPath();
-        ctx.moveTo(x, y + 16);
-        ctx.lineTo(x + 7, y + 2);
-        ctx.lineTo(x + 14, y + 16);
-        ctx.fill();
-      }
-    }
-  }
-  // red infection cracks through the stone
-  for (let i = 0; i < 14; i++) {
-    const side = i % 4;
-    const x = side < 2 ? rnd() * W : side === 2 ? rnd() * s.pad : W - rnd() * s.pad;
-    const y = side === 0 ? rnd() * s.pad : side === 1 ? H - rnd() * s.pad : rnd() * H;
-    redCrack(ctx, x, y, rnd() * Math.PI * 2, 40 + rnd() * 70, 2.6, 400 + i * 11);
-  }
   ctx.restore();
 
-  // gold mouldings: outer edge and inner window lip
-  const moulding = (x: number, y: number, w: number, h: number, r: number, t: number) => {
-    ctx.save();
-    rr(ctx, x, y, w, h, r);
-    ctx.lineWidth = t;
-    ctx.strokeStyle = goldGrad(ctx, x, y, x + w * 0.15, y + h);
-    ctx.stroke();
+  // top and bottom rails: gold, a lapis/carnelian inlay band, engraved ticks
+  const rail = (y: number, h: number) => {
+    ctx.fillStyle = goldBand(ctx, 0, y, W, h);
+    ctx.fillRect(0, y, W, h);
+    ctx.strokeStyle = 'rgba(40,18,2,0.9)';
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(40,18,2,0.85)';
-    rr(ctx, x - t / 2, y - t / 2, w + t, h + t, r + t / 2);
-    ctx.stroke();
-    rr(ctx, x + t / 2, y + t / 2, w - t, h - t, Math.max(1, r - t / 2));
-    ctx.stroke();
-    ctx.restore();
+    ctx.strokeRect(0.75, y + 0.75, W - 1.5, h - 1.5);
+    const by = y + h * 0.36;
+    const bh = h * 0.28;
+    for (let x = 30, k = 0; x < W - 30; x += 16, k++) {
+      ctx.fillStyle = k % 4 === 0 ? '#c92a1c' : k % 2 ? '#1f42a8' : '#f2c25a';
+      ctx.fillRect(x, by, 14, bh);
+    }
+    ctx.fillStyle = 'rgba(255,248,220,0.6)';
+    ctx.fillRect(2, y + 2, W - 4, 1.5);
   };
-  moulding(4, 4, W - 8, H - 8, 16, 7);
-  moulding(inner.x - 5, inner.y - 5, inner.w + 10, inner.h + 10, 10, 9);
-  moulding(14, 14, W - 28, H - 28, 12, 2.5);
+  rail(0, s.pad - 6);
+  rail(H - s.pad + 6, s.pad - 6);
 
-  // inner bevel shadow (the reels sit deeper than the frame)
+  // side columns: fluted gold shafts with lotus capitals
+  const colW = s.pad - 2;
+  for (const x0 of [0, W - colW]) {
+    ctx.fillStyle = goldBand(ctx, x0, 0, colW, H, true);
+    ctx.fillRect(x0, s.pad - 8, colW, H - (s.pad - 8) * 2);
+    ctx.strokeStyle = 'rgba(40,18,2,0.55)';
+    ctx.lineWidth = 1.2;
+    for (let k = 1; k < 4; k++) {
+      ctx.beginPath();
+      ctx.moveTo(x0 + (colW * k) / 4, s.pad);
+      ctx.lineTo(x0 + (colW * k) / 4, H - s.pad);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(40,18,2,0.9)';
+    ctx.strokeRect(x0 + 0.75, s.pad - 8, colW - 1.5, H - (s.pad - 8) * 2);
+    capital(ctx, x0 + colW / 2, s.pad + 30, colW * 1.3, false);
+    capital(ctx, x0 + colW / 2, H - s.pad - 30, colW * 1.3, true);
+  }
+
+  // inner window lip: a thin bright gold bead and a deep shadow into the reels
   ctx.save();
-  rr(ctx, inner.x, inner.y, inner.w, inner.h, 8);
+  rr(ctx, inner.x - 4, inner.y - 4, inner.w + 8, inner.h + 8, 6);
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = goldGrad(ctx, inner.x, inner.y, inner.x + 60, inner.y + inner.h);
+  ctx.stroke();
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = 'rgba(30,12,2,0.95)';
+  rr(ctx, inner.x - 1, inner.y - 1, inner.w + 2, inner.h + 2, 4);
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  rr(ctx, inner.x, inner.y, inner.w, inner.h, 4);
   ctx.clip();
-  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-  ctx.filter = 'blur(8px)';
-  ctx.lineWidth = 22;
-  rr(ctx, inner.x, inner.y, inner.w, inner.h, 8);
+  ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+  ctx.filter = 'blur(10px)';
+  ctx.lineWidth = 26;
+  rr(ctx, inner.x, inner.y, inner.w, inner.h, 4);
   ctx.stroke();
   ctx.restore();
 
-  // corner bosses
-  for (const [x, y] of [[s.pad / 2 - 2, s.pad / 2 - 2], [W - s.pad / 2 + 2, s.pad / 2 - 2], [s.pad / 2 - 2, H - s.pad / 2 + 2], [W - s.pad / 2 + 2, H - s.pad / 2 + 2]]) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(Math.PI / 4);
-    ctx.fillStyle = goldGrad(ctx, -30, -30, 30, 30);
-    rr(ctx, -27, -27, 54, 54, 6);
+  // corner blocks with rubies
+  for (const [x, y] of [[colW / 2, s.pad / 2 - 3], [W - colW / 2, s.pad / 2 - 3], [colW / 2, H - s.pad / 2 + 3], [W - colW / 2, H - s.pad / 2 + 3]]) {
+    ctx.fillStyle = goldGrad(ctx, x - 26, y - 26, x + 26, y + 26);
+    rr(ctx, x - 26, y - 24, 52, 48, 6);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(50,24,2,0.9)';
+    ctx.strokeStyle = 'rgba(40,18,2,0.9)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.restore();
-    gem(ctx, x, y, 13);
+    rr(ctx, x - 18, y - 16, 36, 32, 4);
+    ctx.strokeStyle = 'rgba(255,240,200,0.45)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    gem(ctx, x, y, 11);
   }
-  // winged suns on the side posts and centre of the bottom rail
-  for (const [x, y, span] of [[s.pad / 2 - 2, H / 2, 46], [W - s.pad / 2 + 2, H / 2, 46], [W / 2, H - s.pad / 2 + 2, 120]] as const) {
-    wingedSun(ctx, x, y, span);
-  }
+  // the crown: a great winged sun over the top rail, a small one under the bottom rail
+  grandWingedSun(ctx, W / 2, s.pad / 2 - 4, Math.min(W * 0.3, 380));
+  wingedSun(ctx, W / 2, H - s.pad / 2 + 3, 110);
+  // nothing may cover the reels
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  rr(ctx, inner.x, inner.y, inner.w, inner.h, 4);
+  ctx.fill();
+  ctx.restore();
   return c;
 }
 

@@ -289,7 +289,7 @@ export class Game {
     const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
     this.teaser.visible = portrait && !this.inFeature;
     this.logo.scale.set(portrait ? 1.12 : 1);
-    this.logo.y = portrait ? -44 : -18;
+    this.logo.y = portrait ? -50 : -30;
     this.baseScale = scale;
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
