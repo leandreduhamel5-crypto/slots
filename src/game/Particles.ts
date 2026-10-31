@@ -31,6 +31,8 @@ interface P {
 /** Cartoon VFX: ink-outlined blood drops, comic stars, smoke puffs and glowing sparks. */
 export class Particles extends Container {
   private ps: P[] = [];
+  /** size of a particle relative to the design: small screens get smaller, fewer ones */
+  unit = 1;
   private fountain: { x: number; y: number; rate: number; acc: number } | null = null;
   private fountain2: { x: number; y: number; rate: number; acc: number } | null = null;
 
@@ -67,7 +69,7 @@ export class Particles extends Container {
     this.addChild(s);
     const g = kind === 'flake' ? 1050 : kind === 'sand' ? 620 : kind === 'puff' ? -60 : kind === 'star' ? 300 : kind === 'tex' ? 700 : kind === 'coin' ? 1150 : 1300;
     const spin = kind === 'coin' || kind === 'flake' ? (6 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1) : (Math.random() - 0.5) * 10;
-    this.ps.push({ s, kind, vx, vy, life: Math.random() * (kind === 'coin' ? 0.3 : 0), max, spin, g, size });
+    this.ps.push({ s, kind, vx, vy, life: Math.random() * (kind === 'coin' ? 0.3 : 0), max, spin, g, size: size * this.unit });
     this.scaleOf(this.ps[this.ps.length - 1]);
   }
 
@@ -237,7 +239,7 @@ export class Particles extends Container {
     const dt = Math.min(0.05, dtMs / 1000);
     for (const f of [this.fountain, this.fountain2]) {
       if (!f) continue;
-      f.acc += f.rate * dt;
+      f.acc += f.rate * this.unit * dt;
       while (f.acc >= 1) {
         f.acc--;
         // both jets lean toward the middle of the screen
@@ -252,7 +254,7 @@ export class Particles extends Container {
     }
     if (this.rainState) {
       const r = this.rainState;
-      r.acc += r.rate * dt;
+      r.acc += r.rate * this.unit * dt;
       while (r.acc >= 1) {
         r.acc--;
         if (this.tex.coin && Math.random() < 0.88) {

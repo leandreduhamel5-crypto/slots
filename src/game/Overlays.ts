@@ -91,10 +91,20 @@ export class Overlays extends Container {
   /** Paint the big titles ahead of time, a frame apart, so nothing hitches when they appear. */
   private warmTitles(): void {
     const jobs: [string, number, string][] = [...WIN_TIERS.map((t) => [t.name, 104, t.material] as [string, number, string]), ['10 TOURS GRATUITS', 88, 'gold']];
+    const art: (() => void)[] = [
+      () => this.plaqueTex(1020, 500),
+      () => this.plaqueTex(1240, 290),
+      () => this.plaqueTex(960, 430),
+      () => this.shrineArt(300),
+      () => (this.drumShade ??= Texture.from(paintDrumShade(1184, 234))),
+      () => this.raysTex(),
+    ];
     const next = () => {
-      const j = jobs.shift();
-      if (!j) return;
-      this.head3d(...j);
+      const job = art.shift();
+      const j = job ? null : jobs.shift();
+      if (job) job();
+      else if (j) this.head3d(...j);
+      else return;
       setTimeout(next, 120);
     };
     setTimeout(next, 1500);
@@ -131,6 +141,7 @@ export class Overlays extends Container {
     this.content.scale.set(Math.min(w / 1300, avail / 800, 1.2));
     this.back.position.set(w / 2, avail / 2);
     this.back.scale.set(Math.max(w / 1300, h / 1000, 1));
+    this.particles.unit = Math.max(0.45, Math.min(1.1, Math.min(w, h * 1.7) / 1500));
     this.drawDim(this.dim.alpha);
   }
 
@@ -302,15 +313,37 @@ export class Overlays extends Container {
     return s;
   }
 
-  /** A plaque of the big screens, unfolding sideways out of its centre. */
-  private plaque(w: number, h: number, y: number): Sprite {
+  private plaqueTex(w: number, h: number): Texture {
     const key = `${w}x${h}`;
     let t = this.plaques.get(key);
     if (!t) {
       t = Texture.from(paintPlaque(w, h));
       this.plaques.set(key, t);
     }
-    const s = new Sprite(t);
+    return t;
+  }
+
+  /** The gold window of the strain drum, and the same frame with its opening cut out. */
+  private shrineArt(size: number): void {
+    if (this.shrineTex && this.rimTex) return;
+    const art = paintShrineFrame(size, size);
+    this.shrineTex = Texture.from(art);
+    // laid over the symbols, so they pass behind the gold
+    const cut = document.createElement('canvas');
+    cut.width = art.width;
+    cut.height = art.height;
+    const x = cut.getContext('2d')!;
+    x.drawImage(art, 0, 0);
+    x.globalCompositeOperation = 'destination-out';
+    x.beginPath();
+    x.roundRect(100, 100, art.width - 200, art.height - 200, 24);
+    x.fill();
+    this.rimTex = Texture.from(cut);
+  }
+
+  /** A plaque of the big screens, unfolding sideways out of its centre. */
+  private plaque(w: number, h: number, y: number): Sprite {
+    const s = new Sprite(this.plaqueTex(w, h));
     s.anchor.set(0.5);
     s.scale.set(0.5);
     s.y = y;
@@ -634,23 +667,9 @@ export class Overlays extends Container {
     this.drumShade ??= Texture.from(paintDrumShade(PW - 56, PH - 56));
     const shade = new Sprite(this.drumShade);
     shade.anchor.set(0.5);
-    if (!this.shrineTex || !this.rimTex) {
-      const art = paintShrineFrame(WINDOW, WINDOW);
-      this.shrineTex = Texture.from(art);
-      // the same frame with its window cut out: laid over the symbols, so they pass behind the gold
-      const cut = document.createElement('canvas');
-      cut.width = art.width;
-      cut.height = art.height;
-      const x = cut.getContext('2d')!;
-      x.drawImage(art, 0, 0);
-      x.globalCompositeOperation = 'destination-out';
-      x.beginPath();
-      x.roundRect(100, 100, art.width - 200, art.height - 200, 24);
-      x.fill();
-      this.rimTex = Texture.from(cut);
-    }
-    const frame = new Sprite(this.shrineTex);
-    const rim = new Sprite(this.rimTex);
+    this.shrineArt(WINDOW);
+    const frame = new Sprite(this.shrineTex!);
+    const rim = new Sprite(this.rimTex!);
     for (const f of [frame, rim]) {
       f.anchor.set(0.5);
       f.scale.set(0.5);

@@ -39,10 +39,10 @@ export class Paytable {
         <p class="pt-lead">Montants affichés pour une mise de <b>${fmt(bet)}</b>.</p>
 
         <section class="pt-codex">
-          <img src="${this.images[Sym.CODEX]}" alt="Codex">
+          <img src="${this.images[Sym.CODEX]}" alt="Pyramide">
           <div>
             <h3>La Pyramide : joker et scatter</h3>
-            <p>Il remplace tous les symboles sur une ligne. Il paie aussi n'importe où sur les rouleaux, multiplié par la mise totale.</p>
+            <p>Elle remplace tous les symboles sur une ligne. Elle paie aussi n'importe où sur les rouleaux, multipliée par la mise totale.</p>
             <p><b>3 Pyramides ou plus</b> déclenchent <b>10 tours gratuits</b>.</p>
             <ul class="pt-inline"><li><b>5×</b> ${fmt(200 * bet)}</li><li><b>4×</b> ${fmt(20 * bet)}</li><li><b>3×</b> ${fmt(2 * bet)}</li></ul>
           </div>

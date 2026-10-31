@@ -136,8 +136,8 @@ export class Game {
     this.mascotFx = new Particles(tex);
     this.mascot.onTransform = (to) => {
       if (!this.mascot.visible) return;
-      const x = this.mascot.x + 110 * MASCOT_SCALE;
-      const y = this.mascot.y - 830 * MASCOT_SCALE;
+      const x = this.mascot.x + 110 * this.mascot.scale.x;
+      const y = this.mascot.y - 830 * this.mascot.scale.y;
       this.mascotFx.impact(x, y, 1.6);
       this.mascotFx.burst(x, y, 30, 1.1);
       this.audio.stinger(to === 'inhuman' ? 2 : 0);
@@ -309,7 +309,20 @@ export class Game {
     this.world.position.set(this.worldX, availH / 2);
     // shown when her face is on screen (the veil and arm may run off the left edge)
     const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2 + shift;
-    this.mascot.visible = SHOW_MASCOT && !portrait && faceX > 40;
+    if (portrait) {
+      // upright screens: she stands under the reels, cut by the console, beside the feature's reminder
+      this.mascotX = BOARD_W * 0.74;
+      this.mascot.scale.set(1.05);
+      this.mascot.y = BOARD_Y + BOARD_H + 46 + 1003 * 1.05;
+      this.mascot.visible = SHOW_MASCOT;
+      this.teaser.scale.set(0.8);
+      this.teaser.x = BOARD_W * 0.3;
+    } else {
+      this.mascotX = MASCOT_X;
+      this.mascot.scale.set(MASCOT_SCALE);
+      this.mascot.y = WORLD_BOTTOM;
+      this.mascot.visible = SHOW_MASCOT && faceX > 40;
+    }
     this.bg.resize(w, h, hudH);
     this.overlays.resize(w, h, hudH);
   }
@@ -357,6 +370,7 @@ export class Game {
   }
 
   private worldX = 0;
+  private mascotX = MASCOT_X;
   /** wins in a row: each one sings a little higher */
   private streak = 0;
   /** where the eye is: the scene shifts a little with the pointer, near things more than far */
@@ -369,7 +383,7 @@ export class Game {
     v.y += (v.ty - v.y) * ease;
     this.bg.setView(v.x, v.y);
     this.world.x = this.worldX - v.x * 7;
-    this.mascot.x = MASCOT_X - v.x * 12;
+    this.mascot.x = this.mascotX - v.x * 12;
     this.watchFrameRate(dt);
     dt *= this.warp;
     this.board.update(dt);

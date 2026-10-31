@@ -118,7 +118,7 @@ export class Hud {
 
   /** Desktop: three zones on one row. Portrait phones: meters on top, controls below. */
   private arrange(): void {
-    const mobile = window.matchMedia('(max-aspect-ratio: 1/1), (max-width: 760px)').matches;
+    const mobile = window.matchMedia('(max-aspect-ratio: 1/1)').matches;
     const q = (c: string) => this.root.querySelector<HTMLElement>(c)!;
     const e = this.el;
     if (mobile) {

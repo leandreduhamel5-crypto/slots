@@ -627,7 +627,7 @@ button {
   opacity: 0.5;
 }
 
-@media (max-aspect-ratio: 1/1), (max-width: 760px) {
+@media (max-aspect-ratio: 1/1) {
   #hud {
     grid-template-columns: 1fr;
     grid-template-areas: 'meters' 'controls';
@@ -2366,5 +2366,111 @@ button {
   }
   .ti-card {
     padding: 6px;
+  }
+}
+
+/* ---------- rules, in the game's lapis and gold ---------- */
+.pt-panel {
+  border: 3px solid transparent;
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse at 50% 0, #1b3680, #0c1a48 46%, #060c24) padding-box,
+    linear-gradient(160deg, #fff2b8, #d39c34 26%, #7a4a10 50%, #f2c25a 74%, #8a5614) border-box;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.75), inset 0 0 0 1px rgba(255, 230, 170, 0.2);
+  scrollbar-color: #d39c34 transparent;
+}
+.pt-panel h2,
+.pt-panel h2 em {
+  color: #ffd98a;
+  text-shadow: 0 2px 0 #4a2a06, 0 3px 10px rgba(0, 0, 0, 0.7);
+}
+.pt-panel section {
+  border: 1px solid rgba(242, 194, 90, 0.34);
+  border-radius: 10px;
+  background: rgba(4, 8, 28, 0.6);
+}
+.pt-panel b {
+  color: #ffdc90;
+}
+.pt-close {
+  border: 2px solid #f2c25a;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(180deg, #ff5a3c, #a80c20);
+  color: #fff4d2;
+}
+.pt-sym {
+  border: 1px solid rgba(242, 194, 90, 0.3);
+  background: rgba(12, 26, 72, 0.7);
+}
+.pt-sym.premium {
+  border-color: #d39c34;
+  background: linear-gradient(180deg, #1b3680, #0a1438);
+}
+.pt-line i {
+  background: rgba(255, 255, 255, 0.1);
+}
+.pt-line i.on {
+  background: #f2c25a;
+}
+
+/* low or narrow landscape screens: one slim row, with every control still there */
+@media (min-aspect-ratio: 1/1) and (max-width: 1100px), (min-aspect-ratio: 1/1) and (max-height: 520px) {
+  #hud.console {
+    height: calc(68px + var(--safe-b));
+    gap: 6px;
+    padding: 0 8px var(--safe-b);
+  }
+  #hud.console .c-zone {
+    gap: 6px;
+  }
+  #hud.console .c-sys,
+  #hud.console .c-bet,
+  #hud.console .c-play {
+    gap: 5px;
+  }
+  #hud.console .c-btn {
+    width: 34px;
+    height: 34px;
+  }
+  #hud.console .c-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+  #hud.console .spin {
+    width: 58px;
+    height: 58px;
+  }
+  #hud.console .c-meter {
+    min-width: 78px;
+    height: 46px;
+    padding: 3px 8px;
+  }
+  #hud.console .c-betmeter {
+    min-width: 66px;
+  }
+  #hud.console .c-meter label {
+    font-size: 8.5px;
+  }
+  #hud.console .c-meter span {
+    font-size: 15px;
+  }
+  .c-buy {
+    min-width: 70px;
+    height: 46px;
+    padding: 3px 6px;
+  }
+  .c-buy b {
+    font-size: 8.5px;
+  }
+  .c-buy span {
+    font-size: 13px;
+  }
+}
+@media (max-height: 520px) {
+  #demo-note {
+    font-size: 8px;
+    letter-spacing: 0.04em;
+    top: 3px;
+    right: 6px;
   }
 }
