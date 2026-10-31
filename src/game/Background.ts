@@ -1,7 +1,7 @@
 import { coverCanvas } from './assets';
 import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
-import { GodrayFilter } from 'pixi-filters';
 import gsap from 'gsap';
+import { paintSoftRays } from './art/egyptFrame';
 import { makeCanvas, seeded } from './art/painters';
 import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, OBELISK_TIP_Y, PYRAMID_HALF, RS, TH as H, TW as W } from './art/templeHD';
 import { Fire, paintFlameBlob } from './Fire';
@@ -156,7 +156,7 @@ export class Background extends Container {
   private flareV = 0;
   private bolts = new Graphics();
   private boltLight = 0;
-  private rays = new GodrayFilter({ angle: 24, parallel: true, gain: 0.4, lacunarity: 2.6, alpha: 0.28 });
+  private rayLayer: Sprite;
   private redWash: Sprite;
   private fog: TilingSprite;
   private spores: Spore[] = [];
@@ -298,9 +298,12 @@ export class Background extends Container {
     this.fog.tint = 0x6a5070;
     this.fog.alpha = 0.07;
 
-    this.addChild(this.sceneC, this.redWash, this.fog, this.sporeLayer, this.pulse);
-    this.rays.resolution = 0.5;
-    this.sceneC.filters = [this.rays];
+    // sky rays are painted once and turned slowly: a filter on the scene costs either the
+    // frame rate or, at low resolution, the sharpness of the whole picture
+    this.rayLayer = new Sprite(Texture.from(paintSoftRays()));
+    this.rayLayer.anchor.set(0.5);
+    this.rayLayer.blendMode = 'add';
+    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.sporeLayer, this.pulse);
     for (let i = 0; i < 50; i++) this.spores.push(this.spawn(true));
   }
 
@@ -323,6 +326,8 @@ export class Background extends Container {
     this.redWash.position.set(w / 2, h * 0.45);
     this.redWash.width = w * 1.2;
     this.redWash.height = h * 1.2;
+    this.rayLayer.position.set(w / 2, h * 0.06);
+    this.rayLayer.width = this.rayLayer.height = Math.max(w, h) * 2.4;
     this.fog.width = w;
     this.fog.height = h;
   }
@@ -331,7 +336,8 @@ export class Background extends Container {
   readonly camera = { k: 1, fx: APEX[0], fy: 430 };
 
   private applyCamera(): void {
-    const base = Math.max(this.w / W, this.h / H);
+    // a little larger than the screen: a camera shake must never uncover the edge of the picture
+    const base = Math.max(this.w / W, this.h / H) * 1.06;
     const s = base * this.camera.k;
     const f = [this.camera.fx - W / 2, this.camera.fy - H / 2];
     this.sceneC.scale.set(s);
@@ -434,13 +440,18 @@ export class Background extends Container {
     gsap.fromTo(this.pulse, { alpha: strength }, { alpha: 0, duration: 0.6, ease: 'power2.out' });
   }
 
+  setRays(on: boolean): void {
+    this.rayLayer.visible = on;
+  }
+
   update(dtMs: number): void {
     const dt = dtMs / 1000;
     this.t += dt;
     const f = this.feature;
     const beat = Math.pow(Math.max(0, Math.sin(this.t * (2.6 + f * 1.6))), 12);
-    this.rays.time += dt * 0.25;
-    this.rays.alpha = Math.min(0.48, 0.26 + f * 0.1 + this.flareV * 0.15 + this.boltLight * 0.2);
+    this.rayLayer.rotation += dt * 0.012;
+    this.rayLayer.alpha = Math.min(0.2, 0.09 + f * 0.04 + this.flareV * 0.08 + this.boltLight * 0.08);
+    this.rayLayer.tint = f > 0.5 ? 0xff5040 : 0xffd8a0;
     this.fog.tilePosition.x += dt * 12;
     this.fog.tilePosition.y += dt * 3;
     this.fog.tint = f > 0.5 ? 0xa02030 : 0x6a5070;

@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: book-of-infection
+    runtime: static
+    buildCommand: npm ci --include=dev && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600

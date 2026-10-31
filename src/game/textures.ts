@@ -11,21 +11,24 @@ import {
   paintStar,
   softGlow,
 } from './art/painters';
-import { BOARD_H, BOARD_W, CELL_H, CELL_W, REEL_GAP } from './layout';
+import { BOARD_H, BOARD_W, CELL_W, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP, reelX } from './layout';
 import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintCoin, paintEgyptFrame, paintGoldWinFrame, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintGlyphRing, paintPyramidWall, paintRisingColumn, redCrack } from './art/egyptFrame';
 
-export const TEX_SIZE = 320;
+/** the painted symbols are 512 px: keep all of it, the screens that show it are getting bigger */
+export const TEX_SIZE = 512;
+/** textures used to be 320 px: effects laid out on the art are written in those units */
+export const TEX_UNIT = TEX_SIZE / 320;
 export const FRAME_PAD = 40;
 export const FRAME_BLEED = 60;
 /** the art-direction frame (egypt/frame.webp): size, reel window and ruby centres in its pixels */
 export const FRAME_ART = {
-  size: [1535, 985],
-  window: [158, 160, 1220, 660],
-  rubies: [[133, 132], [1403, 132], [133, 835], [1403, 835], [766, 110], [766, 840], [546, 148], [989, 148]],
+  size: [1671, 941],
+  window: [148, 103, 1375, 723],
+  rubies: [[118, 75], [1552, 76], [118, 850], [1554, 850], [833, 62], [833, 848], [492, 75], [1178, 75], [496, 857], [1172, 857]],
 } as const;
 
 export interface SymbolRig {
@@ -45,9 +48,11 @@ export interface SymbolTextures {
   /** additive glow layers that make each symbol light up */
   glowMaps: Texture[];
   frame: Texture;
-  reelPanels: Texture[];
+  /** the stone wall behind the reels, running on under the frame */
+  wall: Texture;
   shade: Texture;
-  winFrame: Texture;
+  /** ring of hieroglyphs turning behind a winning symbol */
+  glyphRing: Texture;
   veins: Texture;
   glow: Texture;
   spore: Texture;
@@ -97,8 +102,6 @@ function drawRoyal(key: string): HTMLCanvasElement {
   return c;
 }
 
-/** painted art from the concept sheet framed with too much margin */
-const OVERRIDE_ZOOM: Record<string, number> = { codex: 1.28 };
 const PREMIUM_ZOOM: Record<string, number> = { codex: 1.1, zero: 1.12, mask: 1.12, antidote: 1.08, blood: 1.08 };
 
 const PREMIUM_AURA: Record<string, string> = {
@@ -108,6 +111,30 @@ const PREMIUM_AURA: Record<string, string> = {
   antidote: '#38dcff',
   blood: '#ff3347',
 };
+
+/** letters and numbers are the low symbols: drawn smaller, they leave the stage to the gods */
+const ROYAL_KEYS = ['a', 'k', 'q', 'j', 'ten'];
+const ROYAL_SCALE = 0.8;
+
+function insetCanvas(src: HTMLCanvasElement, k: number): HTMLCanvasElement {
+  if (k === 1) return src;
+  const [c, ctx] = makeCanvas(src.width, src.height);
+  const d = src.width * k;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, (src.width - d) / 2, (src.height - d) / 2, d, d);
+  return c;
+}
+
+/** A rim of light behind the art, so that even the black jackal stands out from the dark reels. */
+function backlit(src: HTMLCanvasElement, color: string): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(src.width, src.height);
+  ctx.shadowColor = color + 'b0';
+  ctx.shadowBlur = 11 * TEX_UNIT;
+  ctx.drawImage(src, 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.drawImage(src, 0, 0);
+  return c;
+}
 
 /** Studio "lighting pass": colour aura behind, top-light / bottom-shade volume clipped to the art. */
 function finishPremium(src: HTMLCanvasElement, aura: string): HTMLCanvasElement {
@@ -138,7 +165,7 @@ function motionBlur(src: HTMLCanvasElement): HTMLCanvasElement {
   const steps = 9;
   for (let i = 0; i < steps; i++) {
     ctx.globalAlpha = 0.22;
-    ctx.drawImage(src, 0, (i - steps / 2) * 8);
+    ctx.drawImage(src, 0, (i - steps / 2) * 8 * TEX_UNIT);
   }
   ctx.globalAlpha = 1;
   return c;
@@ -264,17 +291,9 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     const custom = overrides.get(def.key);
     if (custom) {
       // professional artwork from public/assets: used as-is, no procedural rig
-      let c = containCanvas(custom, TEX_SIZE);
-      const k = OVERRIDE_ZOOM[def.key] ?? 1;
-      if (k !== 1) {
-        const [z, zc] = makeCanvas(TEX_SIZE, TEX_SIZE);
-        zc.translate(TEX_SIZE / 2, TEX_SIZE / 2 + TEX_SIZE * 0.04);
-        zc.scale(k, k);
-        zc.drawImage(c, -TEX_SIZE / 2, -TEX_SIZE / 2);
-        c = z;
-      }
+      const c = backlit(insetCanvas(containCanvas(custom, TEX_SIZE), ROYAL_KEYS.includes(def.key) ? ROYAL_SCALE : 1), PREMIUM_AURA[def.key] ?? '#ffb060');
       canvases.push(c);
-      glowCanvases.push(softGlow(c, 12));
+      glowCanvases.push(softGlow(c, 12 * TEX_UNIT));
     } else if (PAINTED[def.key]) {
       // hand-painted premium (512 px, downsampled)
       const painted = PAINTED[def.key]();
@@ -325,9 +344,9 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     glowMaps: glowCanvases.map((c) => Texture.from(c)),
     // the 3D-rendered frame (art/frame3d.ts) is 2x; the painted one is the fallback
     frame: frameArt ? Texture.from(frameArt) : Texture.from(framed()),
-    reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
+    wall: Texture.from(paintPyramidWall(BOARD_W + (FRAME_MARGIN_X + 16) * 2, BOARD_H + (FRAME_MARGIN_Y + 16) * 2, [1, 2, 3, 4].map((r) => reelX(r) - REEL_GAP / 2 + FRAME_MARGIN_X + 16))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
-    winFrame: Texture.from(paintGoldWinFrame(CELL_W, CELL_H)),
+    glyphRing: Texture.from(paintGlyphRing()),
     veins: Texture.from(paintRisingColumn(CELL_W, BOARD_H)),
     glow: Texture.from(radial(256, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
     spore: Texture.from(radial(64, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),

@@ -18,14 +18,14 @@ import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
 import type { SymbolTextures } from './textures';
 
-const BOARD_Y = 152;
+const BOARD_Y = 186;
 const WORLD_TOP = -178;
-const WORLD_BOTTOM = BOARD_Y + BOARD_H + 150;
+const WORLD_BOTTOM = BOARD_Y + BOARD_H + 212;
 /** Cleopatra stands left of the reels, her cobra staff right beside the frame */
-const MASCOT_X = -365;
+const MASCOT_X = -505;
 const MASCOT_SCALE = 0.82;
 const SHOW_MASCOT = true;
-const WORLD_W = BOARD_W + 300;
+const WORLD_W = BOARD_W + 360;
 
 class FeatureBanner extends Container {
   private count: Text;
@@ -57,9 +57,9 @@ class FeatureBanner extends Container {
       .stroke({ width: 6, color: ink })
       .roundRect(-316, -56, 292, 110, 17)
       .stroke({ width: 2, color: 0x8a5612 });
-    const label = new Text({ text: 'TOURS GRATUITS', style: cartoon(28, COLORS.infection) });
+    const label = new Text({ text: 'TOURS GRATUITS', style: cartoon(21, COLORS.infection) });
     label.anchor.set(0.5);
-    label.position.set(-170, -34);
+    label.position.set(-170, -36);
     this.count = new Text({ text: '0 / 10', style: cartoon(64, COLORS.yellow) });
     this.count.anchor.set(0.5);
     this.count.position.set(-170, 18);
@@ -81,13 +81,13 @@ class FeatureBanner extends Container {
         sp.width = sp.height = 100;
         sp.x = (i - (specials.length - 1) / 2) * 104;
         this.icons.addChild(sp);
-        gsap.from(sp.scale, { x: 0, y: 0, duration: 0.7, ease: 'elastic.out(1.2, 0.4)' });
+        gsap.from(sp.scale, { x: 0, y: 0, duration: 0.7, ease: 'power3.out' });
       });
     }
   }
 
   bump(): void {
-    gsap.fromTo(this.count.scale, { x: 1.4, y: 0.7 }, { x: 1, y: 1, duration: 0.5, ease: 'elastic.out(1.2, 0.4)' });
+    gsap.fromTo(this.count.scale, { x: 1.4, y: 0.7 }, { x: 1, y: 1, duration: 0.5, ease: 'power3.out' });
   }
 }
 
@@ -120,6 +120,7 @@ export class Game {
     assets: LoadedAssets,
     templeNight: HTMLImageElement,
     templeInfected: HTMLImageElement,
+    logoImage: HTMLImageElement,
   ) {
     this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, assets.background);
     this.bg.onLightning = (power) => this.audio.lightning(power);
@@ -127,16 +128,16 @@ export class Game {
     this.board.position.set(0, BOARD_Y);
     this.board.onAnticipate = (on) => this.pushIn(on);
     this.board.onImpact = (p) => this.punch(p);
-    const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo);
+    const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo ?? logoImage);
     this.logo = new Logo(logoArt);
     this.logo.position.set(BOARD_W / 2, -18);
     this.logo.homeX = BOARD_W / 2;
     this.banner = new FeatureBanner(tex);
-    this.banner.position.set(BOARD_W / 2, 6);
+    this.banner.position.set(BOARD_W / 2, 0);
     this.teaser = this.buildTeaser(tex);
-    this.mascot = new Mascot(mascotTex, assets.mascot);
+    this.mascot = new Mascot(mascotTex);
     this.mascot.scale.set(MASCOT_SCALE);
-    this.mascot.position.set(MASCOT_X, BOARD_Y + BOARD_H + 150);
+    this.mascot.position.set(MASCOT_X, WORLD_BOTTOM);
     this.mascot.setBook(tex.normal[Sym.CODEX]);
     this.mascotFx = new Particles(tex);
     this.mascot.onTransform = (to) => {
@@ -161,6 +162,7 @@ export class Game {
     // bloom: emissive bits (eyes, veins, orb, neon, glows) radiate
     this.bloom.resolution = app.renderer.resolution;
     this.scene.filters = [this.bloom];
+    this.shock.resolution = app.renderer.resolution;
     app.stage.addChild(this.scene, this.overlays);
 
     this.hud = new Hud({
@@ -270,7 +272,7 @@ export class Game {
     sub.anchor.set(0.5);
     sub.position.set(0, 154);
     c.addChild(t, sub);
-    c.position.set(BOARD_W / 2, BOARD_Y + BOARD_H + 150);
+    c.position.set(BOARD_W / 2, WORLD_BOTTOM);
     c.visible = false;
     return c;
   }
@@ -285,7 +287,7 @@ export class Game {
     const portrait = w < h;
     const bottom = portrait ? WORLD_BOTTOM + 270 : WORLD_BOTTOM;
     const worldH = bottom - WORLD_TOP;
-    const worldW = portrait ? BOARD_W + 150 : WORLD_W;
+    const worldW = portrait ? BOARD_W + 340 : WORLD_W;
     const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
     this.teaser.visible = portrait && !this.inFeature;
     this.logo.scale.set(portrait ? 1.12 : 1);
@@ -301,7 +303,7 @@ export class Game {
     const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2 + shift;
     this.mascot.visible = SHOW_MASCOT && !portrait && faceX > 40;
     this.bg.resize(w, h);
-    this.overlays.resize(w, h);
+    this.overlays.resize(w, h, hudH);
   }
 
   /** Time warp for hit-stops (1 = normal). */
@@ -329,7 +331,25 @@ export class Game {
     }, 170);
   }
 
+  /** 0 full, 1 no god rays, 2 no bloom either. The game steps down by itself on a slow machine. */
+  private quality = 0;
+  private frameAvg = 16;
+  private frameCount = 0;
+
+  private watchFrameRate(dt: number): void {
+    // a long gap is a hidden tab or a one-off hitch, not the machine's real speed
+    if (dt > 120 || document.hidden) return;
+    this.frameAvg += (dt - this.frameAvg) * 0.04;
+    if (++this.frameCount < 120 || this.frameAvg < 22 || this.quality >= 2) return;
+    this.frameCount = 0;
+    this.frameAvg = 16;
+    this.quality++;
+    if (this.quality === 1) this.bg.setRays(false);
+    else this.scene.filters = [];
+  }
+
   private update(dt: number): void {
+    this.watchFrameRate(dt);
     dt *= this.warp;
     this.board.update(dt);
     this.mascotFx.update(dt);
@@ -359,8 +379,8 @@ export class Game {
     gsap.killTweensOf(this.cam, 'kick');
     gsap.fromTo(
       this.cam,
-      { kick: 1 + 0.045 * power },
-      { kick: 1, duration: 0.7, ease: 'elastic.out(1, 0.45)', onUpdate: this.applyZoom },
+      { kick: 1 + 0.03 * power },
+      { kick: 1, duration: 0.45, ease: 'power3.out', onUpdate: this.applyZoom },
     );
   }
 
@@ -374,19 +394,19 @@ export class Game {
     this.shakePower = Math.max(this.shakePower, power);
   }
 
-  private bloom = new AdvancedBloomFilter({ threshold: 0.7, bloomScale: 0.6, brightness: 1, blur: 6, quality: 5 });
+  private bloom = new AdvancedBloomFilter({ threshold: 0.7, bloomScale: 0.6, brightness: 1, blur: 5, quality: 2 });
 
   private shockwave(): void {
     this.shock.center = { x: this.viewW / 2, y: this.viewH / 2 };
     this.shock.time = 0;
-    this.scene.filters = [this.bloom, this.shock];
+    this.scene.filters = this.quality >= 2 ? [this.shock] : [this.bloom, this.shock];
     gsap.killTweensOf(this.shock);
     gsap.to(this.shock, {
       time: 1.4,
       duration: 1.4,
       ease: 'none',
       onComplete: () => {
-        this.scene.filters = [this.bloom];
+        this.scene.filters = this.quality >= 2 ? [] : [this.bloom];
       },
     });
   }
@@ -449,7 +469,6 @@ export class Game {
     this.mascot.react('spin');
 
     await this.spinTo(round.base.grid, null);
-    this.mascot.lookAt(0, 0);
     await this.presentOutcome(round.base, round.bet, 0, false);
 
     if (round.feature) await this.runFeature(round, 0);
@@ -529,7 +548,7 @@ export class Game {
       if (celebrate) {
         this.audio.win(size);
         this.bg.flare(0.45 + size * 0.2);
-        this.board.coinBurst(6 + size * 8);
+        this.board.coinBurst(size * 8);
         this.audio.coins(6 + size * 8);
       }
       else this.audio.tick();

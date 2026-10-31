@@ -13,8 +13,9 @@ import j from './egypt/j.webp';
 import ten from './egypt/ten.webp';
 import pyramid from './egypt/pyramid.webp';
 import virus from './egypt/virus.webp';
-import cleopatra from './egypt/cleopatra.webp';
+import cleoFull from './egypt/cleo_full.webp';
 import frame from './egypt/frame.webp';
+import logo from './egypt/logo.webp';
 import templeNight from './egypt/temple_night.webp';
 import templeInfected from './egypt/temple_infected.webp';
 
@@ -32,7 +33,7 @@ export const SYMBOL_ART_URLS: Record<string, string> = {
   ten,
 };
 
-export const EXTRA_ART_URLS = { pyramid, virus, templeNight, templeInfected, cleopatra, frame };
+export const EXTRA_ART_URLS = { pyramid, virus, templeNight, templeInfected, cleoFull, frame, logo };
 
 function load(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

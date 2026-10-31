@@ -307,70 +307,6 @@ export function paintEgyptFrame(s: EgyptFrameSpec): HTMLCanvasElement {
   return c;
 }
 
-/** Dark engraved stone behind one reel column. */
-export function paintStonePanel(w: number, h: number, seed: number): HTMLCanvasElement {
-  const [c, ctx] = makeCanvas(w, h);
-  const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#1e0e0e');
-  g.addColorStop(0.5, '#160909');
-  g.addColorStop(1, '#0c0505');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
-  const rnd = seeded(seed);
-  // stone blocks
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-  ctx.lineWidth = 2;
-  for (let y = 0; y < h; y += 92) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
-    const off = (y / 92) % 2 ? w * 0.4 : w * 0.8;
-    ctx.beginPath();
-    ctx.moveTo(off, y);
-    ctx.lineTo(off, y + 92);
-    ctx.stroke();
-  }
-  for (let i = 0; i < 120; i++) {
-    ctx.fillStyle = rnd() < 0.6 ? 'rgba(0,0,0,0.25)' : 'rgba(255,190,160,0.035)';
-    ctx.beginPath();
-    ctx.ellipse(rnd() * w, rnd() * h, 2 + rnd() * 9, 1 + rnd() * 4, rnd() * 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // faint engraved eye of Horus, one per panel
-  ctx.save();
-  ctx.globalAlpha = 0.09;
-  ctx.strokeStyle = '#f2c25a';
-  ctx.lineWidth = 5;
-  ctx.lineCap = 'round';
-  const ey = h * (0.3 + rnd() * 0.4);
-  ctx.beginPath();
-  ctx.moveTo(w * 0.22, ey);
-  ctx.quadraticCurveTo(w * 0.5, ey - 34, w * 0.78, ey);
-  ctx.quadraticCurveTo(w * 0.5, ey + 30, w * 0.22, ey);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(w * 0.5, ey, 11, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-  // a faint red crack
-  ctx.globalAlpha = 0.5;
-  redCrack(ctx, rnd() * w, rnd() * h, rnd() * Math.PI * 2, 60 + rnd() * 60, 1.6, seed + 3);
-  ctx.globalAlpha = 1;
-  // side shading so columns read as recessed
-  const sg = ctx.createLinearGradient(0, 0, w, 0);
-  sg.addColorStop(0, 'rgba(0,0,0,0.45)');
-  sg.addColorStop(0.12, 'rgba(0,0,0,0)');
-  sg.addColorStop(0.88, 'rgba(0,0,0,0)');
-  sg.addColorStop(1, 'rgba(0,0,0,0.45)');
-  ctx.fillStyle = sg;
-  ctx.fillRect(0, 0, w, h);
-  // thin gold separator on the right edge
-  ctx.fillStyle = goldGrad(ctx, w - 4, 0, w, h);
-  ctx.fillRect(w - 3, 0, 3, h);
-  return c;
-}
-
 /** Gold coin for the win showers: milled rim, stamped Eye of Horus, glossy highlight (128 px). */
 export function paintCoin(): HTMLCanvasElement {
   const S = 128;
@@ -473,53 +409,6 @@ export function paintRisingColumn(w: number, h: number): HTMLCanvasElement {
     }
   }
   ctx.putImageData(img, 0, 0);
-  return c;
-}
-
-/** Frame around a winning symbol: soft gold-red halo, gold double rim, gem corners. */
-export function paintGoldWinFrame(w: number, h: number): HTMLCanvasElement {
-  const b = 14;
-  const [c, ctx] = makeCanvas(w + b * 2, h + b * 2);
-  ctx.translate(b, b);
-  const box = (inset: number, r: number) => rr(ctx, inset, inset, w - inset * 2, h - inset * 2, r);
-  ctx.save();
-  ctx.filter = 'blur(6px)';
-  box(4, 16);
-  ctx.strokeStyle = 'rgba(255,150,60,0.8)';
-  ctx.lineWidth = 12;
-  ctx.stroke();
-  ctx.restore();
-  box(4, 16);
-  ctx.strokeStyle = '#1a0806';
-  ctx.lineWidth = 10;
-  ctx.stroke();
-  box(4, 16);
-  ctx.strokeStyle = goldGrad(ctx, 0, 0, w, h);
-  ctx.lineWidth = 6;
-  ctx.stroke();
-  box(10, 11);
-  ctx.strokeStyle = 'rgba(255,236,180,0.7)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  for (const [x, y] of [[6, 6], [w - 6, 6], [6, h - 6], [w - 6, h - 6]]) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(Math.PI / 4);
-    ctx.fillStyle = goldGrad(ctx, -10, -10, 10, 10);
-    ctx.fillRect(-9, -9, 18, 18);
-    ctx.strokeStyle = '#1a0806';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(-9, -9, 18, 18);
-    ctx.restore();
-    const g = ctx.createRadialGradient(x - 2, y - 2, 0.5, x, y, 6);
-    g.addColorStop(0, '#ffd0c8');
-    g.addColorStop(0.45, '#ff2a36');
-    g.addColorStop(1, '#5a0008');
-    ctx.beginPath();
-    ctx.arc(x, y, 5.5, 0, Math.PI * 2);
-    ctx.fillStyle = g;
-    ctx.fill();
-  }
   return c;
 }
 
@@ -745,5 +634,149 @@ export function paintArrowHead(): HTMLCanvasElement {
   ctx.strokeStyle = 'rgba(50,24,2,0.9)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
+  return c;
+}
+
+/** Ring of hieroglyphs in light: white, tinted and added at run time. */
+export function paintGlyphRing(size = 512): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(size, size);
+  const m = size / 2;
+  ctx.translate(m, m);
+  ctx.strokeStyle = '#fff';
+  ctx.lineCap = 'round';
+  for (const [r, w, a] of [[m * 0.97, 4, 0.9], [m * 0.92, 1.5, 0.5], [m * 0.7, 1.5, 0.5], [m * 0.66, 3, 0.8]]) {
+    ctx.globalAlpha = a;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.95;
+  ctx.lineWidth = 4;
+  const glyphs: ((x: CanvasRenderingContext2D) => void)[] = [
+    (x) => { x.ellipse(0, -9, 7, 10, 0, 0, Math.PI * 2); x.moveTo(-11, 2); x.lineTo(11, 2); x.moveTo(0, 1); x.lineTo(0, 18); }, // ankh
+    (x) => { x.moveTo(-14, 0); x.quadraticCurveTo(0, -12, 14, 0); x.quadraticCurveTo(0, 10, -14, 0); x.moveTo(3, 0); x.arc(0, 0, 3, 0, Math.PI * 2); }, // eye
+    (x) => { x.moveTo(0, 15); x.quadraticCurveTo(-11, 0, 2, -15); x.quadraticCurveTo(9, 0, 0, 15); }, // reed
+    (x) => { x.arc(0, 0, 10, 0, Math.PI * 2); x.moveTo(-14, 14); x.lineTo(14, 14); }, // sun over the land
+    (x) => { x.moveTo(-13, 12); x.lineTo(0, -13); x.lineTo(13, 12); x.closePath(); }, // pyramid
+  ];
+  const n = 20;
+  for (let i = 0; i < n; i++) {
+    ctx.save();
+    ctx.rotate((i / n) * Math.PI * 2);
+    ctx.translate(0, -m * 0.81);
+    ctx.scale(m / 230, m / 230);
+    ctx.beginPath();
+    glyphs[i % glyphs.length](ctx);
+    ctx.stroke();
+    ctx.restore();
+  }
+  return c;
+}
+
+/**
+ * The wall behind the reels: limestone blocks of the great pyramid, laid in courses, chipped by
+ * time and lit by torches. Dim enough for the symbols to stand out, never a black hole.
+ * `columns` are the x of the joints between the reels.
+ */
+export function paintPyramidWall(w: number, h: number, columns: number[], seed = 7): HTMLCanvasElement {
+  const rnd = seeded(seed);
+  const [c, ctx] = makeCanvas(w, h);
+  ctx.fillStyle = '#1c120b'; // the mortar shows between the blocks
+  ctx.fillRect(0, 0, w, h);
+  const course = 74;
+  const glyphs = ['ankh', 'eye', 'reed', 'sun'];
+  for (let row = 0, y = 0; y < h; row++, y += course) {
+    let x = row % 2 ? -70 : -rnd() * 40;
+    while (x < w) {
+      const bw = 118 + rnd() * 74;
+      const tone = 0.82 + rnd() * 0.36;
+      const shade = (v: number) => Math.round(v * tone);
+      const g = ctx.createLinearGradient(0, y, 0, y + course);
+      g.addColorStop(0, `rgb(${shade(112)},${shade(82)},${shade(52)})`);
+      g.addColorStop(0.5, `rgb(${shade(92)},${shade(66)},${shade(42)})`);
+      g.addColorStop(1, `rgb(${shade(62)},${shade(43)},${shade(28)})`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.roundRect(x + 2, y + 2, bw - 4, course - 4, 5);
+      ctx.fill();
+      // light catching the top edge, shadow under the block
+      ctx.fillStyle = 'rgba(255,220,160,0.14)';
+      ctx.fillRect(x + 5, y + 3, bw - 10, 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(x + 4, y + course - 6, bw - 8, 3);
+      // grain and the pits of four thousand years
+      for (let k = 0; k < 70; k++) {
+        ctx.fillStyle = rnd() < 0.5 ? `rgba(0,0,0,${0.05 + rnd() * 0.13})` : `rgba(255,225,170,${0.03 + rnd() * 0.07})`;
+        const r = 0.6 + rnd() * rnd() * 3.4;
+        ctx.beginPath();
+        ctx.arc(x + 4 + rnd() * (bw - 8), y + 4 + rnd() * (course - 8), r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // now and then a crack, or a hieroglyph carved into the block
+      if (rnd() < 0.3) {
+        ctx.strokeStyle = 'rgba(0,0,0,0.38)';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        let cx = x + rnd() * bw;
+        let cy = y + 3;
+        ctx.moveTo(cx, cy);
+        while (cy < y + course - 4) {
+          cx += (rnd() - 0.5) * 16;
+          cy += 6 + rnd() * 9;
+          ctx.lineTo(cx, cy);
+        }
+        ctx.stroke();
+      } else if (rnd() < 0.24) {
+        const gx = x + bw / 2;
+        const gy = y + course / 2;
+        ctx.lineWidth = 2.6;
+        ctx.lineCap = 'round';
+        for (const [col, off] of [['rgba(0,0,0,0.34)', 0], ['rgba(255,226,170,0.13)', 1.4]] as const) {
+          ctx.strokeStyle = col;
+          ctx.beginPath();
+          const kind = glyphs[Math.floor((gx + gy) % 4)];
+          if (kind === 'ankh') {
+            ctx.ellipse(gx + off, gy - 9 + off, 7, 9, 0, 0, Math.PI * 2);
+            ctx.moveTo(gx - 11 + off, gy + 2 + off);
+            ctx.lineTo(gx + 11 + off, gy + 2 + off);
+            ctx.moveTo(gx + off, gy + off);
+            ctx.lineTo(gx + off, gy + 19 + off);
+          } else if (kind === 'eye') {
+            ctx.moveTo(gx - 17 + off, gy + off);
+            ctx.quadraticCurveTo(gx + off, gy - 14 + off, gx + 17 + off, gy + off);
+            ctx.quadraticCurveTo(gx + off, gy + 11 + off, gx - 17 + off, gy + off);
+            ctx.moveTo(gx + 4 + off, gy + off);
+            ctx.arc(gx + off, gy + off, 4, 0, Math.PI * 2);
+          } else if (kind === 'reed') {
+            ctx.moveTo(gx + off, gy + 18 + off);
+            ctx.quadraticCurveTo(gx - 13 + off, gy + off, gx + 2 + off, gy - 18 + off);
+            ctx.quadraticCurveTo(gx + 10 + off, gy + off, gx + off, gy + 18 + off);
+          } else {
+            ctx.arc(gx + off, gy - 4 + off, 11, 0, Math.PI * 2);
+            ctx.moveTo(gx - 15 + off, gy + 13 + off);
+            ctx.lineTo(gx + 15 + off, gy + 13 + off);
+          }
+          ctx.stroke();
+        }
+      }
+      x += bw;
+    }
+  }
+  // torchlight: warm in the middle, falling away toward the frame
+  ctx.globalCompositeOperation = 'multiply';
+  const v = ctx.createRadialGradient(w / 2, h * 0.46, h * 0.2, w / 2, h * 0.46, w * 0.68);
+  v.addColorStop(0, '#fff');
+  v.addColorStop(1, '#5e4c44');
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'source-over';
+  // the joints between the reels: a groove in the stone, a thread of gold
+  for (const x of columns) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(x - 3, 0, 6, h);
+    ctx.fillStyle = 'rgba(232,184,80,0.55)';
+    ctx.fillRect(x - 0.75, 0, 1.5, h);
+  }
   return c;
 }

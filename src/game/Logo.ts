@@ -133,11 +133,13 @@ export function paintLogo(_eye?: HTMLCanvasElement): HTMLCanvasElement {
 /** Logo canvas: professional artwork from public/assets if provided, else the painted one. */
 export function logoCanvas(eye: HTMLCanvasElement, custom: HTMLImageElement | null): HTMLCanvasElement {
   if (!custom) return paintLogo(eye);
-  const [c, ctx] = makeCanvas(1100, 360);
-  const k = Math.min(1100 / custom.naturalWidth, 360 / custom.naturalHeight);
+  // the logo is kept at 2×: it is the first thing a player reads on a big screen
+  const [c, ctx] = makeCanvas(2200, 720);
+  const k = Math.min(2200 / custom.naturalWidth, 720 / custom.naturalHeight);
   const w = custom.naturalWidth * k;
   const h = custom.naturalHeight * k;
-  ctx.drawImage(custom, (1100 - w) / 2, (360 - h) / 2, w, h);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(custom, (2200 - w) / 2, (720 - h) / 2, w, h);
   return c;
 }
 
@@ -204,11 +206,37 @@ export class Logo extends Container {
     this.dropTex = Texture.from(emberCanvas());
     this.inner.addChild(this.halo, this.sprite, mask, this.shine, this.dropLayer);
     this.addChild(this.inner);
-    this.scheduleGlitch();
+    this.addGems();
     this.scheduleShine();
-    gsap.to(this.inner.scale, { x: this.base * 1.025, y: this.base * 0.99, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    gsap.to(this.inner.scale, { x: this.base * 1.012, y: this.base * 1.012, duration: 2.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     gsap.to(this.halo, { alpha: 0.6, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     gsap.ticker.add(this.tick);
+  }
+
+  /** The five rubies of the artwork smoulder, and a star crosses each of them now and then. */
+  private addGems(): void {
+    const k = 2200 / 1992; // artwork px → canvas px
+    const gems: [number, number, number][] = [[993, 108, 1.5], [525, 238, 0.8], [1455, 238, 0.8], [1495, 395, 1.1], [990, 556, 1]];
+    gems.forEach(([x, y, size], i) => {
+      const gx = x * k - this.art.width / 2;
+      const gy = y * k + (720 - 619 * k) / 2 - this.art.height * 0.45;
+      const glow = new Sprite(this.dropTex);
+      glow.anchor.set(0.5);
+      glow.blendMode = 'add';
+      glow.tint = 0xff2a14;
+      glow.position.set(gx, gy);
+      glow.scale.set(size * 5);
+      gsap.fromTo(glow, { alpha: 0.2 }, { alpha: 0.75, duration: 1.3 + i * 0.21, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
+      const star = new Sprite(this.dropTex);
+      star.anchor.set(0.5);
+      star.blendMode = 'add';
+      star.position.set(gx, gy);
+      star.scale.set(size * 9, size * 0.5);
+      star.alpha = 0;
+      const glint = () => gsap.timeline({ delay: 3 + Math.random() * 8, onComplete: glint }).fromTo(star, { alpha: 0 }, { alpha: 1, duration: 0.14 }).to(star, { alpha: 0, duration: 0.6 });
+      glint();
+      this.inner.addChild(glow, star);
+    });
   }
 
   private scheduleShine(): void {
@@ -257,18 +285,9 @@ export class Logo extends Container {
     return 1100 / this.art.width;
   }
 
-  private scheduleGlitch(): void {
-    gsap.delayedCall(4 + Math.random() * 5, () => {
-      if (this.destroyed) return;
-      this.glitch();
-      this.scheduleGlitch();
-    });
-  }
-
-  /** Cartoon "boing" plus a short chromatic glitch. */
+  /** Struck by an event: a short chromatic tear and a sweep of light. */
   glitch(power = 1): void {
     this.filters = [this.split];
-    gsap.fromTo(this.inner, { rotation: -0.04 * power }, { rotation: 0, duration: 0.6, ease: 'elastic.out(1.2, 0.3)' });
     if (power > 1) this.sweep(0.6);
     const tl = gsap.timeline();
     for (let i = 0; i < 5; i++) {

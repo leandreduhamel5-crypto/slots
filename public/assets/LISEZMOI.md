@@ -63,3 +63,5 @@ Suffixe commun à ajouter à chaque prompt :
 | `logo.png` | game logo reading "CODEX INFECTA", chunky bone-white 3D letters with blood dripping from the top, red jagged splash behind, purple ribbon with "INFECTA", two red eyes, transparent background |
 | `mascot.png` | full body floating hooded wraith, tattered dark navy cloak, void face with burning yellow eyes and a wide fanged grin, one skeletal clawed hand holding a red flesh grimoire with an eye, the other levitating a glowing green orb, smoke at the hem, facing left, transparent background |
 | `background.jpg` | (sans le suffixe) wide 16:9 painting of an abandoned infected asylum corridor in one-point perspective, tiled walls, metal doors with glowing red portholes, hanging lamps casting light cones, red veins crawling from a sealed door at the far end, checkered floor, toxic barrels in the foreground, cartoon horror style, cinematic lighting |
+
+Pour changer la peinture de Cléopâtre, remplacez `src/game/art/egypt/cleopatra.webp` puis relancez `scripts/cleopatra_art.py`.

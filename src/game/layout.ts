@@ -1,9 +1,12 @@
-export const CELL_W = 196;
-export const CELL_H = 184;
+export const CELL_W = 216;
+export const CELL_H = 198;
 export const REEL_GAP = 10;
 export const BOARD_W = 5 * CELL_W + 4 * REEL_GAP;
 export const BOARD_H = 3 * CELL_H;
 export const SYMBOL_SIZE = 178;
+/** room between the reels and the frame's opening: the cobras and pendants live there, clear of the symbols */
+export const FRAME_MARGIN_X = 50;
+export const FRAME_MARGIN_Y = 30;
 
 export const COLORS = {
   ink: 0x170b14,
@@ -19,8 +22,8 @@ export const COLORS = {
 
 /** One colour per payline so overlapping wins stay readable. */
 export const LINE_COLORS = [
-  // warm temple palette: golds, ambers, embers and reds, distinct enough to tell lines apart
-  0xffd23f, 0xff3a2a, 0xffa030, 0xfff0c0, 0xff6a50, 0xe8b860, 0xff2a6a, 0xffc890, 0xd88a2a, 0xff8a7a,
+  // the metals and embers of the temple: golds, ambers and coppers, distinct enough to tell apart
+  0xffd24a, 0xff8a3a, 0xffb040, 0xffeeb0, 0xff7040, 0xe8c060, 0xffa050, 0xffd890, 0xf0a030, 0xff9a70,
 ];
 
 export function reelX(reel: number): number {

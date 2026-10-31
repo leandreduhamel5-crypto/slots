@@ -18,6 +18,10 @@ export const WIN_TIERS = [
   { x: 500, name: 'EXTINCTION', material: 'infection', ray: 0x5a0410 },
 ];
 
+/** Widest a tier title and an amount may be, in overlay units: they stay inside their plates. */
+const BIG_TITLE_W = 850;
+const AMOUNT_W = 560;
+
 export function winTier(win: number, bet: number): number {
   let t = -1;
   WIN_TIERS.forEach((tier, i) => {
@@ -55,13 +59,14 @@ export class Overlays extends Container {
   private particles: Particles;
   private w = 1920;
   private h = 1080;
+  private hudH = 120;
   private skipRequested = false;
   private burstRays: Container | null = null;
   private emberLayer = new Container();
   private headCache = new Map<string, Texture>();
 
   /** Big 3D title rendered once with the lettering engine and cached. */
-  private head3d(text: string, size: number, material = 'gold'): Sprite {
+  private head3d(text: string, size: number, material = 'gold', maxWidth = 1120): Sprite {
     const key = `${text}|${size}|${material}`;
     let t = this.headCache.get(key);
     if (!t) {
@@ -74,8 +79,14 @@ export class Overlays extends Container {
     }
     const s = new Sprite(t);
     s.anchor.set(0.5);
-    s.scale.set(0.5);
+    s.scale.set(this.fitScale(t, size, maxWidth));
     return s;
+  }
+
+  /** Scale of a title so its letters (not the transparent padding) fit in maxWidth. */
+  private fitScale(t: Texture, size: number, maxWidth: number): number {
+    const ink = t.width * 0.5 - size * 0.9;
+    return Math.min(0.5, 0.5 * (maxWidth / Math.max(1, ink)));
   }
 
   /** Paint the big titles ahead of time, a frame apart, so nothing hitches when they appear. */
@@ -112,12 +123,14 @@ export class Overlays extends Container {
     this.skipRequested = true;
   }
 
-  resize(w: number, h: number): void {
+  resize(w: number, h: number, hudH = this.hudH): void {
     this.w = w;
     this.h = h;
-    this.content.position.set(w / 2, h / 2);
-    this.content.scale.set(Math.min(w / 1300, h / 1000, 1.2));
-    this.back.position.set(w / 2, h / 2);
+    this.hudH = hudH;
+    const avail = h - hudH;
+    this.content.position.set(w / 2, avail / 2);
+    this.content.scale.set(Math.min(w / 1300, avail / 800, 1.2));
+    this.back.position.set(w / 2, avail / 2);
     this.back.scale.set(Math.max(w / 1300, h / 1000, 1));
     this.drawDim(this.dim.alpha);
   }
@@ -155,17 +168,18 @@ export class Overlays extends Container {
     this.content.alpha = 1;
     this.dim.tint = 0xffffff;
     this.drawDim(0);
-    gsap.to(this.dim, { alpha: 0.93, duration: 0.25 });
+    gsap.to(this.dim, { alpha: 0.86, duration: 0.25 });
   }
 
   private async close(): Promise<void> {
     this.particles.stopFountain();
     this.particles.stopRain();
+    this.audio.bigWinStop();
     this.emberOn = false;
     await new Promise<void>((r) =>
       gsap
         .timeline({ onComplete: r })
-        .to(this.content.scale, { x: this.content.scale.x * 0.6, y: this.content.scale.y * 0.6, duration: 0.25, ease: 'back.in(2)' })
+        .to(this.content.scale, { x: this.content.scale.x * 1.12, y: this.content.scale.y * 1.12, duration: 0.3, ease: 'power2.in' })
         .to([this.content, this.back, this.dim], { alpha: 0, duration: 0.25 }, '<'),
     );
     this.clearLayers();
@@ -330,10 +344,58 @@ export class Overlays extends Container {
   private popIn(o: Container, delay = 0, from = 0.2): void {
     const sx = o.scale.x;
     const sy = o.scale.y;
-    gsap.fromTo(o.scale, { x: sx * from, y: sy * from }, { x: sx, y: sy, duration: 0.6, delay, ease: 'elastic.out(1.1, 0.45)' });
+    gsap.fromTo(o.scale, { x: sx * Math.max(from, 1.5), y: sy * Math.max(from, 1.5) }, { x: sx, y: sy, duration: 0.32, delay, ease: 'power3.in' });
+    gsap.fromTo(o, { alpha: 0 }, { alpha: 1, duration: 0.2, delay });
   }
 
-  /** Tiered big-win celebration: the title escalates while the amount counts up. */
+  /** Thin ring of light racing out from a point of the content layer. */
+  private ring(y: number, tint: number, size = 1400): void {
+    const r = new Sprite(this.ringTex());
+    r.anchor.set(0.5);
+    r.y = y;
+    r.blendMode = 'add';
+    r.tint = tint;
+    this.content.addChildAt(r, 0);
+    gsap.fromTo(r, { width: 120, height: 120, alpha: 1 }, { width: size, height: size, alpha: 0, duration: 0.8, ease: 'power2.out', onComplete: () => r.destroy() });
+  }
+
+  private ringT: Texture | null = null;
+  private ringTex(): Texture {
+    if (!this.ringT) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 512;
+      const x = c.getContext('2d')!;
+      const g = x.createRadialGradient(256, 256, 170, 256, 256, 256);
+      g.addColorStop(0, 'rgba(255,255,255,0)');
+      g.addColorStop(0.72, 'rgba(255,255,255,0.14)');
+      g.addColorStop(0.9, 'rgba(255,255,255,1)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g;
+      x.fillRect(0, 0, 512, 512);
+      this.ringT = Texture.from(c);
+    }
+    return this.ringT;
+  }
+
+  /** A blade of light crossing a title, masked by its letters. */
+  private titleSweep(title: Sprite): void {
+    const mask = new Sprite(title.texture);
+    mask.anchor.set(0.5);
+    mask.scale.copyFrom(title.scale);
+    mask.position.copyFrom(title.position);
+    const blade = new Sprite(this.tex.shine);
+    blade.anchor.set(0.5);
+    blade.height = 340;
+    blade.width = 150;
+    blade.rotation = 0.35;
+    blade.blendMode = 'add';
+    blade.position.y = title.y;
+    blade.mask = mask;
+    this.content.addChild(mask, blade);
+    gsap.fromTo(blade, { x: -700 }, { x: 700, duration: 0.8, ease: 'power1.inOut', onComplete: () => { blade.destroy(); mask.destroy(); } });
+  }
+
+  /** Tiered big-win celebration: each tier is a heavier blow; the amount never leaves its cartouche. */
   async bigWin(win: number, bet: number, onTick?: (v: number) => void): Promise<void> {
     const top = winTier(win, bet);
     if (top < 0) return;
@@ -343,38 +405,42 @@ export class Overlays extends Container {
     this.burstRays = rays;
     const eye = new Sprite(this.tex.normal[Sym.CODEX]);
     eye.anchor.set(0.5);
-    eye.width = eye.height = 210;
-    eye.y = -395;
-    gsap.to(eye, { rotation: 0.06, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    const ribbon = this.ribbon(860, 150, 0x1e0a08);
-    ribbon.y = -150;
-    const heading = this.head3d(t0.name, 104, t0.material);
-    heading.y = -160;
-    const plate = this.plate(620, 170);
-    plate.y = 150;
+    eye.width = eye.height = 190;
+    eye.y = -295;
+    gsap.to(eye, { y: -305, duration: 2.2, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    const ribbon = this.ribbon(1040, 150, 0x1e0a08);
+    ribbon.y = -110;
+    const heading = this.head3d(t0.name, 104, t0.material, BIG_TITLE_W);
+    heading.y = -120;
+    const plate = this.plate(680, 170);
+    plate.y = 130;
     const amount = new Digits(118);
     amount.value = 0;
-    amount.y = 150;
+    amount.y = 130;
     const sub = new Text({ text: 'TOUCHEZ POUR PASSER', style: body(20, 0xd8b878) });
     sub.anchor.set(0.5);
-    sub.y = 290;
+    sub.y = 262;
     gsap.to(sub, { alpha: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.content.addChild(eye, ribbon, heading, plate, amount, sub);
-    this.popIn(eye, 0, 0.1);
-    this.popIn(ribbon, 0.1);
-    this.popIn(heading, 0.15);
-    this.popIn(plate, 0.2);
-    this.popIn(amount, 0.25);
-    this.audio.impact(1);
-    this.audio.tierUp(0);
-    this.fx.shockwave();
-    this.fx.shake(10);
-    this.fx.thump(0.35);
-    this.particles.impact(this.w / 2, this.h / 2, 1.6);
-    this.particles.startFountain(this.w / 2, this.h * 0.7, 30);
-    this.audio.coins(24);
-    this.particles.startRain([Sym.CODEX].map((s) => this.tex.normal[s]), this.w, 10);
-    this.fx.punch(1);
+    this.popIn(eye, 0);
+    this.popIn(ribbon, 0.06);
+    this.popIn(heading, 0.1);
+    this.popIn(plate, 0.16);
+    this.popIn(amount, 0.2);
+    this.audio.bigWinStart();
+    gsap.delayedCall(0.42, () => {
+      if (!this.visible || heading.destroyed) return;
+      this.audio.tierUp(0);
+      this.fx.shockwave();
+      this.fx.shake(10);
+      this.fx.thump(0.35);
+      this.fx.punch(1);
+      this.ring(-120, 0xffc860);
+      this.titleSweep(heading);
+    });
+    this.particles.startFountain(this.w * 0.14, this.h * 0.86, 16);
+    this.particles.startFountain2(this.w * 0.86, this.h * 0.86, 16);
+    this.particles.startRain([this.tex.normal[Sym.CODEX]], this.w, 12);
 
     const duration = 2.1 * (top + 1);
     this.audio.timpaniRoll(duration);
@@ -387,6 +453,7 @@ export class Overlays extends Container {
       ease: 'power1.inOut',
       onUpdate: () => {
         amount.value = counter.v;
+        amount.scale.set(Math.min(1, AMOUNT_W / Math.max(1, amount.inkWidth)));
         onTick?.(counter.v);
         const now = performance.now();
         if (now - lastTick > 70) {
@@ -406,26 +473,40 @@ export class Overlays extends Container {
       tween.progress(1);
       if (tier < top) this.upgrade(heading, top);
     }
-    gsap.fromTo(amount.scale, { x: 1.35, y: 1.35 }, { x: 1, y: 1, duration: 0.6, ease: 'elastic.out(1.2, 0.4)' });
-    this.audio.win(3);
-    await this.waitOrSkip(2200);
+    const k = amount.scale.x;
+    gsap.fromTo(amount.scale, { x: k * 1.3, y: k * 1.3 }, { x: k, y: k, duration: 0.3, ease: 'power3.in' });
+    gsap.delayedCall(0.3, () => {
+      if (!this.visible || heading.destroyed) return;
+      this.ring(130, 0xfff0c0, 1700);
+      this.fx.shake(14);
+      this.fx.thump(0.5);
+      this.titleSweep(heading);
+    });
+    this.audio.bigWinEnd(top);
+    await this.waitOrSkip(2400);
     await this.close();
   }
 
   private upgrade(heading: Sprite, tier: number): void {
     const t = WIN_TIERS[tier];
-    heading.texture = this.head3d(t.name, 104, t.material).texture;
-    gsap.fromTo(heading.scale, { x: 0.85, y: 0.3 }, { x: 0.5, y: 0.5, duration: 0.6, ease: 'elastic.out(1.2, 0.4)' });
+    const tex = this.head3d(t.name, 104, t.material, BIG_TITLE_W);
+    heading.texture = tex.texture;
+    const k = tex.scale.x;
+    gsap.killTweensOf(heading.scale);
+    gsap.fromTo(heading.scale, { x: k * 1.7, y: k * 1.7 }, { x: k, y: k, duration: 0.24, ease: 'power3.in' });
     if (this.burstRays) this.retint(this.burstRays, t.ray);
     this.audio.tierUp(tier);
-    this.fx.shockwave();
-    this.fx.shake(10 + tier * 6);
-    this.fx.glitch(1 + tier);
-    this.fx.thump(0.3 + tier * 0.1);
-    this.particles.impact(this.w / 2, this.h * 0.38, 1.2 + tier * 0.3);
-    this.particles.burst(this.w / 2, this.h * 0.45, 30 + tier * 20, 1 + tier * 0.2);
-    this.particles.setRainRate(10 + tier * 9);
-    this.fx.punch(1 + tier * 0.3);
+    gsap.delayedCall(0.22, () => {
+      if (!this.visible || heading.destroyed) return;
+      this.fx.shockwave();
+      this.fx.shake(10 + tier * 6);
+      this.fx.glitch(1 + tier);
+      this.fx.thump(0.3 + tier * 0.1);
+      this.fx.punch(1 + tier * 0.3);
+      this.ring(-120, t.material === 'infection' ? 0xff3a24 : 0xffc860, 1500 + tier * 200);
+      this.titleSweep(heading);
+    });
+    this.particles.setRainRate(12 + tier * 10);
   }
 
   /** Cartoon slot-window roulette that lands on the chosen strain. */
@@ -507,7 +588,7 @@ export class Overlays extends Container {
       if (idx !== lastIdx) {
         lastIdx = idx;
         this.audio.tick(Math.min(1, state.off / (target * spacing)));
-        gsap.fromTo(frame.scale, { x: 0.515, y: 0.49 }, { x: 0.5, y: 0.5, duration: 0.12 });
+        gsap.fromTo(frame.scale, { x: 0.505, y: 0.505 }, { x: 0.5, y: 0.5, duration: 0.12 });
         for (const ar of [arrowL, arrowR]) gsap.fromTo(ar, { alpha: 1 }, { alpha: 0.55, duration: 0.15 });
       }
     };
@@ -535,8 +616,8 @@ export class Overlays extends Container {
     this.fx.thump(0.45);
     this.fx.shake(14);
     gsap.fromTo(flash, { alpha: 1, width: 200, height: 200 }, { alpha: 0, width: 900, height: 900, duration: 0.6, ease: 'power2.out' });
-    gsap.fromTo(chosen, { width: 330, height: 330 }, { width: 240, height: 240, duration: 0.7, ease: 'elastic.out(1.2, 0.35)' });
-    gsap.fromTo(frame.scale, { x: 0.56, y: 0.46 }, { x: 0.5, y: 0.5, duration: 0.5, ease: 'elastic.out(1.2, 0.4)' });
+    gsap.fromTo(chosen, { width: 330, height: 330 }, { width: 240, height: 240, duration: 0.7, ease: 'power3.out' });
+    gsap.fromTo(frame.scale, { x: 0.54, y: 0.54 }, { x: 0.5, y: 0.5, duration: 0.4, ease: 'power3.out' });
     gsap.to(aura, { alpha: 0.85, duration: 0.2 });
     gsap.to(band, { alpha: 0, duration: 0.4 });
     const sc = this.content.scale.y;
@@ -720,7 +801,7 @@ export class Overlays extends Container {
       // we arrive inside: the white-red flash fades to the chamber
       this.content.alpha = 1;
       this.dim.tint = 0xffffff;
-      gsap.fromTo(this.dim, { alpha: 1 }, { alpha: 0.93, duration: 0.6 });
+      gsap.fromTo(this.dim, { alpha: 1 }, { alpha: 0.86, duration: 0.6 });
     }
     this.audio.featureStart();
     this.fx.shake(16);
@@ -742,7 +823,7 @@ export class Overlays extends Container {
     pyr.anchor.set(0.5);
     pyr.width = pyr.height = 420;
     pyr.y = 30;
-    const head = this.head3d(`${spins} TOURS GRATUITS`, 88, 'gold');
+    const head = this.head3d(`${spins} TOURS GRATUITS`, 88, 'gold', 1000);
     head.y = -330;
     this.content.addChild(pillar, ring, pyr, head);
     gsap.fromTo(pillar, { alpha: 0, width: 40 }, { alpha: 0.9, width: 300, duration: 0.35, ease: 'power2.out' });
@@ -750,7 +831,9 @@ export class Overlays extends Container {
     gsap.fromTo(pyr, { y: 500, alpha: 0 }, { y: 30, alpha: 1, duration: 0.55, ease: 'power3.out', delay: 0.15 });
     const ps = pyr.scale.x;
     gsap.fromTo(pyr.scale, { x: ps * 0.4, y: ps * 0.4 }, { x: ps, y: ps, duration: 0.55, ease: 'back.out(1.6)', delay: 0.15 });
+    // a player may skip this screen at any moment: nothing delayed may touch what is gone
     gsap.delayedCall(0.7, () => {
+      if (ring.destroyed) return;
       this.fx.shake(20);
       this.fx.shockwave();
       this.particles.impact(this.w / 2, this.h / 2, 1.8);
@@ -759,6 +842,7 @@ export class Overlays extends Container {
     // the title slams in
     head.alpha = 0;
     gsap.delayedCall(0.75, () => {
+      if (head.destroyed) return;
       head.alpha = 1;
       gsap.fromTo(head.scale, { x: 1.3, y: 1.3 }, { x: 0.5, y: 0.5, duration: 0.35, ease: 'power3.in', onComplete: () => this.fx.shake(10) });
     });
@@ -788,7 +872,7 @@ export class Overlays extends Container {
     gsap.killTweensOf(caption);
     caption.destroy();
     gsap.to(beam, { alpha: 0, duration: 0.4 });
-    const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 54, 'blood');
+    const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 54, 'blood', 1000);
     strain.y = 236;
     this.content.addChild(strain);
     this.popIn(strain);
@@ -812,8 +896,8 @@ export class Overlays extends Container {
     this.fx.glitch(2);
     this.sunburst(0x3e1806);
     const ribbon = this.ribbon(1120, 150, 0x8a0f26);
-    ribbon.y = mutation !== null ? -290 : -20;
-    const head = this.head3d(`+${spins} TOURS GRATUITS`, 84, 'gold');
+    ribbon.y = mutation !== null ? -248 : -20;
+    const head = this.head3d(`+${spins} TOURS GRATUITS`, 84, 'gold', 940);
     head.y = ribbon.y - 10;
     this.content.addChild(ribbon, head);
     this.popIn(ribbon);
@@ -822,12 +906,12 @@ export class Overlays extends Container {
     if (mutation !== null) {
       const sub = new Text({ text: 'MUTATION ! UNE NOUVELLE SOUCHE', style: body(30, 0xff8a70) });
       sub.anchor.set(0.5);
-      sub.y = -185;
+      sub.y = -150;
       this.content.addChild(sub);
       this.popIn(sub, 0.2);
-      await this.roulette(40, mutation, active);
+      await this.roulette(50, mutation, active);
       const name = this.head3d(SYMBOLS[mutation].name.toUpperCase(), 56, 'blood');
-      name.y = 250;
+      name.y = 240;
       this.content.addChild(name);
       this.popIn(name);
     }
@@ -841,7 +925,7 @@ export class Overlays extends Container {
     this.sunburst(0x3a2408);
     const ribbon = this.ribbon(900, 150, 0x1e0a08);
     ribbon.y = -200;
-    const head = this.head3d('INFECTION TERMINÉE', 80, 'bone');
+    const head = this.head3d('INFECTION TERMINÉE', 80, 'bone', 740);
     head.y = -210;
     const plate = this.plate(620, 180);
     plate.y = 20;
@@ -867,12 +951,13 @@ export class Overlays extends Container {
       ease: 'power2.out',
       onUpdate: () => {
         amount.value = counter.v;
+        amount.scale.set(Math.min(1, AMOUNT_W / Math.max(1, amount.inkWidth)));
         onTick?.(counter.v);
       },
     });
     await Promise.race([new Promise<void>((r) => tween.eventCallback('onComplete', () => r())), this.waitOrSkip(5000)]);
     tween.progress(1);
-    this.audio.win(2);
+    this.audio.bigWinEnd(1);
     await this.waitOrSkip(2600);
     await this.close();
   }
@@ -880,7 +965,7 @@ export class Overlays extends Container {
   async message(text: string, ms = 1600): Promise<void> {
     this.open();
     const ribbon = this.ribbon(900, 150, 0x1e0a08);
-    const t = this.head3d(text, 62, 'bone');
+    const t = this.head3d(text, 62, 'bone', 740);
     t.y = -8;
     this.content.addChild(ribbon, t);
     this.popIn(ribbon);

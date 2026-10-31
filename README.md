@@ -46,7 +46,9 @@ scripts/       simulateur Monte Carlo
 
 - Le serveur calcule le tour entier (jeu de base et tous les tours gratuits) avant toute animation. Le client se contente de mettre en scène un résultat déjà décidé.
 - La partie en cours est sauvegardée : si on recharge la page au milieu des tours gratuits, la partie reprend là où elle s'était arrêtée.
-- Tout le visuel est généré dans le navigateur (SVG, Canvas 2D, PixiJS) et tout le son est synthétisé avec la Web Audio API. Le projet ne contient aucun fichier image ou audio.
+- Le décor, les effets et les interfaces sont générés dans le navigateur (Canvas 2D, PixiJS) ; les personnages et symboles sont peints (`src/game/art/egypt/`). Tout le son est synthétisé avec la Web Audio API : oud, tambour sur cadre, sistre, ney, gong et voix, sans aucun fichier audio.
+- Les symboles viennent de la planche `scripts/symbols_sheet.webp`, découpée par `scripts/cut_symbols.py`.
+- Cléopâtre n'est jamais déformée : sa peinture reste intacte et elle vit par la lumière (torches, reflets sur l'or, étoiles sur les bijoux, halo, clignement). `scripts/cleopatra_art.py` prépare la peinture et les paupières (Python, `pillow`, `numpy`, `opencv-python-headless`).
 - Des illustrations professionnelles peuvent remplacer les symboles, le décor ou le logo : déposez les fichiers dans `public/assets/` et déclarez-les dans `public/assets/manifest.json` (voir `public/assets/LISEZMOI.md`).
 - `npm run dev` puis http://localhost:5173/gallery.html affiche une planche de tous les visuels (symboles, effets, mascotte) pour la revue artistique, et http://localhost:5173/lab.html les symboles peints en grand (`?only=codex` pour un seul symbole, `?only=royals` pour les lettres, `?only=spectre` pour le personnage).
 - Un gain inférieur ou égal à la mise s'affiche sans célébration. Cela évite les « pertes déguisées en gains ».

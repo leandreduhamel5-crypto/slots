@@ -10,7 +10,7 @@ export interface ParticleTextures {
   coin?: Texture;
 }
 
-type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark' | 'tex' | 'coin';
+type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark' | 'tex' | 'coin' | 'sand';
 
 interface P {
   s: Sprite;
@@ -28,6 +28,7 @@ interface P {
 export class Particles extends Container {
   private ps: P[] = [];
   private fountain: { x: number; y: number; rate: number; acc: number } | null = null;
+  private fountain2: { x: number; y: number; rate: number; acc: number } | null = null;
 
   constructor(private tex: ParticleTextures) {
     super();
@@ -40,6 +41,7 @@ export class Particles extends Container {
       star: this.tex.star,
       puff: this.tex.puff,
       spark: this.tex.spore,
+      sand: this.tex.spore,
       tex: this.tex.spore,
       coin: this.tex.coin ?? this.tex.spore,
     };
@@ -52,9 +54,13 @@ export class Particles extends Container {
       s.blendMode = 'add';
       s.tint = Math.random() < 0.5 ? 0xff3347 : 0xffd23f;
     }
+    if (kind === 'sand') {
+      s.blendMode = 'add';
+      s.tint = [0xffc860, 0xe8a040, 0xfff0c0, 0xc87828][Math.floor(Math.random() * 4)];
+    }
     s.position.set(x, y);
     this.addChild(s);
-    const g = kind === 'puff' ? -60 : kind === 'star' ? 300 : kind === 'tex' ? 700 : kind === 'coin' ? 1150 : 1300;
+    const g = kind === 'sand' ? 620 : kind === 'puff' ? -60 : kind === 'star' ? 300 : kind === 'tex' ? 700 : kind === 'coin' ? 1150 : 1300;
     const spin = kind === 'coin' ? (6 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1) : (Math.random() - 0.5) * 10;
     this.ps.push({ s, kind, vx, vy, life: Math.random() * (kind === 'coin' ? 0.3 : 0), max, spin, g, size });
     this.scaleOf(this.ps[this.ps.length - 1]);
@@ -130,6 +136,22 @@ export class Particles extends Container {
     }
   }
 
+  /** Golden sand shaken loose: grains spilling from a line of the given width. */
+  sand(x: number, y: number, width: number, n: number, power = 1): void {
+    for (let i = 0; i < n; i++) {
+      const up = Math.random() < 0.45;
+      this.add('sand', x + (Math.random() - 0.5) * width, y, (Math.random() - 0.5) * 170 * power, (up ? -(90 + Math.random() * 260) : Math.random() * 90) * power, 0.5 + Math.random() * 0.7, 5 + Math.random() * 9);
+    }
+  }
+
+  /** Dust rolling sideways out of a seam. */
+  dust(x: number, y: number, width: number, n: number): void {
+    for (let i = 0; i < n; i++) {
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      this.add('puff', x + (Math.random() - 0.5) * width, y + Math.random() * 10, dir * (40 + Math.random() * 110), -(10 + Math.random() * 30), 0.5 + Math.random() * 0.45, 34 + Math.random() * 30);
+    }
+  }
+
   private rainState: { textures: Texture[]; width: number; rate: number; acc: number } | null = null;
 
   /** Big-win shower: themed mini symbols tumbling from the top of the screen (the slot "coin rain"). */
@@ -150,18 +172,24 @@ export class Particles extends Container {
     this.fountain = { x, y, rate, acc: 0 };
   }
 
+  startFountain2(x: number, y: number, rate: number): void {
+    this.fountain2 = { x, y, rate, acc: 0 };
+  }
+
   stopFountain(): void {
-    this.fountain = null;
+    this.fountain = this.fountain2 = null;
   }
 
   update(dtMs: number): void {
     const dt = Math.min(0.05, dtMs / 1000);
-    if (this.fountain) {
-      const f = this.fountain;
+    for (const f of [this.fountain, this.fountain2]) {
+      if (!f) continue;
       f.acc += f.rate * dt;
       while (f.acc >= 1) {
         f.acc--;
-        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.4;
+        // both jets lean toward the middle of the screen
+        const lean = !this.fountain2 ? 0 : f === this.fountain2 ? -0.28 : 0.28;
+        const a = -Math.PI / 2 + lean + (Math.random() - 0.5) * 0.7;
         const v = 800 + Math.random() * 700;
         const r = Math.random();
         const kind: Kind = this.tex.coin ? (r < 0.82 ? 'coin' : r < 0.92 ? 'star' : 'spark') : r < 0.55 ? 'drop' : r < 0.75 ? 'cyan' : 'star';

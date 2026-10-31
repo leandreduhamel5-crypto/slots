@@ -8,6 +8,8 @@ type Phase = 'idle' | 'starting' | 'spinning' | 'stopping' | 'landing';
 
 const MAX_SPEED = 3800; // px / s
 const BLUR_SPEED = 1400;
+/** The last cell of travel: speed bleeds off into a dead stop, like a stone slab seating. */
+const SEAT_POWER = 2.6;
 
 /**
  * One reel column. Sprites[0] sits just above the window and sprites[ROWS + 1] just below it.
@@ -22,6 +24,7 @@ export class Reel extends Container {
   private stopQueue: Sym[] = [];
   private landed: (() => void) | null = null;
   private stripPos: number;
+  private seating = false;
   speedScale = 1;
 
   get idle(): boolean {
@@ -77,9 +80,9 @@ export class Reel extends Container {
     gsap
       .timeline({ delay: delay / 1000 })
       .to(tug, {
-        v: -26,
-        duration: 0.12,
-        ease: 'power2.out',
+        v: -16,
+        duration: 0.13,
+        ease: 'sine.out',
         onUpdate: () => this.applyOffset(tug.v),
       })
       .add(() => {
@@ -137,28 +140,40 @@ export class Reel extends Container {
       if (this.stopQueue.length <= 3) {
         for (let i = 0; i < this.cells.length; i++) this.setSymbol(i, this.symbols[i]);
       }
-      if (this.stopQueue.length === 0) this.land();
+      // one cell short of the final position: land() carries it the rest of the way
+      if (this.stopQueue.length === 1 && !this.seating) {
+        this.seating = true;
+        this.land();
+      } else if (this.stopQueue.length === 0) this.seating = false;
     }
   }
 
+  /** No overshoot and no bounce: the velocity is continuous, then the reel is simply stopped. */
   private land(): void {
     this.phase = 'landing';
-    const overshoot = 34;
-    const o = { v: this.offset };
+    const from = this.offset;
+    const dist = CELL_H - from;
+    const v0 = Math.max(600, this.speed * this.speedScale);
     this.speed = 0;
-    this.onLand?.();
-    gsap
-      .timeline()
-      .to(o, { v: overshoot, duration: 0.07, ease: 'power1.out', onUpdate: () => this.applyOffset(o.v) })
-      .to(o, { v: 0, duration: 0.32, ease: 'back.out(3)', onUpdate: () => this.applyOffset(o.v) })
-      .add(() => {
-        this.phase = 'idle';
+    gsap.killTweensOf(this);
+    const o = { k: 0 };
+    gsap.to(o, {
+      k: 1,
+      duration: (SEAT_POWER * dist) / v0,
+      ease: `power${SEAT_POWER - 1}.out`,
+      onUpdate: () => this.applyOffset(from + dist * o.k),
+      onComplete: () => {
         this.offset = 0;
+        this.phase = 'stopping';
+        this.shift();
+        this.phase = 'idle';
         this.layoutCells();
+        this.onLand?.();
         const cb = this.landed;
         this.landed = null;
         cb?.();
-      });
+      },
+    });
   }
 
   private applyOffset(v: number): void {

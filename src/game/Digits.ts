@@ -56,6 +56,8 @@ export class Digits extends Container {
   private glyphs: Map<string, Glyph>;
   private sprites: Sprite[] = [];
   private current = '';
+  /** width of the current text, before this container's own scale */
+  inkWidth = 0;
 
   constructor(
     private size: number,
@@ -94,5 +96,6 @@ export class Digits extends Container {
     });
     for (let i = chars.length; i < this.sprites.length; i++) this.sprites[i].visible = false;
     for (const s of this.sprites) s.x -= width / 2;
+    this.inkWidth = width;
   }
 }

@@ -1,52 +1,42 @@
-import { Container, DisplacementFilter, Graphics, MeshPlane, Sprite, Texture } from 'pixi.js';
+import { Container, DisplacementFilter, Graphics, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
+import { paintSoftRays } from './art/egyptFrame';
 import { makeCanvas } from './art/painters';
 import { paintFlameBlob } from './Fire';
 
-/**
- * Cleopatra, one uniform character: the painting (soft-matted, hair strand by strand) is a
- * single dense mesh deformed by an invisible skeleton with smooth skin weights, the way Spine
- * meshes are rigged in production slots. No part is ever cut out, so nothing can tear or show
- * a seam. Coordinates are pixels of the 809×1003 matte.
- */
+/** Cleopatra's painting. Coordinates are pixels of the 809×1003 art. */
 export const ART_W = 809;
 export const ART_H = 1003;
 type V2 = [number, number];
-const P = (x: number, y: number): V2 => [x, y + 6];
 
-/* skeleton (rest pose) */
-const HIPS = P(430, 760);
-const CHEST = P(470, 420);
-const NECK = P(480, 292);
-const HEAD_C = P(515, 150);
-const SHOULDER = P(322, 345);
-const ELBOW = P(262, 565);
-const PALM = P(92, 850);
-const COBRA_NECK = P(690, 250);
-const COBRA_C = P(730, 95);
 /* features */
-const EYES: V2[] = [P(500, 127), P(555, 157)];
-const COBRA_EYE = P(752, 77);
-const COBRA_MOUTH = P(792, 115);
-const VEIL = P(120, 560);
-const HAIR = P(330, 250);
+const EYES: V2[] = [[501, 133], [556, 162]];
+const PALM: V2 = [84, 876];
+const COBRA_EYE: V2 = [752, 83];
+const COBRA_MOUTH: V2 = [792, 121];
+const HALO: V2 = [490, 210];
+/** crown, earrings, armband, belt gems, staff */
+const JEWELS: V2[] = [[578, 58], [416, 190], [541, 245], [305, 412], [408, 808], [443, 765], [640, 440], COBRA_EYE];
 
 const GOLD = 0xffc860;
 const RED = 0xff2a22;
 
 export interface MascotTextures {
   art: Texture;
+  /** the highlights of the gold and the jewels alone, for the light that travels over her */
+  gold: Texture;
   silhouette: Texture;
   rim: Texture;
   cracks: [Texture, Texture];
+  sparkles: V2[];
+  edge: V2[];
   glow: Texture;
   flame: Texture;
   noise: Texture;
   beam: Texture;
-  ring: Texture;
-  sparkles: V2[];
-  edge: V2[];
+  blade: Texture;
+  rays: Texture;
 }
 
 /** 'human' is the queen at peace, 'inhuman' the infected queen of the free spins. */
@@ -123,29 +113,15 @@ function canvasOf(img: HTMLImageElement): HTMLCanvasElement {
   return c;
 }
 
+/** Soft glow of a layer, in the layer's own frame (it shares the layer's mesh). */
 function silhouetteCanvas(art: HTMLCanvasElement): HTMLCanvasElement {
-  const blur = 16;
-  const pad = blur * 3;
-  const [c, ctx] = makeCanvas(art.width + pad * 2, art.height + pad * 2);
-  ctx.filter = `blur(${blur}px)`;
-  ctx.drawImage(art, pad, pad);
+  const [c, ctx] = makeCanvas(art.width, art.height);
+  ctx.filter = 'blur(16px)';
+  ctx.drawImage(art, 0, 0);
   ctx.filter = 'none';
   ctx.globalCompositeOperation = 'source-in';
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, c.width, c.height);
-  return c;
-}
-
-
-/** Shockwave ring (thin, bright) for the staff striking the floor. */
-function ringCanvas(): HTMLCanvasElement {
-  const [c, ctx] = makeCanvas(256, 256);
-  const g = ctx.createRadialGradient(128, 128, 90, 128, 128, 128);
-  g.addColorStop(0, 'rgba(255,255,255,0)');
-  g.addColorStop(0.6, 'rgba(255,255,255,0.9)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
   return c;
 }
 
@@ -223,23 +199,21 @@ function lerpColor(a: number, b: number, k: number): number {
 }
 
 
-/** Thin bright outline of the silhouette (for the red rim light of the infected form). */
+/** Thin bright outline of a layer (for the red rim light of the infected form). */
 function rimCanvas(art: HTMLCanvasElement): HTMLCanvasElement {
-  const pad = 30;
-  const [c, ctx] = makeCanvas(art.width + pad * 2, art.height + pad * 2);
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
-    ctx.drawImage(art, pad + Math.cos(a) * 6, pad + Math.sin(a) * 6);
-  }
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.drawImage(art, pad, pad);
+  const [c, ctx] = makeCanvas(art.width, art.height);
+  ctx.drawImage(art, 0, 0);
   ctx.globalCompositeOperation = 'source-in';
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, c.width, c.height);
-  const [b, bx] = makeCanvas(c.width, c.height);
-  bx.filter = 'blur(3px)';
-  bx.drawImage(c, 0, 0);
-  return b;
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.filter = 'blur(5px)';
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    ctx.drawImage(art, Math.cos(a) * 3, Math.sin(a) * 3);
+  }
+  ctx.filter = 'none';
+  return c;
 }
 
 /** Points along the outer silhouette, for the flames of the infected aura. */
@@ -257,76 +231,64 @@ function edgePoints(art: HTMLCanvasElement): V2[] {
   return pts;
 }
 
-export async function buildMascotTextures(img: HTMLImageElement): Promise<MascotTextures> {
-  const art = canvasOf(img);
+/** Only what shines in the painting: warm, bright pixels, softly thresholded. */
+function goldCanvas(art: HTMLCanvasElement): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(art.width, art.height);
+  const src = art.getContext('2d')!.getImageData(0, 0, art.width, art.height);
+  const d = src.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const warm = Math.max(0, Math.min(1, (d[i] - d[i + 2] - 40) / 90));
+    const lit = Math.max(0, Math.min(1, (d[i + 1] - 120) / 80));
+    // gold is yellow, skin is orange: the ratio of green to red keeps her skin out of it
+    const yellow = Math.max(0, Math.min(1, (d[i + 1] / Math.max(1, d[i]) - 0.74) / 0.1));
+    d[i + 3] = d[i + 3] * warm * lit * yellow;
+  }
+  ctx.putImageData(src, 0, 0);
+  return c;
+}
+
+/** Soft vertical band: bright in the middle, gone at the edges. */
+function bladeCanvas(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(128, 8);
+  const g = ctx.createLinearGradient(0, 0, 128, 0);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.5, 'rgba(255,255,255,1)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 8);
+  return c;
+}
+
+export async function buildMascotTextures(painting: HTMLImageElement): Promise<MascotTextures> {
   const t = (c: HTMLCanvasElement) => Texture.from(c);
+  const art = canvasOf(painting);
   const cr = cracksFor(art, [0, 0], [
-    [EYES[0][0], EYES[0][1] + 8, Math.PI * 0.6, 70],
-    [EYES[1][0], EYES[1][1] + 8, Math.PI * 0.45, 60],
-    [NECK[0], NECK[1] + 10, Math.PI * 0.5, 110],
-    [CHEST[0] - 80, CHEST[1] - 60, Math.PI * 0.6, 160],
-    [CHEST[0] + 40, CHEST[1] + 60, Math.PI * 0.45, 160],
-    [HIPS[0], HIPS[1], Math.PI * 0.55, 180],
-    [ELBOW[0], ELBOW[1], Math.PI * 0.7, 140],
+    [501, 141, Math.PI * 0.6, 70], [556, 170, Math.PI * 0.45, 60],
+    [470, 340, Math.PI * 0.6, 150], [510, 470, Math.PI * 0.45, 160], [430, 760, Math.PI * 0.55, 180],
+    [262, 548, Math.PI * 0.7, 140], [320, 400, Math.PI * 0.6, 120],
   ], 29);
   const noise = t(noiseCanvas());
   noise.source.addressMode = 'repeat';
   return {
-    art: Texture.from(img),
+    art: Texture.from(painting),
+    gold: t(goldCanvas(art)),
     silhouette: t(silhouetteCanvas(art)),
     rim: t(rimCanvas(art)),
     cracks: [t(cr[0]), t(cr[1])],
+    sparkles: sparklePoints(art),
+    edge: edgePoints(art),
     glow: t(glowCanvas()),
     flame: t(paintFlameBlob()),
     noise,
     beam: t(beamCanvas()),
-    ring: t(ringCanvas()),
-    sparkles: sparklePoints(art),
-    edge: edgePoints(art),
+    blade: t(bladeCanvas()),
+    rays: t(paintSoftRays()),
   };
 }
 
-/* ------------------------------------------------------------------ skinning */
+/* ------------------------------------------------------------------ the character */
 
-type M = [number, number, number, number, number, number]; // a b c d tx ty
-const mul = (m: M, n: M): M => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
-/** rotate by r (and scale by s) around pivot p, then translate by (dx, dy) */
-const around = (p: V2, r: number, dx = 0, dy = 0, s = 1): M => {
-  const c = Math.cos(r) * s;
-  const n = Math.sin(r) * s;
-  return [c, n, -n, c, p[0] - c * p[0] + n * p[1] + dx, p[1] - n * p[0] - c * p[1] + dy];
-};
-const apply = (m: M, x: number, y: number): V2 => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
-
-const smooth = (e0: number, e1: number, x: number) => {
-  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
-  return t * t * (3 - 2 * t);
-};
-/** distance from p to the segment ab */
-function segDist(p: V2, a: V2, b: V2): number {
-  const vx = b[0] - a[0];
-  const vy = b[1] - a[1];
-  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / (vx * vx + vy * vy)));
-  return Math.hypot(p[0] - a[0] - vx * t, p[1] - a[1] - vy * t);
-}
-
-const BONES = ['hips', 'chest', 'head', 'armU', 'armF', 'cobra'] as const;
-type BoneName = (typeof BONES)[number];
-
-/** Smooth skin weights of an art point. */
-function weights(x: number, y: number): number[] {
-  const p: V2 = [x, y];
-  const head = (1 - smooth(150, 230, Math.hypot(x - HEAD_C[0], (y - HEAD_C[1]) * 0.85))) * (1 - smooth(NECK[1] - 30, NECK[1] + 30, y));
-  const cobra = (1 - smooth(80, 190, Math.hypot(x - COBRA_C[0], (y - COBRA_C[1]) * 0.75))) * smooth(560, 620, x);
-  const armF = (1 - smooth(40, 95, segDist(p, ELBOW, PALM))) * smooth(ELBOW[1] - 40, ELBOW[1] + 40, y) * (1 - smooth(300, 380, x));
-  const armU = (1 - smooth(40, 90, segDist(p, SHOULDER, ELBOW))) * (1 - armF) * (1 - smooth(330, 400, x));
-  const chest = (1 - smooth(HIPS[1] - 200, HIPS[1] - 20, y)) * (1 - head) * (1 - armU) * (1 - armF) * (1 - cobra);
-  const raw = [0, chest, head, armU, armF, cobra];
-  const sum = raw.reduce((a, b) => a + b, 0);
-  raw[0] = Math.max(0, 1 - sum);
-  const tot = raw.reduce((a, b) => a + b, 0);
-  return raw.map((v) => v / tot);
-}
+const lerpTo = (a: number, b: number, k: number) => a + (b - a) * k;
 
 interface Mote {
   s: Sprite;
@@ -336,29 +298,30 @@ interface Mote {
   age: number;
   a0: number;
   size: number;
-  grow?: number;
   ramp?: boolean;
 }
 
 /**
- * Behaviour: a living idle (weight shift, breathing, the head drifting toward the reels, hair
- * and veil in the wind, the cobra swaying), then full-body gestures: on spin she lifts her chin
- * and the cobra rears and strikes; on a win her free hand rises and a flame of gold blooms in
- * her palm; on a big win she leans back, hand raised, while the cobra spits light over the reels.
- * In the free spins she is wreathed in a red aura: flames licking off her silhouette, a red rim
- * light, glowing eyes and molten cracks.
+ * The painting is never bent: no pixel of her changes shape or size, so nothing can look like a
+ * warped image. She lives through light, as a painted slot character should. Torchlight flickers
+ * on her skin, blades of light travel over the gold, stars cross her jewels. On a win
+ * a halo of rays opens behind her and a flame burns at her fingertips; on a big win the cobra
+ * spits light over the reels. In the free spins she burns: red rim light, molten cracks, flames
+ * licking off the silhouette, glowing eyes.
  */
 export class Mascot extends Container {
-  private float = new Container();
   private rig = new Container();
-  private mesh: MeshPlane;
-  private rest: Float32Array;
-  private skin: Float32Array;
-  private auraOuter: Sprite;
+  private art: Sprite;
+  private gold: Sprite;
+  private sheen: Sprite;
+  private blade: Sprite;
+  private halo: Sprite;
+  private haloCore: Sprite;
+  private aura: Sprite;
+  private rim: Sprite;
+  private cracks: Sprite[];
   private noise: Sprite;
   private displace: DisplacementFilter;
-  private rim: Sprite;
-  private cracks: Sprite[] = [];
   private eyeGlows: Sprite[] = [];
   private cobraEye: Sprite;
   private mouthOrb: Sprite;
@@ -375,16 +338,13 @@ export class Mascot extends Container {
   private rage = 0;
   private emitIn = 0;
   private flameIn = 0;
-  private look = { x: 0, y: 0, tx: 0, ty: 0 };
-  private bones = {} as Record<BoneName, M>;
-  private fx = { y: 0, flare: 0, beam: 0, shake: 0, strike: 0, rear: 0, raise: 0, orb: 0, lean: 0, chin: 0 };
+  private glintIn = 1;
+  private sweepIn = 3;
+  private fx = { flare: 0, beam: 0, shake: 0, orb: 0, halo: 0, sweep: -1 };
   form: Form = 'human';
   onTransform: ((to: Form) => void) | null = null;
 
-  constructor(
-    private tex: MascotTextures,
-    custom: HTMLImageElement | null = null,
-  ) {
+  constructor(private tex: MascotTextures) {
     super();
     const glow = (size: number, tint: number) => {
       const s = new Sprite(tex.glow);
@@ -394,63 +354,71 @@ export class Mascot extends Container {
       s.blendMode = 'add';
       return s;
     };
-    this.auraOuter = new Sprite(tex.silhouette);
-    this.auraOuter.anchor.set(0.5);
-    this.auraOuter.position.set(ART_W / 2, ART_H / 2);
-    this.auraOuter.blendMode = 'add';
+    const layer = (t: Texture, add = false) => {
+      const s = new Sprite(t);
+      if (add) s.blendMode = 'add';
+      s.alpha = 0;
+      return s;
+    };
     this.noise = new Sprite(tex.noise);
     this.noise.renderable = false;
     this.noise.scale.set(1.8);
     this.displace = new DisplacementFilter({ sprite: this.noise, scale: 24 });
-    const aura = new Container();
-    aura.addChild(this.auraOuter);
-    aura.filters = [this.displace];
+    this.aura = layer(tex.silhouette, true);
+    const auraGroup = new Container();
+    auraGroup.addChild(this.aura);
+    auraGroup.filters = [this.displace];
 
-    this.mesh = new MeshPlane({ texture: custom ? Texture.from(custom) : tex.art, verticesX: 36, verticesY: 44 });
-    this.mesh.autoResize = false;
-    if (custom) this.mesh.scale.set(ART_W / custom.naturalWidth, ART_H / custom.naturalHeight);
-    this.rest = new Float32Array(this.mesh.geometry.positions);
-    // per-vertex weights (in art space), computed once
-    const n = this.rest.length / 2;
-    this.skin = new Float32Array(n * BONES.length);
-    const sx = this.mesh.scale.x;
-    const sy = this.mesh.scale.y;
-    for (let i = 0; i < n; i++) {
-      const w = weights(this.rest[i * 2] * sx, this.rest[i * 2 + 1] * sy);
-      for (let b = 0; b < BONES.length; b++) this.skin[i * BONES.length + b] = w[b];
-    }
+    this.halo = new Sprite(tex.rays);
+    this.halo.anchor.set(0.5);
+    this.halo.position.set(...HALO);
+    this.halo.blendMode = 'add';
+    this.halo.alpha = 0;
+    this.haloCore = glow(620, GOLD);
+    this.haloCore.position.set(...HALO);
+    this.haloCore.alpha = 0;
 
-    this.rim = new Sprite(tex.rim);
-    this.rim.position.set(-30, -30);
-    this.rim.blendMode = 'add';
-    this.rim.alpha = 0;
-    for (const ct of tex.cracks) {
-      const s = new Sprite(ct);
-      s.alpha = 0;
-      this.cracks.push(s);
+    this.art = new Sprite(tex.art);
+    this.gold = layer(tex.gold, true);
+    this.cracks = [layer(tex.cracks[0]), layer(tex.cracks[1], true)];
+    this.rim = layer(tex.rim, true);
+    // a blade of light: the gold highlights, revealed through a moving soft band
+    this.sheen = layer(tex.gold, true);
+    this.blade = new Sprite(tex.blade);
+    this.blade.anchor.set(0.5);
+    this.blade.height = ART_H * 1.8;
+    this.blade.width = 200;
+    this.blade.rotation = 0.32;
+    this.blade.position.set(-300, ART_H / 2);
+    this.sheen.mask = this.blade;
+
+    this.rig.addChild(this.noise, this.halo, this.haloCore, this.back, auraGroup, this.art, this.gold, this.cracks[0], this.cracks[1], this.rim, this.sheen, this.blade);
+    for (const e of EYES) {
+      const g = glow(40, GOLD);
+      g.position.set(...e);
+      this.eyeGlows.push(g);
     }
-    this.cracks[1].blendMode = 'add';
-    for (let i = 0; i < EYES.length; i++) this.eyeGlows.push(glow(40, GOLD));
     this.cobraEye = glow(46, RED);
+    this.cobraEye.position.set(...COBRA_EYE);
     this.mouthOrb = glow(20, GOLD);
+    this.mouthOrb.position.set(...COBRA_MOUTH);
     this.mouthOrb.alpha = 0;
     this.beam = new Sprite(tex.beam);
     this.beam.anchor.set(0.02, 0.5);
+    this.beam.position.set(...COBRA_MOUTH);
     this.beam.blendMode = 'add';
     this.beam.alpha = 0;
     this.orb = glow(120, GOLD);
-    this.orbCore = glow(40, 0xffffff);
+    this.orbCore = glow(26, 0xffffff);
+    this.orb.position.set(...PALM);
+    this.orbCore.position.set(...PALM);
     this.orb.alpha = this.orbCore.alpha = 0;
     this.sparks.blendMode = 'add';
 
-    this.rig.addChild(this.noise, this.back, aura, this.mesh, this.cracks[0], this.cracks[1], this.rim, ...this.eyeGlows, this.cobraEye, this.beam, this.mouthOrb, this.orb, this.orbCore, this.sparks, this.front);
+    this.rig.addChild(...this.eyeGlows, this.cobraEye, this.beam, this.mouthOrb, this.orb, this.orbCore, this.sparks, this.front);
     this.rig.pivot.set(ART_W / 2, ART_H);
-    this.float.addChild(this.rig);
-    this.addChild(this.float);
-
-    for (const b of BONES) this.bones[b] = [1, 0, 0, 1, 0, 0];
+    this.addChild(this.rig);
     gsap.ticker.add(this.tick);
-    this.scheduleTell();
   }
 
   /** Kept for API compatibility. */
@@ -459,39 +427,6 @@ export class Mascot extends Container {
   override destroy(options?: Parameters<Container['destroy']>[0]): void {
     gsap.ticker.remove(this.tick);
     super.destroy(options);
-  }
-
-  /** Skinned position of an art point. */
-  private pose(x: number, y: number): V2 {
-    const w = weights(x, y);
-    let ox = 0;
-    let oy = 0;
-    BONES.forEach((b, i) => {
-      if (w[i] < 1e-4) return;
-      const q = apply(this.bones[b], x, y);
-      ox += q[0] * w[i];
-      oy += q[1] * w[i];
-    });
-    return [ox, oy];
-  }
-
-  private solveBones(): void {
-    const t = this.t;
-    const fx = this.fx;
-    const breath = Math.sin(t * 1.6);
-    const hips = around(HIPS, Math.sin(t * 0.55) * 0.012 - fx.lean * 0.05, Math.sin(t * 0.55) * 3, 0);
-    const chest = mul(hips, around(HIPS, Math.sin(t * 0.55 + 0.7) * 0.01 - fx.lean * 0.04, 0, -breath * 2.2, 1 + breath * 0.004));
-    const head = mul(
-      chest,
-      around(NECK, -this.look.x * 0.07 + Math.sin(t * 0.7) * 0.02 - fx.chin * 0.1 + fx.lean * 0.06, this.look.x * 4, this.look.y * 3 - breath * 1.2),
-    );
-    const armU = mul(chest, around(SHOULDER, Math.sin(t * 0.9) * 0.025 - fx.raise * 0.04));
-    const armF = mul(armU, around(ELBOW, Math.sin(t * 0.9 + 0.7) * 0.035 + fx.raise * 0.2));
-    const cobra = mul(
-      chest,
-      around(COBRA_NECK, Math.sin(t * 1.3) * 0.07 - fx.rear * 0.22 + fx.strike * 0.16, fx.strike * 30, -fx.rear * 16 + Math.sin(t * 1.3 + 1) * 3, 1 + fx.strike * 0.14),
-    );
-    Object.assign(this.bones, { hips, chest, head, armU, armF, cobra });
   }
 
   private tick = (): void => {
@@ -504,96 +439,79 @@ export class Mascot extends Container {
     const fx = this.fx;
     const beat = Math.pow(Math.max(0, Math.sin(t * (2.2 + r * 1.8))), 10);
     const tint = lerpColor(GOLD, RED, r);
-    this.look.x += (this.look.tx - this.look.x) * Math.min(1, dt * 3.5);
-    this.look.y += (this.look.ty - this.look.y) * Math.min(1, dt * 3.5);
-    this.float.y = Math.sin(t * 1.1) * 3 + fx.y;
     this.rig.x = fx.shake ? (Math.random() - 0.5) * fx.shake : 0;
-    this.solveBones();
 
-    // skin the mesh, plus secondary motion (hair, veil) that follows the bones
-    const pos = this.mesh.geometry.positions;
-    const rest = this.rest;
-    const sk = this.skin;
-    const sx = this.mesh.scale.x;
-    const sy = this.mesh.scale.y;
-    const B = BONES.length;
-    const mats = BONES.map((b) => this.bones[b]);
-    for (let i = 0, v = 0; i < pos.length; i += 2, v++) {
-      const x = rest[i] * sx;
-      const y = rest[i + 1] * sy;
-      let ox = 0;
-      let oy = 0;
-      for (let b = 0; b < B; b++) {
-        const w = sk[v * B + b];
-        if (w < 1e-4) continue;
-        const m = mats[b];
-        ox += (m[0] * x + m[2] * y + m[4]) * w;
-        oy += (m[1] * x + m[3] * y + m[5]) * w;
-      }
-      // hair: strands swing behind her shoulder, lagging the head
-      const wh = (1 - smooth(70, 190, Math.hypot(x - HAIR[0], (y - HAIR[1]) * 0.7))) * smooth(150, 300, y);
-      ox += Math.sin(t * 1.15 + y * 0.012) * 5 * wh + this.look.x * -4 * wh;
-      // veil and ribbons ripple, more when she moves
-      const wv = (1 - smooth(120, 380, Math.hypot(x - VEIL[0], (y - VEIL[1]) * 0.6))) * (1 - smooth(200, 440, x));
-      ox += Math.sin(t * 1.8 + y * 0.012 + x * 0.01) * (10 + fx.raise * 6) * wv * (1 + r * 0.8);
-      oy += Math.cos(t * 1.4 + x * 0.015) * 5 * wv;
-      pos[i] = ox / sx;
-      pos[i + 1] = oy / sy;
-    }
-    this.mesh.geometry.getBuffer('aPosition').update();
-    this.mesh.tint = lerpColor(0xffffff, 0xffc0b0, r * 0.45);
+    // torchlight: two slow flickers, never in step, breathing on the skin and in the gold
+    const flame = 0.5 + 0.3 * Math.sin(t * 7.3) * Math.sin(t * 2.9 + 1) + 0.2 * Math.sin(t * 13.1 + 2);
+    const warm = lerpTo(0xff, 0xe2, 1 - flame) | 0;
+    const cool = lerpTo(0xf6, 0xcc, 1 - flame) | 0;
+    this.art.tint = lerpColor((0xff << 16) | (warm << 8) | cool, 0xffc0b0, r * 0.45);
+    this.gold.alpha = 0.08 + flame * 0.14 + fx.flare * 0.22 + fx.halo * 0.14;
+    this.gold.tint = tint;
 
-    // overlays ride the skeleton
-    const ch = this.bones.chest;
-    for (const s of [...this.cracks]) {
-      s.position.set(ch[4], ch[5]);
-      s.rotation = Math.atan2(ch[1], ch[0]);
+    this.glintIn -= dt;
+    if (this.glintIn <= 0) {
+      this.glintIn = 0.5 + Math.random() * 1.3;
+      this.glint(JEWELS[Math.floor(Math.random() * JEWELS.length)], 1);
     }
+    this.sweepIn -= dt;
+    if (this.sweepIn <= 0) {
+      this.sweepIn = 5 + Math.random() * 4;
+      this.sweep(1.5);
+    }
+    this.sheen.visible = fx.sweep >= 0;
+    if (this.sheen.visible) {
+      this.sheen.alpha = 0.95;
+      this.sheen.tint = lerpColor(0xfff0d0, 0xff5a3a, r);
+      this.blade.x = -240 + fx.sweep * (ART_W + 480);
+    }
+
+    // halo of rays behind her
+    this.halo.visible = this.haloCore.visible = fx.halo > 0.01;
+    if (this.halo.visible) {
+      this.halo.tint = this.haloCore.tint = tint;
+      this.halo.alpha = Math.min(0.85, fx.halo * 0.7);
+      this.halo.rotation = t * 0.12;
+      this.halo.width = this.halo.height = 760 + fx.halo * 380 + beat * 30;
+      this.haloCore.alpha = Math.min(0.75, fx.halo * 0.55) * (0.85 + flame * 0.15);
+    }
+
+    // the skins of the infected form cost nothing at peace
+    const burning = r > 0.01 || fx.flare > 0.01;
+    this.aura.parent!.visible = burning;
+    this.rim.visible = this.cracks[0].visible = this.cracks[1].visible = burning;
     this.cracks[0].alpha = r;
     this.cracks[1].alpha = r * (0.4 + beat * 0.6 + fx.flare * 0.4);
-    this.rim.alpha = r * (0.55 + beat * 0.45) + fx.flare * 0.25;
+    this.rim.alpha = r * (0.55 + beat * 0.45) + fx.flare * 0.2;
     this.rim.tint = lerpColor(0xffd080, RED, r);
     const flick = Math.random() < 0.012 ? 0.3 : 1;
-    EYES.forEach((e, i) => {
-      const [x, y] = this.pose(e[0], e[1]);
-      const g = this.eyeGlows[i];
-      g.position.set(x, y);
+    this.eyeGlows.forEach((g) => {
       g.tint = lerpColor(0xffd890, RED, r);
-      g.alpha = (0.12 + r * 0.75 + beat * 0.25 * r + fx.flare * 0.6) * flick;
-      const s = (28 + fx.flare * 30 + r * 16) / 256;
+      g.alpha = (0.08 + r * 0.6 + beat * 0.2 * r + fx.flare * 0.14) * flick;
+      const s = (24 + fx.flare * 6 + r * 12) / 256;
       g.scale.set(s * 1.5, s);
     });
-    const ce = this.pose(...COBRA_EYE);
-    this.cobraEye.position.set(...ce);
-    this.cobraEye.tint = RED;
     this.cobraEye.alpha = 0.55 + 0.25 * Math.sin(t * 3.1) + fx.flare * 0.5 + r * 0.3;
     this.cobraEye.scale.set((34 + fx.flare * 36) / 256);
-    const mo = this.pose(...COBRA_MOUTH);
-    this.mouthOrb.position.set(...mo);
-    this.mouthOrb.alpha = Math.min(1, fx.beam * 1.2 + fx.strike * 0.4);
+    this.mouthOrb.alpha = Math.min(1, fx.beam * 1.2);
     this.mouthOrb.tint = tint;
     this.mouthOrb.scale.set((24 + fx.beam * 90 + Math.random() * 10) / 256);
-    this.beam.position.set(...mo);
     this.beam.alpha = fx.beam * (0.85 + Math.random() * 0.15);
     this.beam.tint = tint;
     this.beam.scale.set((1300 * (0.5 + fx.beam * 0.5)) / 512, (300 + Math.random() * 40) / 64);
     this.beam.rotation = -0.75 + Math.sin(t * 6) * 0.03;
-    const palm = this.pose(...PALM);
-    this.orb.position.set(...palm);
-    this.orbCore.position.set(...palm);
     this.orb.alpha = Math.min(1, fx.orb * (0.8 + 0.2 * Math.sin(t * 9)) + r * 0.3);
-    this.orbCore.alpha = Math.min(1, fx.orb * 0.9 + r * 0.2);
+    this.orbCore.alpha = Math.min(1, fx.orb * 0.5 + r * 0.15);
     this.orb.tint = tint;
-    this.orb.width = this.orb.height = 90 + fx.orb * 100 + r * 30 + Math.sin(t * 7) * 10;
+    this.orb.width = this.orb.height = 70 + fx.orb * 70 + r * 24 + Math.sin(t * 7) * 8;
 
-    // aura: golden heat haze at rest, a red burning one when infected
+    // aura: a red burning haze when infected, a brief gold one on a flare
     this.noise.x = (this.noise.x + dt * 10) % 256;
     this.noise.y = (this.noise.y - dt * (70 + r * 90)) % 256;
     this.displace.scale.x = 14 + r * 22 + fx.flare * 20;
     this.displace.scale.y = 26 + r * 40 + fx.flare * 30;
-    this.auraOuter.tint = tint;
-    this.auraOuter.alpha = 0.26 + r * 0.45 + beat * 0.15 * (1 + r) + fx.flare * 0.35;
-    this.auraOuter.scale.set(1 + r * 0.05 + beat * 0.02 * r);
+    this.aura.tint = tint;
+    this.aura.alpha = r * 0.65 + beat * 0.15 * r + fx.flare * 0.3;
 
     // particles
     this.emitIn -= dt;
@@ -635,6 +553,46 @@ export class Mascot extends Container {
     }
   };
 
+  /** A blade of light travelling across the gold. */
+  private sweep(duration: number): void {
+    gsap.killTweensOf(this.fx, 'sweep');
+    gsap.fromTo(this.fx, { sweep: 0 }, { sweep: 1, duration, ease: 'sine.inOut', onComplete: () => void (this.fx.sweep = -1) });
+  }
+
+  /** A four-pointed star crossing a jewel. */
+  private glint(at: V2, size: number): void {
+    const c = new Container();
+    c.position.set(...at);
+    for (const [w, h] of [[90, 5], [5, 58]]) {
+      const ray = new Sprite(this.tex.glow);
+      ray.anchor.set(0.5);
+      ray.width = w * size;
+      ray.height = h * size;
+      ray.blendMode = 'add';
+      ray.tint = 0xfff4d8;
+      c.addChild(ray);
+    }
+    const dot = new Sprite(this.tex.glow);
+    dot.anchor.set(0.5);
+    dot.width = dot.height = 26 * size;
+    dot.blendMode = 'add';
+    c.addChild(dot);
+    c.scale.set(0.2);
+    c.alpha = 0;
+    this.front.addChild(c);
+    gsap
+      .timeline({ onComplete: () => c.destroy({ children: true }) })
+      .to(c, { alpha: 1, duration: 0.12, ease: 'sine.out' }, 0)
+      .to(c.scale, { x: 1, y: 1, duration: 0.2, ease: 'power2.out' }, 0)
+      .to(c, { rotation: 0.3, duration: 0.55, ease: 'none' }, 0)
+      .to(c, { alpha: 0, duration: 0.3, ease: 'sine.in' }, 0.25);
+  }
+
+  /** Every jewel lights up, one after the other. */
+  private jewels(): void {
+    JEWELS.forEach((j, i) => gsap.delayedCall(i * 0.07, () => !this.destroyed && this.glint(j, 1.3)));
+  }
+
   private mote(x: number, y: number, tint: number, vx: number, vy: number, life: number, size: number, startScale = 0, layer = this.front): Mote {
     const s = new Sprite(this.tex.glow);
     s.anchor.set(0.5);
@@ -652,17 +610,15 @@ export class Mascot extends Container {
     const pts = this.tex.sparkles;
     if (!pts.length) return;
     const p = pts[Math.floor(Math.random() * pts.length)];
-    const [x, y] = this.pose(p[0], p[1]);
-    this.mote(x, y, this.form === 'inhuman' ? 0xff6a40 : 0xfff0c0, 0, -6, 0.35 + Math.random() * 0.4, 12 + Math.random() * 18);
+    this.mote(p[0], p[1], this.form === 'inhuman' ? 0xff6a40 : 0xfff0c0, 0, -6, 0.35 + Math.random() * 0.4, 12 + Math.random() * 18);
   }
 
   private spawnFlame(): void {
     const pts = this.tex.edge;
     const p = pts[Math.floor(Math.random() * pts.length)];
-    const [x, y] = this.pose(p[0], p[1]);
     const s = new Sprite(this.tex.flame);
     s.anchor.set(0.5, 0.8);
-    s.position.set(x + (Math.random() - 0.5) * 6, y);
+    s.position.set(p[0] + (Math.random() - 0.5) * 6, p[1]);
     s.blendMode = 'add';
     (Math.random() < 0.65 ? this.back : this.front).addChild(s);
     this.motes.push({ s, vx: (Math.random() - 0.5) * 20, vy: -(90 + Math.random() * 120), life: 0.45 + Math.random() * 0.4, age: 0, a0: 0.75, size: 18 + Math.random() * 26, ramp: true });
@@ -685,10 +641,9 @@ export class Mascot extends Container {
   }
 
   private spawnOrbWisp(): void {
-    const [x, y] = this.pose(...PALM);
     const a = Math.random() * Math.PI * 2;
     const rr = 30 + Math.random() * 40;
-    this.mote(x + Math.cos(a) * rr, y + Math.sin(a) * rr, this.form === 'inhuman' ? RED : 0xffe0a0, -Math.cos(a) * 60, -Math.sin(a) * 60 - 30, 0.6 + Math.random() * 0.4, 14 + Math.random() * 12);
+    this.mote(PALM[0] + Math.cos(a) * rr, PALM[1] + Math.sin(a) * rr, this.form === 'inhuman' ? RED : 0xffe0a0, -Math.cos(a) * 60, -Math.sin(a) * 60 - 30, 0.6 + Math.random() * 0.4, 14 + Math.random() * 12);
   }
 
   private burst(n: number, at: V2, speed = 180): void {
@@ -723,37 +678,6 @@ export class Mascot extends Container {
 
   /* ------------------------------------------------------------ behaviour */
 
-  private scheduleTell(): void {
-    gsap.delayedCall(3 + Math.random() * 4, () => {
-      if (this.destroyed) return;
-      if (!this.busy?.isActive()) {
-        const roll = Math.random();
-        const tl = gsap.timeline();
-        if (roll < 0.35) {
-          const dir = Math.random() < 0.65 ? 1 : -0.6;
-          tl.add(() => this.lookAt(dir, Math.random() * 0.5)).add(() => this.lookAt(0, 0), 1.8 + Math.random());
-        } else if (roll < 0.65) {
-          tl.to(this.fx, { rear: 0.6, duration: 0.4, ease: 'sine.out' }).to(this.fx, { rear: 0, strike: 0.4, duration: 0.14, ease: 'power3.in' }).to(this.fx, { strike: 0, duration: 0.5, ease: 'sine.out' });
-        } else if (roll < 0.85) {
-          tl.to(this.fx, { raise: 0.5, orb: 0.6, duration: 0.8, ease: 'sine.inOut' }).to(this.fx, { raise: 0, orb: 0, duration: 1, ease: 'sine.inOut' }, '+=0.9');
-        } else {
-          tl.to(this.fx, { chin: 0.6, flare: 0.4, duration: 0.5, ease: 'sine.inOut' }).to(this.fx, { chin: 0, flare: 0, duration: 0.9, ease: 'sine.inOut' }, '+=0.4');
-          if (this.form === 'inhuman') this.crackle(0.6);
-        }
-        this.play(tl);
-      }
-      this.scheduleTell();
-    });
-  }
-
-  /** x: -1 away from the reels … 1 toward them. */
-  lookAt(x: number, y: number): void {
-    this.look.tx = x;
-    this.look.ty = y;
-  }
-
-  shockwave(_power = 1): void {}
-
   private play(tl: gsap.core.Timeline): void {
     this.busy?.progress(1).kill();
     this.busy = tl;
@@ -768,7 +692,7 @@ export class Mascot extends Container {
     }
     this.filters = [this.split];
     const tl = gsap.timeline({ onComplete: () => (this.filters = []) });
-    tl.to(this.fx, { flare: 0.8, lean: 0.6, chin: 0.8, raise: 1, orb: 1, rear: 1, shake: 5, duration: 0.5, ease: 'power2.out' }, 0);
+    tl.to(this.fx, { flare: 0.8, halo: 1, orb: 1, shake: 4, duration: 0.5, ease: 'power2.out' }, 0);
     for (let i = 0; i < 6; i++) {
       tl.add(() => {
         this.rage = i % 2 ? (to === 'inhuman' ? 0.2 : 0.8) : to === 'inhuman' ? 0.9 : 0.1;
@@ -781,12 +705,12 @@ export class Mascot extends Container {
       this.form = to;
       this.split.red = { x: 0, y: 0 };
       this.split.blue = { x: 0, y: 0 };
-      this.burst(36, this.pose(...PALM), 240);
+      this.burst(36, PALM, 240);
       if (to === 'inhuman') this.crackle(1.4);
       this.onTransform?.(to);
     }, 0.6)
-      .to(this.fx, { rear: 0, strike: 1, flare: 1.3, duration: 0.14, ease: 'power3.in' }, 0.6)
-      .to(this.fx, { strike: 0, flare: 0, shake: 0, lean: 0, chin: 0, raise: 0, orb: 0, duration: 1, ease: 'sine.inOut' }, 1.4);
+      .to(this.fx, { flare: 1.3, duration: 0.14, ease: 'power3.in' }, 0.6)
+      .to(this.fx, { flare: 0, shake: 0, halo: 0, orb: 0, duration: 1, ease: 'sine.inOut' }, 1.4);
     this.play(tl);
   }
 
@@ -794,40 +718,36 @@ export class Mascot extends Container {
     const tl = gsap.timeline();
     switch (kind) {
       case 'spin':
-        this.lookAt(1, 0.4);
-        tl.to(this.fx, { chin: 0.4, rear: 0.6, duration: 0.22, ease: 'power2.out' })
-          .to(this.fx, { rear: 0, strike: 0.55, duration: 0.11, ease: 'power3.in' })
-          .to(this.fx, { strike: 0, chin: 0, duration: 0.55, ease: 'sine.out' })
-          .add(() => this.lookAt(0.7, 0.3));
+        this.sweep(0.8);
+        tl.to(this.fx, { flare: 0.3, duration: 0.15, ease: 'power2.out' }).to(this.fx, { flare: 0, duration: 0.6, ease: 'sine.out' });
         break;
       case 'codex':
-        tl.to(this.fx, { rear: 0.8, duration: 0.12, ease: 'power2.out' }).to(this.fx, { rear: 0, strike: 0.8, flare: 0.5, duration: 0.1, ease: 'power3.in' }).to(this.fx, { strike: 0, flare: 0, duration: 0.5 });
+        this.glint(COBRA_EYE, 1.5);
+        tl.to(this.fx, { flare: 0.7, duration: 0.1, ease: 'power2.out' }).to(this.fx, { flare: 0, duration: 0.6, ease: 'sine.out' });
         break;
       case 'win':
-        this.lookAt(-0.2, 0.1);
-        tl.to(this.fx, { raise: 1, orb: 1, flare: 0.6, chin: 0.3, duration: 0.55, ease: 'back.out(1.4)' })
-          .add(() => this.burst(18, this.pose(...PALM), 170), 0.4)
-          .to(this.fx, { rear: 0.6, duration: 0.18 }, 0.2)
-          .to(this.fx, { rear: 0, strike: 0.7, duration: 0.11, ease: 'power3.in' }, 0.45)
-          .to(this.fx, { strike: 0, duration: 0.45 }, 0.65)
-          .to(this.fx, { raise: 0, orb: 0, flare: 0, chin: 0, duration: 1.1, ease: 'sine.inOut' }, 1.5)
-          .add(() => this.lookAt(0.5, 0.2));
+        // a halo opens behind her, her jewels catch fire, a flame burns at her fingertips
+        this.sweep(0.9);
+        this.jewels();
+        tl.to(this.fx, { halo: 0.7, orb: 1, flare: 0.5, duration: 0.6, ease: 'sine.out' })
+          .add(() => this.burst(18, PALM, 170), 0.4)
+          .to(this.fx, { halo: 0, orb: 0, flare: 0, duration: 1.1, ease: 'sine.inOut' }, 1.7);
         break;
       case 'big':
-        this.lookAt(0.4, -0.6);
-        tl.to(this.fx, { lean: 1, chin: 1, raise: 1, orb: 1, rear: 1, flare: 1, y: -6, duration: 0.5, ease: 'back.out(1.3)' })
-          .to(this.fx, { rear: 0, strike: 1, flare: 1.4, shake: 4, duration: 0.12, ease: 'power3.in' })
+        this.sweep(0.7);
+        this.jewels();
+        tl.to(this.fx, { halo: 1.3, orb: 1, flare: 1, duration: 0.55, ease: 'power2.inOut' })
+          .to(this.fx, { flare: 1.4, shake: 3, duration: 0.12, ease: 'power3.in' })
           .to(this.fx, { beam: 1, duration: 0.15 })
           .add(() => {
-            this.burst(40, this.pose(...COBRA_MOUTH), 240);
+            this.burst(40, COBRA_MOUTH, 240);
             this.crackle(1.2);
+            this.sweep(0.7);
           }, '<')
           .to(this.fx, { beam: 0, shake: 0, duration: 0.5 }, '+=1.2')
-          .to(this.fx, { strike: 0, lean: 0, chin: 0, raise: 0, orb: 0, flare: 0, y: 0, duration: 1.1, ease: 'sine.inOut' })
-          .add(() => this.lookAt(0, 0));
+          .to(this.fx, { halo: 0, orb: 0, flare: 0, duration: 1.1, ease: 'sine.inOut' });
         break;
       case 'feature':
-        this.lookAt(0, 0);
         this.setForm('inhuman');
         return;
     }
