@@ -167,7 +167,6 @@ export class Background extends Container {
   private duneScale = 1;
   /** sand blown low along the ground */
   private blown: TilingSprite;
-  private view = { x: 0, y: 0 };
   /** height of the console over the bottom of the screen */
   private ground = 0;
   private redWash: Sprite;
@@ -365,15 +364,7 @@ export class Background extends Container {
     const z = this.camera.k - 1;
     this.dunes.scale.set(this.duneScale * (1 + z * 0.7));
     this.dunes.alpha = Math.max(0, 1 - z * 1.6);
-    this.dunes.position.set(this.w / 2 - this.view.x * 20, this.h - this.ground + 150 * this.dunes.scale.y - this.view.y * 7 + z * this.h * 0.75);
-  }
-
-  /** Where the viewer's eye is (-1..1): the far temple moves a little, the near dunes more. */
-  setView(x: number, y: number): void {
-    this.view.x = x;
-    this.view.y = y;
-    this.applyCamera();
-    this.placeDunes();
+    this.dunes.position.set(this.w / 2, this.h - this.ground + 150 * this.dunes.scale.y + z * this.h * 0.75);
   }
 
   /** camera dolly: k = zoom factor, focus = the art point that stays put while zooming in */
@@ -385,8 +376,13 @@ export class Background extends Container {
     const s = base * this.camera.k;
     const f = [this.camera.fx - W / 2, this.camera.fy - H / 2];
     this.sceneC.scale.set(s);
-    this.sceneC.position.set(this.w / 2 - f[0] * (s - base) - this.view.x * 11, this.h / 2 - f[1] * (s - base) - this.view.y * 5);
+    this.sceneC.position.set(this.w / 2 - f[0] * (s - base), this.h / 2 - f[1] * (s - base));
     this.placeDunes();
+  }
+
+  /** Where the capstone is on screen. */
+  apexOnScreen(): { x: number; y: number } {
+    return this.sceneC.toGlobal({ x: APEX[0] - W / 2, y: APEX[1] - H / 2 });
   }
 
   /** Dolly the camera into (k > 1) or back out of the pyramid. */

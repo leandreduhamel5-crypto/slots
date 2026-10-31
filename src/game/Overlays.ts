@@ -386,6 +386,19 @@ export class Overlays extends Container {
     };
   }
 
+  /** A ruby of a crown breathing with light. */
+  private rubyGlow(y: number, size: number): Sprite {
+    const s = new Sprite(this.tex.glow);
+    s.anchor.set(0.5);
+    s.y = y;
+    s.width = s.height = size;
+    s.blendMode = 'add';
+    s.tint = 0xff5a30;
+    this.content.addChild(s);
+    gsap.fromTo(s, { alpha: 0.35 }, { alpha: 0.9, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    return s;
+  }
+
   /** Keeps a chain of lamps running on its own for as long as it is on screen. */
   private runLamps(lamps: { root: Container; chase: (phase: number) => void }): gsap.core.Tween {
     const run = { p: 0 };
@@ -485,6 +498,7 @@ export class Overlays extends Container {
     sub.y = 378;
     gsap.to(sub, { alpha: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.content.addChild(plaque, lamps.root, heading, pips, amount, multSeal, mult, crown, foot, sub);
+    const rubies = [this.rubyGlow(crown.y - 9, 150), this.rubyGlow(foot.y - 6, 96)];
     const chaser = this.runLamps(lamps);
     gsap.fromTo(crown, { y: crown.y - 130, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.12 });
     gsap.fromTo(foot, { y: foot.y + 110, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.12 });
@@ -545,6 +559,7 @@ export class Overlays extends Container {
           this.lightPip(pips, tier);
           punch();
           lamps.blaze(600);
+          for (const r of rubies) gsap.fromTo(r.scale, { x: r.scale.x * 2.2, y: r.scale.y * 2.2 }, { x: r.scale.x, y: r.scale.y, duration: 0.5, ease: 'power2.out' });
           chaser.timeScale(1 + tier * 0.8);
           this.titleSweep(plaque, this.content, 640);
         }
@@ -747,7 +762,7 @@ export class Overlays extends Container {
       const idx = Math.round(state.off / spacing);
       if (idx !== lastIdx) {
         lastIdx = idx;
-        this.audio.tick(Math.min(1, Math.max(0, state.off / end)));
+        this.audio.drumTick(state.off / end);
         gsap.fromTo([frame.scale, rim.scale], { x: 0.512, y: 0.512 }, { x: 0.5, y: 0.5, duration: 0.12 });
         gsap.fromTo(arrowL, { x: -(WINDOW / 2 + 16), alpha: 1 }, { x: -(WINDOW / 2 + 28), alpha: 0.7, duration: 0.16 });
         gsap.fromTo(arrowR, { x: WINDOW / 2 + 16, alpha: 1 }, { x: WINDOW / 2 + 28, alpha: 0.7, duration: 0.16 });
@@ -774,8 +789,8 @@ export class Overlays extends Container {
     // lock: the wheel empties, the strain blazes in its window and the light goes straight up
     const chosen = items[target];
     for (const sp of items) if (sp !== chosen) gsap.to(sp, { alpha: 0, duration: 0.3 });
-    this.audio.impact(1.2);
-    this.audio.codex(4);
+    this.audio.impact(0.9);
+    this.audio.strainLock();
     this.fx.shockwave();
     this.fx.thump(0.45);
     this.fx.shake(12);
@@ -953,7 +968,10 @@ export class Overlays extends Container {
           const dt = 1 / 60;
           for (const d of doors) {
             d.z -= dt * speed;
-            if (d.z < 0.25) d.z += 8;
+            if (d.z < 0.25) {
+              d.z += 8;
+              this.audio.doorPass();
+            }
             const k = 1 / d.z;
             d.s.scale.set(k * 4.2);
             const v = Math.round(Math.min(255, 60 + 195 * Math.min(1, k * 1.2)));

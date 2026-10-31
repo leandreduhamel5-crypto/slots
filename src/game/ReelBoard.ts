@@ -85,6 +85,8 @@ export class ReelBoard extends Container {
   private seatLights: Sprite[] = [];
   private edgeLights: Sprite[] = [];
   private accent = 0xffc860;
+  /** in the bonus, winning symbols light up without moving */
+  private still = false;
   private anticipationFx: { glow: Sprite; veins: Sprite; border: Graphics; comets: Sprite[] }[] = [];
   private throbbing: Rig[] = [];
   private rigs = new Map<string, Rig>();
@@ -318,6 +320,7 @@ export class ReelBoard extends Container {
 
   /** Free spins: the whole board breathes red. */
   setFeature(on: boolean): void {
+    this.still = on;
     this.accent = on ? 0xff3a24 : 0xffc860;
     gsap.killTweensOf(this.infectionGlow);
     if (on) {
@@ -713,10 +716,12 @@ export class ReelBoard extends Container {
     tl.fromTo(rig.halo, { alpha: 0 }, { alpha: strong ? 0.62 : 0.42, duration: 0.2, ease: 'sine.out' }, 0)
       .to(rig.halo, { alpha: strong ? 0.3 : 0.2, duration: 0.7, ease: 'sine.out' }, 0.2)
       .fromTo(rig.halo.scale, { x: hs * 0.7, y: hs * 0.7 }, { x: hs, y: hs, duration: 0.45, ease: 'power2.out' }, 0)
-      .to(b.scale, { x: up, y: up, duration: 0.38, ease: 'power3.out' }, 0)
       .fromTo(rig.glow, { alpha: 0.08 }, { alpha: 0, duration: 0.6, ease: 'sine.out' }, 0);
+    if (!this.still) {
+      tl.to(b.scale, { x: up, y: up, duration: 0.38, ease: 'power3.out' }, 0);
+      rig.tweens.push(gsap.to(b.scale, { x: up * 0.97, y: up * 0.97, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.45 }));
+    }
     rig.tweens.push(
-      gsap.to(b.scale, { x: up * 0.97, y: up * 0.97, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.45 }),
       gsap.to(rig.halo, { alpha: strong ? 0.4 : 0.28, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.9 }),
       gsap.fromTo(rig.shine, { x: -TEX_SIZE }, { x: TEX_SIZE, duration: 0.75, ease: 'power1.inOut', repeat: -1, repeatDelay: 1.5, delay: delay + 0.1 }),
     );
@@ -724,7 +729,7 @@ export class ReelBoard extends Container {
     // one-shot particle effects, so a looping win cycle doesn't flood the screen
     const once = (fn: () => void) => rig.tweens.push(gsap.delayedCall(delay + 0.3, fn));
     once(() => this.fx.sand(pos.x, pos.y + CELL_H * 0.2, CELL_W * 0.7, strong ? 22 : 10, 1.1));
-    if (!this.tex.rigs.has(rig.sym)) this.egyptWin(rig, tl, amp, once, pos);
+    if (!this.tex.rigs.has(rig.sym) && !this.still) this.egyptWin(rig, tl, amp, once, pos);
     rig.tweens.push(tl);
   }
 
@@ -739,14 +744,9 @@ export class ReelBoard extends Container {
     flash.width = flash.height = CELL_W * 2;
     this.labelLayer.addChild(flash);
     gsap.fromTo(flash, { alpha: 0.22 }, { alpha: 0, duration: 0.5, onComplete: () => flash.destroy() });
-    this.fx.impact(c.x, c.y, 0.8, 1);
+    this.fx.sand(c.x, c.y + CELL_H * 0.3, CELL_W * 0.7, 14, 1);
     const rig = this.rig(reel, row);
-    const s = SYMBOL_SIZE / TEX_SIZE;
-    const tl = gsap
-      .timeline({ onComplete: () => this.dropRig(rig) })
-      .fromTo(rig.body.scale, { x: s * 1.3, y: s * 1.3 }, { x: s, y: s, duration: 0.2, ease: 'power3.in' })
-      .fromTo(rig.glow, { alpha: 0.08 }, { alpha: 0, duration: 0.5 }, 0);
-    if (rig.parts.lid) tl.add(this.blink(rig), 0.35);
+    const tl = gsap.timeline({ onComplete: () => this.dropRig(rig) }).fromTo(rig.glow, { alpha: 0.5 }, { alpha: 0, duration: 0.6, ease: 'sine.out' });
     rig.tweens.push(tl);
   }
 
@@ -868,9 +868,9 @@ export class ReelBoard extends Container {
     t.text = text;
     t.addChildAt(makeSeal(this.tex.seal, t.inkWidth + 96, 72), 0);
     t.position.set(x, y);
+    t.scale.set(scale);
     this.labelLayer.addChild(t);
-    gsap.fromTo(t.scale, { x: 0.2 * scale, y: 0.2 * scale }, { x: scale, y: scale, duration: 0.5, ease: 'power3.out' });
-    gsap.from(t, { y: y + 24, duration: 0.35, ease: 'power3.out' });
+    gsap.fromTo(t, { alpha: 0 }, { alpha: 1, duration: 0.25 });
     return t;
   }
 
@@ -1032,6 +1032,54 @@ export class ReelBoard extends Container {
     this.fx.coins(cx, BOARD_H * 0.75, 8, 0.8);
   }
 
+  /**
+   * The pyramids on the reels call the great one: each lights up in turn and sends a thread of gold
+   * to the capstone. Resolves when the last thread lands.
+   */
+  async callTemple(to: { x: number; y: number }, onThread: (i: number) => void): Promise<void> {
+    await this.settleWins();
+    this.clearHighlights();
+    const cells: Cell[] = [];
+    for (let r = 0; r < REELS; r++) for (let row = 0; row < ROWS; row++) if (this.symbolAt(r, row) === Sym.CODEX) cells.push([r, row]);
+    await Promise.all(
+      cells.map(([r, row], i) =>
+        new Promise<void>((resolve) => {
+          const from = cellCenter(r, row);
+          const g = new Graphics();
+          g.blendMode = 'add';
+          this.labelLayer.addChild(g);
+          const o = { t: 0 };
+          const draw = () => {
+            if (g.destroyed) return;
+            const x = from.x + (to.x - from.x) * o.t;
+            const y = from.y + (to.y - from.y) * o.t;
+            g.clear();
+            for (const [width, color, alpha] of [[26, 0xffa030, 0.16], [10, 0xffc860, 0.45], [3.5, 0xfff0c8, 1]] as const) {
+              g.moveTo(from.x, from.y).lineTo(x, y).stroke({ width, color, alpha, cap: 'round' });
+            }
+          };
+          const delay = i * 0.17;
+          gsap.delayedCall(delay, () => {
+            onThread(i);
+            this.popCell(r, row, 0xffc860);
+          });
+          gsap.to(o, {
+            t: 1,
+            delay,
+            duration: 0.34,
+            ease: 'power2.in',
+            onUpdate: draw,
+            onComplete: () => {
+              this.fx.sand(from.x, from.y, CELL_W * 0.6, 16, 1);
+              gsap.to(g, { alpha: 0, duration: 0.4, onComplete: () => !g.destroyed && g.destroy() });
+              resolve();
+            },
+          });
+        }),
+      ),
+    );
+  }
+
   /** Lets the pass over the winning lines finish, briskly: it must not light symbols over a column. */
   private settleWins(): Promise<void> {
     const tl = this.cycleTl;
@@ -1057,13 +1105,7 @@ export class ReelBoard extends Container {
       for (let row = 0; row < ROWS && !covered; row++) {
         if (this.symbolAt(r, row) === exp.symbol) {
           const rig = this.rig(r, row);
-          const s = SYMBOL_SIZE / TEX_SIZE;
-          rig.tweens.push(
-            gsap
-              .timeline()
-              .to(rig.body.scale, { x: s * 1.3, y: s * 1.3, duration: 0.2, ease: 'power3.out' })
-              .to(rig.glow, { alpha: 0.55, duration: 0.2 }, 0),
-          );
+          rig.tweens.push(gsap.to(rig.glow, { alpha: 0.55, duration: 0.2 }));
         }
       }
       const veins = new Sprite(this.tex.veins);
@@ -1106,19 +1148,15 @@ export class ReelBoard extends Container {
       this.expandLayer.addChild(vm, veins, big, sweepMask, sweep);
       onReel?.(r);
       await new Promise<void>((resolve) => {
-        const sx = big.scale.x;
-        const sy = big.scale.y;
         gsap
           .timeline({ onComplete: resolve })
           .to(vm.scale, { y: 1, duration: 0.4, ease: 'power2.in' })
           .add(() => {
             for (const rig of [...this.rigs.values()].filter((g) => g.reel === r)) this.dropRig(rig);
-            this.onImpact?.(0.8);
             this.slamLight(x + CELL_W / 2);
             for (let row = 0; row < ROWS; row++) this.fx.seat(x + CELL_W / 2, (row + 1) * CELL_H, CELL_W * 0.9, false);
           })
-          .to(big, { alpha: 1, duration: 0.05 })
-          .fromTo(big.scale, { x: sx * 1.09, y: sy * 1.09 }, { x: sx, y: sy, duration: 0.3, ease: 'power3.in' }, '<')
+          .to(big, { alpha: 1, duration: 0.16, ease: 'sine.out' })
           .fromTo(light, { alpha: 0.95 }, { alpha: 0.26, duration: 0.7, ease: 'power2.out' }, '<')
           .to(veins, { alpha: 0, duration: 0.3 }, '<')
           .to(sweep, { y: BOARD_H + 240, duration: 0.6, ease: 'power1.inOut' }, '<0.12');

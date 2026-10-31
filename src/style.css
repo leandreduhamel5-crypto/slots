@@ -2474,3 +2474,31 @@ button {
     right: 6px;
   }
 }
+
+/* amounts shrink to fit: the cartouches themselves never grow */
+#hud.console:not(.mobile) .c-meter:not(.c-betmeter) {
+  width: 178px;
+}
+@media (min-aspect-ratio: 1/1) and (max-width: 1100px), (min-aspect-ratio: 1/1) and (max-height: 520px) {
+  #hud.console:not(.mobile) .c-meter:not(.c-betmeter) {
+    width: 84px;
+  }
+}
+#hud.console .c-meter span,
+.c-buy span {
+  display: inline-block;
+  transform-origin: center;
+}
+#hud.console.mobile .c-row1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+/* a free spin is waiting: the button burns and calls for the press */
+#hud.console.awaiting .spin {
+  animation: spin-call 0.9s ease-in-out infinite;
+}
+@keyframes spin-call {
+  0%, 100% { box-shadow: 0 8px 18px rgba(0, 0, 0, 0.65), 0 0 18px rgba(255, 170, 60, 0.6); filter: brightness(1); }
+  50% { box-shadow: 0 8px 18px rgba(0, 0, 0, 0.65), 0 0 0 5px rgba(255, 214, 130, 0.9), 0 0 56px rgba(255, 170, 60, 1); filter: brightness(1.25); }
+}

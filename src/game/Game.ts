@@ -1,4 +1,4 @@
-import { Application, Container, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { AdvancedBloomFilter, ShockwaveFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { BASE_STRIPS, BET_LEVELS, FREE_STRIPS, REELS, ROWS, Sym, minCount } from '../math/config';
@@ -24,8 +24,8 @@ const WORLD_TOP = -172;
 /** just under the frame: everything on screen stays clear of the console */
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 142;
 /** Cleopatra stands left of the reels, her cobra staff right beside the frame */
-const MASCOT_X = -505;
-const MASCOT_SCALE = 0.82;
+const MASCOT_X = -437;
+const MASCOT_SCALE = 0.68;
 const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 360;
 
@@ -33,6 +33,10 @@ const WORLD_W = BOARD_W + 360;
 class FeatureBanner extends Container {
   private count: Text;
   private icons = new Container();
+  /** the strains the icons show: a new bonus can have another strain, with the same count */
+  private shown = '';
+  private bar = new Graphics().roundRect(0, 0, 244, 4, 2).fill(0xf2c25a);
+  private glow: Sprite;
 
   constructor(private tex: SymbolTextures) {
     super();
@@ -60,13 +64,29 @@ class FeatureBanner extends Container {
     strains.anchor.set(0.5);
     strains.position.set(150, -38);
     this.icons.position.set(150, 12);
-    this.addChild(plate, label, this.count, strains, this.icons);
+    // how far through the free spins we are
+    const track = new Graphics().roundRect(-124, 45, 248, 7, 3.5).fill(0x050a1e).stroke({ width: 1, color: 0xc08a30 });
+    this.bar.position.set(-122, 48.5);
+    this.bar.scale.x = 0;
+    this.glow = new Sprite(tex.glow);
+    this.glow.anchor.set(0.5);
+    this.glow.position.set(150, 12);
+    this.glow.width = 240;
+    this.glow.height = 130;
+    this.glow.blendMode = 'add';
+    this.glow.tint = 0xffb040;
+    this.glow.alpha = 0.22;
+    gsap.to(this.glow, { alpha: 0.4, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.addChild(plate, label, this.count, track, this.bar, strains, this.glow, this.icons);
     this.visible = false;
   }
 
   set(spin: number, total: number, specials: Sym[]): void {
     this.count.text = `${spin} / ${total}`;
-    if (this.icons.children.length !== specials.length) {
+    gsap.to(this.bar.scale, { x: Math.min(1, spin / Math.max(1, total)), duration: 0.35, ease: 'power2.out' });
+    const key = specials.join();
+    if (key !== this.shown) {
+      this.shown = key;
       this.icons.removeChildren().forEach((c) => c.destroy());
       specials.forEach((s, i) => {
         const sp = new Sprite(this.tex.normal[s]);
@@ -82,6 +102,12 @@ class FeatureBanner extends Container {
   bump(): void {
     gsap.fromTo(this.count.scale, { x: 1.2, y: 1.2 }, { x: 1, y: 1, duration: 0.35, ease: 'power3.out' });
   }
+
+  /** The strain has just taken a reel. */
+  flash(): void {
+    gsap.killTweensOf(this.glow);
+    gsap.fromTo(this.glow, { alpha: 1 }, { alpha: 0.22, duration: 0.7, ease: 'power2.out', onComplete: () => void gsap.to(this.glow, { alpha: 0.4, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' }) });
+  }
 }
 
 export class Game {
@@ -92,6 +118,8 @@ export class Game {
   private bg: Background;
   private board: ReelBoard;
   private logo: Logo;
+  /** the capstone blazes right behind the logo: this keeps its letters readable */
+  private logoShade: Sprite;
   private banner: FeatureBanner;
   private overlays: Overlays;
   private hud: Hud;
@@ -144,7 +172,11 @@ export class Game {
       this.bg.thump(to === 'inhuman' ? 0.4 : 0.15);
       this.shake(to === 'inhuman' ? 16 : 6);
     };
-    this.world.addChild(this.logo, this.banner, this.board, this.mascot, this.teaser, this.mascotFx);
+    this.logoShade = new Sprite(tex.glow);
+    this.logoShade.anchor.set(0.5);
+    this.logoShade.tint = 0x050208;
+    this.logoShade.alpha = 0.7;
+    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.mascot, this.teaser, this.mascotFx);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       shake: (p) => this.shake(p),
@@ -202,10 +234,6 @@ export class Game {
         if (this.paytable.isOpen) this.paytable.close();
         else if (!this.hud.buyOpen) this.onSpinPressed();
       }
-    });
-    window.addEventListener('pointermove', (e) => {
-      this.view.tx = (e.clientX / window.innerWidth) * 2 - 1;
-      this.view.ty = (e.clientY / window.innerHeight) * 2 - 1;
     });
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
@@ -297,28 +325,28 @@ export class Game {
     this.teaser.visible = portrait && !this.inFeature;
     this.logo.scale.set(portrait ? 1.04 : 0.8);
     this.logo.y = portrait ? -100 : -68;
+    this.logoShade.position.set(this.logo.x, this.logo.y + 20);
+    this.logoShade.width = portrait ? 1200 : 1000;
+    this.logoShade.height = portrait ? 440 : 380;
     this.banner.y = portrait ? -92 : -62;
     this.banner.scale.set(portrait ? 1.1 : 1);
     this.baseScale = scale;
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
-    // on wide screens the reels slide right a little to give Cleopatra the stage on the left
-    const wide = !portrait && w / h > 1.45;
-    const shift = wide ? Math.min(w * 0.095, 210) : 0;
-    this.worldX = w / 2 + shift;
-    this.world.position.set(this.worldX, availH / 2);
+    // the reels stand in the very middle of the screen
+    this.world.position.set(w / 2, availH / 2);
     // shown when her face is on screen (the veil and arm may run off the left edge)
-    const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2 + shift;
+    const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
     if (portrait) {
       // upright screens: she stands under the reels, cut by the console, beside the feature's reminder
-      this.mascotX = BOARD_W * 0.74;
+      this.mascot.x = BOARD_W * 0.74;
       this.mascot.scale.set(1.05);
       this.mascot.y = BOARD_Y + BOARD_H + 46 + 1003 * 1.05;
       this.mascot.visible = SHOW_MASCOT;
       this.teaser.scale.set(0.8);
       this.teaser.x = BOARD_W * 0.3;
     } else {
-      this.mascotX = MASCOT_X;
+      this.mascot.x = MASCOT_X;
       this.mascot.scale.set(MASCOT_SCALE);
       this.mascot.y = WORLD_BOTTOM;
       this.mascot.visible = SHOW_MASCOT && faceX > 40;
@@ -369,21 +397,10 @@ export class Game {
     else this.scene.filters = [];
   }
 
-  private worldX = 0;
-  private mascotX = MASCOT_X;
   /** wins in a row: each one sings a little higher */
   private streak = 0;
-  /** where the eye is: the scene shifts a little with the pointer, near things more than far */
-  private view = { x: 0, y: 0, tx: 0, ty: 0 };
 
   private update(dt: number): void {
-    const v = this.view;
-    const ease = Math.min(1, dt * 0.004);
-    v.x += (v.tx - v.x) * ease;
-    v.y += (v.ty - v.y) * ease;
-    this.bg.setView(v.x, v.y);
-    this.world.x = this.worldX - v.x * 7;
-    this.mascot.x = this.mascotX - v.x * 12;
     this.watchFrameRate(dt);
     dt *= this.warp;
     this.board.update(dt);
@@ -461,8 +478,24 @@ export class Game {
     this.refreshHud();
   }
 
+  /** set while a free spin is waiting for the player's press */
+  private spinGate: (() => void) | null = null;
+
+  /** A free spin never starts by itself, autoplay or not. */
+  private waitForPress(): Promise<void> {
+    this.hud.setAwaiting(true);
+    return new Promise((resolve) => (this.spinGate = resolve));
+  }
+
   private onSpinPressed(): void {
     this.audio.unlock();
+    if (this.spinGate) {
+      const go = this.spinGate;
+      this.spinGate = null;
+      this.hud.setAwaiting(false);
+      go();
+      return;
+    }
     if (this.overlays.busy) {
       this.overlays.skip();
       return;
@@ -553,7 +586,7 @@ export class Game {
       anticipate,
       onReelStop: (r) => {
         this.audio.reelStop(r);
-        if (r === REELS - 1) this.shake(2.5);
+        if (r === REELS - 1 && !this.inFeature) this.shake(2.5);
         navigator.vibrate?.(r === REELS - 1 ? 16 : 7);
         for (let row = 0; row < ROWS; row++) {
           const s = grid[r][row];
@@ -602,9 +635,8 @@ export class Game {
     }
     for (const exp of o.expansions) {
       await this.board.expand(exp, () => {
+        this.banner.flash();
         this.audio.expand();
-        this.bg.thump(0.3);
-        this.shake(8);
       });
       shown += exp.win;
       this.hud.rollWin(shown, 900, label);
@@ -616,8 +648,10 @@ export class Game {
     const f = round.feature!;
     const firstSpecials = f.spins[0]?.specials.slice(0, 1) ?? [f.special];
     if (startAt === 0) {
-      await this.sleep(this.turbo ? 300 : 700);
-      // Cleopatra is taken by the infection, the infection spreads over the temple…
+      await this.sleep(this.turbo ? 200 : 450);
+      // the pyramids on the reels wake the great one: a thread of gold from each to the capstone…
+      await this.board.callTemple(this.board.toLocal(this.bg.apexOnScreen()), (i) => this.audio.templeCall(i));
+      // …Cleopatra is taken by the infection, the infection spreads over the temple…
       this.mascot.react('feature');
       this.bg.setFeature(true);
       await this.sleep(this.mascot.visible ? 1500 : 900);
@@ -645,9 +679,10 @@ export class Game {
       const s: FreeSpinOutcome = f.spins[i];
       const before = f.spins[i - 1]?.specials ?? firstSpecials;
       this.banner.set(s.index, i === 0 ? 10 : f.spins[i - 1].total, before);
+      await this.waitForPress();
       this.banner.bump();
       this.audio.spinStart();
-      await this.sleep(this.turbo ? 150 : 350);
+      this.hud.pulseSpin();
       await this.spinTo(s.grid, before);
       await this.presentOutcome(s, round.bet, featureWin, true);
       featureWin = s.featureWin;
@@ -658,8 +693,8 @@ export class Game {
         this.banner.set(s.index, s.total, s.specials);
       }
       this.server.markFreeSpinShown(i + 1);
-      await this.sleep(s.win > 0 ? (this.turbo ? 500 : 900) : this.turbo ? 150 : 350);
     }
+    await this.sleep(this.turbo ? 300 : 700);
     this.board.clearWins();
     await this.overlays.featureOutro(f.win, f.spins.length, round.bet, (v) => this.hud.setWin(v, 'Gain bonus'));
     this.enterFeature(false);
@@ -679,6 +714,7 @@ export class Game {
     this.hud.setFeature(on);
     this.banner.visible = true;
     gsap.to(this.logo, { alpha: on ? 0 : 1, duration: 0.5 });
+    gsap.to(this.logoShade, { alpha: on ? 0 : 0.7, duration: 0.5 });
     gsap.to(this.banner, { alpha: on ? 1 : 0, duration: 0.5, onComplete: () => (this.banner.visible = on) });
   }
 

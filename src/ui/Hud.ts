@@ -130,10 +130,11 @@ export class Hud {
       q('.c-right').append(e.betBox, e.winBox);
     }
     this.root.classList.toggle('mobile', mobile);
+    for (const k of ['balance', 'bet', 'win', 'buyPrice']) this.fit(this.el[k]);
   }
 
   setBuy(price: number, enabled: boolean): void {
-    this.el.buyPrice.textContent = fmt(price);
+    this.amount(this.el.buyPrice, price);
     this.el.buyCost.textContent = fmt(price);
     (this.el.buy as HTMLButtonElement).disabled = !enabled;
   }
@@ -142,19 +143,34 @@ export class Hud {
     return this.el.buyModal.classList.contains('open');
   }
 
+  /** Writes an amount; a long one shrinks to stay inside its cartouche instead of pushing the console off screen. */
+  private amount(el: HTMLElement, v: number): void {
+    const text = fmt(v);
+    const resized = text.length !== el.textContent!.length;
+    el.textContent = text;
+    if (resized) this.fit(el);
+  }
+
+  private fit(el: HTMLElement): void {
+    el.style.transform = '';
+    const room = el.parentElement!.clientWidth - 16;
+    const width = el.offsetWidth;
+    if (room > 0 && width > room) el.style.transform = `scale(${room / width})`;
+  }
+
   setBalance(v: number): void {
-    this.el.balance.textContent = fmt(v);
+    this.amount(this.el.balance, v);
   }
 
   setBet(v: number, canDec: boolean, canInc: boolean): void {
-    this.el.bet.textContent = fmt(v);
+    this.amount(this.el.bet, v);
     (this.el.betDec as HTMLButtonElement).disabled = !canDec;
     (this.el.betInc as HTMLButtonElement).disabled = !canInc;
   }
 
   setWin(v: number, label = 'Gain'): void {
     cancelAnimationFrame(this.winTween);
-    this.el.win.textContent = fmt(v);
+    this.amount(this.el.win, v);
     this.el.winLabel.textContent = label;
     this.el.win.parentElement!.classList.toggle('lit', v > 0);
   }
@@ -168,7 +184,7 @@ export class Hud {
     const step = () => {
       const k = Math.min(1, (performance.now() - t0) / ms);
       const e = 1 - Math.pow(1 - k, 3);
-      this.el.win.textContent = fmt(from + (to - from) * e);
+      this.amount(this.el.win, from + (to - from) * e);
       if (k < 1) this.winTween = requestAnimationFrame(step);
     };
     this.el.win.parentElement!.classList.toggle('lit', to > 0);
@@ -179,6 +195,12 @@ export class Hud {
     this.root.classList.toggle('spinning', spinning);
     (this.el.betDec as HTMLButtonElement).disabled ||= spinning;
     (this.el.betInc as HTMLButtonElement).disabled ||= spinning;
+  }
+
+  /** A free spin is waiting for the player: the button calls for the press. */
+  setAwaiting(on: boolean): void {
+    this.root.classList.toggle('awaiting', on);
+    this.root.classList.toggle('spinning', !on);
   }
 
   setLocked(locked: boolean): void {
