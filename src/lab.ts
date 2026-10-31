@@ -26,6 +26,13 @@ async function run(): Promise<void> {
     document.body.dataset.ready = '1';
     return;
   }
+  if (only === 'logo3d') {
+    const { renderLogo3D } = await import('./game/art/logo3d');
+    const c = await renderLogo3D();
+    (window as unknown as Record<string, unknown>).logoPng = c.toDataURL('image/png');
+    document.body.dataset.ready = '1';
+    return;
+  }
   if (only === 'frame3d') {
     const { renderFrame3D } = await import('./game/art/frame3d');
     const { BOARD_W, BOARD_H } = await import('./game/layout');

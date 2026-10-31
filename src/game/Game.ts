@@ -120,6 +120,7 @@ export class Game {
     assets: LoadedAssets,
     templeNight: HTMLImageElement,
     templeInfected: HTMLImageElement,
+    logoImage: HTMLImageElement | null = null,
   ) {
     this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, assets.background);
     this.bg.onLightning = (power) => this.audio.lightning(power);
@@ -127,7 +128,7 @@ export class Game {
     this.board.position.set(0, BOARD_Y);
     this.board.onAnticipate = (on) => this.pushIn(on);
     this.board.onImpact = (p) => this.punch(p);
-    const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo);
+    const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo, logoImage);
     this.logo = new Logo(logoArt);
     this.logo.position.set(BOARD_W / 2, -18);
     this.logo.homeX = BOARD_W / 2;
@@ -288,8 +289,8 @@ export class Game {
     const worldW = portrait ? BOARD_W + 150 : WORLD_W;
     const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
     this.teaser.visible = portrait && !this.inFeature;
-    this.logo.scale.set(portrait ? 1.12 : 1);
-    this.logo.y = portrait ? -70 : -66;
+    this.logo.scale.set(portrait ? 1.4 : 1.24);
+    this.logo.y = portrait ? -78 : -62;
     this.baseScale = scale;
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);

@@ -131,7 +131,13 @@ export function paintLogo(_eye?: HTMLCanvasElement): HTMLCanvasElement {
 }
 
 /** Logo canvas: professional artwork from public/assets if provided, else the painted one. */
-export function logoCanvas(eye: HTMLCanvasElement, custom: HTMLImageElement | null): HTMLCanvasElement {
+export function logoCanvas(eye: HTMLCanvasElement, custom: HTMLImageElement | null, rendered: HTMLImageElement | null = null): HTMLCanvasElement {
+  if (!custom && rendered) {
+    // the 3D-rendered title (art/logo3d.ts), already 2x
+    const [c, ctx] = makeCanvas(rendered.naturalWidth, rendered.naturalHeight);
+    ctx.drawImage(rendered, 0, 0);
+    return c;
+  }
   if (!custom) return paintLogo(eye);
   const [c, ctx] = makeCanvas(1100, 360);
   const k = Math.min(1100 / custom.naturalWidth, 360 / custom.naturalHeight);
@@ -187,7 +193,7 @@ export class Logo extends Container {
     this.halo.anchor.set(0.5, 0.45);
     this.halo.blendMode = 'add';
     this.halo.tint = 0xff2a44;
-    this.halo.alpha = 0.35;
+    this.halo.alpha = 0.18;
     this.sprite = new Sprite(tex);
     this.sprite.anchor.set(0.5, 0.45);
     // light sweep, masked by the logo itself
@@ -207,7 +213,7 @@ export class Logo extends Container {
     this.scheduleGlitch();
     this.scheduleShine();
     gsap.to(this.inner.scale, { x: this.base * 1.025, y: this.base * 0.99, duration: 1.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    gsap.to(this.halo, { alpha: 0.6, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    gsap.to(this.halo, { alpha: 0.3, duration: 1.4, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     gsap.ticker.add(this.tick);
   }
 

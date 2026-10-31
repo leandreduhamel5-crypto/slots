@@ -50,7 +50,7 @@ async function boot(): Promise<void> {
   warmDigits([118, 114, 56, 54]);
   setProgress(1);
 
-  const game = new Game(app, tex, bookCanvas(), mascot, assets, egypt.extra.templeNight, egypt.extra.templeInfected);
+  const game = new Game(app, tex, bookCanvas(), mascot, assets, egypt.extra.templeNight, egypt.extra.templeInfected, egypt.extra.logo);
   if (import.meta.env.DEV) Object.assign(window, { game, app, gsap });
 
   const loader = document.getElementById('loader');
