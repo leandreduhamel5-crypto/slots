@@ -29,8 +29,6 @@ const COBRA_C = P(730, 95);
 const EYES: V2[] = [P(500, 127), P(555, 157)];
 const COBRA_EYE = P(752, 77);
 const COBRA_MOUTH = P(792, 115);
-const VEIL = P(120, 560);
-const HAIR = P(330, 250);
 
 const GOLD = 0xffc860;
 const RED = 0xff2a22;
@@ -366,6 +364,7 @@ export class Mascot extends Container {
   private orb: Sprite;
   private orbCore: Sprite;
   private sparks = new Graphics();
+  private shine: Sprite;
   private back = new Container();
   private front = new Container();
   private motes: Mote[] = [];
@@ -442,8 +441,18 @@ export class Mascot extends Container {
     this.orbCore = glow(40, 0xffffff);
     this.orb.alpha = this.orbCore.alpha = 0;
     this.sparks.blendMode = 'add';
+    // a band of light sweeping over her gold and skin, clipped to her silhouette
+    this.shine = new Sprite(tex.beam);
+    this.shine.anchor.set(0.5);
+    this.shine.blendMode = 'add';
+    this.shine.alpha = 0;
+    this.shine.rotation = Math.PI / 2 + 0.5;
+    this.shine.scale.set(1600 / 512, 260 / 64);
+    const shineMask = new Sprite(custom ? Texture.from(custom) : tex.art);
+    if (custom) shineMask.scale.set(ART_W / custom.naturalWidth, ART_H / custom.naturalHeight);
+    this.shine.mask = shineMask;
 
-    this.rig.addChild(this.noise, this.back, aura, this.mesh, this.cracks[0], this.cracks[1], this.rim, ...this.eyeGlows, this.cobraEye, this.beam, this.mouthOrb, this.orb, this.orbCore, this.sparks, this.front);
+    this.rig.addChild(this.noise, this.back, aura, this.mesh, shineMask, this.shine, this.cracks[0], this.cracks[1], this.rim, ...this.eyeGlows, this.cobraEye, this.beam, this.mouthOrb, this.orb, this.orbCore, this.sparks, this.front);
     this.rig.pivot.set(ART_W / 2, ART_H);
     this.float.addChild(this.rig);
     this.addChild(this.float);
@@ -455,6 +464,15 @@ export class Mascot extends Container {
 
   /** Kept for API compatibility. */
   setBook(_t: Texture): void {}
+
+  /** Sweep a band of light across her, top-left to bottom-right. */
+  sweep(power = 1, duration = 1.1): void {
+    const s = this.shine;
+    gsap.killTweensOf(s);
+    s.tint = this.form === 'inhuman' ? 0xff7050 : 0xffe6b0;
+    gsap.fromTo(s, { x: -300, y: -100, alpha: 0 }, { x: ART_W + 300, y: ART_H + 100, duration, ease: 'sine.inOut' });
+    gsap.fromTo(s, { alpha: 0 }, { alpha: 0.55 * power, duration: duration * 0.3, yoyo: true, repeat: 1, ease: 'sine.inOut' });
+  }
 
   override destroy(options?: Parameters<Container['destroy']>[0]): void {
     gsap.ticker.remove(this.tick);
@@ -475,23 +493,19 @@ export class Mascot extends Container {
     return [ox, oy];
   }
 
+  /**
+   * The figure itself never deforms: her whole body moves as one rigid piece (a slow sway
+   * around her feet, a lift on big moments). Only the cobra, which stands free against the
+   * sky, turns slightly on its neck when it strikes. Life comes from light: glowing eyes,
+   * light sweeping over the gold, the aura, the orb in her palm, sparks and flames.
+   */
   private solveBones(): void {
     const t = this.t;
     const fx = this.fx;
-    const breath = Math.sin(t * 1.6);
-    const hips = around(HIPS, Math.sin(t * 0.55) * 0.012 - fx.lean * 0.05, Math.sin(t * 0.55) * 3, 0);
-    const chest = mul(hips, around(HIPS, Math.sin(t * 0.55 + 0.7) * 0.01 - fx.lean * 0.04, 0, -breath * 2.2, 1 + breath * 0.004));
-    const head = mul(
-      chest,
-      around(NECK, -this.look.x * 0.07 + Math.sin(t * 0.7) * 0.02 - fx.chin * 0.1 + fx.lean * 0.06, this.look.x * 4, this.look.y * 3 - breath * 1.2),
-    );
-    const armU = mul(chest, around(SHOULDER, Math.sin(t * 0.9) * 0.025 - fx.raise * 0.04));
-    const armF = mul(armU, around(ELBOW, Math.sin(t * 0.9 + 0.7) * 0.035 + fx.raise * 0.2));
-    const cobra = mul(
-      chest,
-      around(COBRA_NECK, Math.sin(t * 1.3) * 0.07 - fx.rear * 0.22 + fx.strike * 0.16, fx.strike * 30, -fx.rear * 16 + Math.sin(t * 1.3 + 1) * 3, 1 + fx.strike * 0.14),
-    );
-    Object.assign(this.bones, { hips, chest, head, armU, armF, cobra });
+    const feet: V2 = [ART_W / 2, ART_H];
+    const hips = around(feet, Math.sin(t * 0.55) * 0.006 - fx.lean * 0.012, 0, -fx.lean * 4);
+    const cobra = mul(hips, around(COBRA_NECK, Math.sin(t * 1.3) * 0.018 - fx.rear * 0.05 + fx.strike * 0.05, fx.strike * 6, -fx.rear * 4));
+    Object.assign(this.bones, { hips, chest: hips, head: hips, armU: hips, armF: hips, cobra });
   }
 
   private tick = (): void => {
@@ -530,13 +544,6 @@ export class Mascot extends Container {
         ox += (m[0] * x + m[2] * y + m[4]) * w;
         oy += (m[1] * x + m[3] * y + m[5]) * w;
       }
-      // hair: strands swing behind her shoulder, lagging the head
-      const wh = (1 - smooth(70, 190, Math.hypot(x - HAIR[0], (y - HAIR[1]) * 0.7))) * smooth(150, 300, y);
-      ox += Math.sin(t * 1.15 + y * 0.012) * 5 * wh + this.look.x * -4 * wh;
-      // veil and ribbons ripple, more when she moves
-      const wv = (1 - smooth(120, 380, Math.hypot(x - VEIL[0], (y - VEIL[1]) * 0.6))) * (1 - smooth(200, 440, x));
-      ox += Math.sin(t * 1.8 + y * 0.012 + x * 0.01) * (10 + fx.raise * 6) * wv * (1 + r * 0.8);
-      oy += Math.cos(t * 1.4 + x * 0.015) * 5 * wv;
       pos[i] = ox / sx;
       pos[i + 1] = oy / sy;
     }
@@ -735,6 +742,7 @@ export class Mascot extends Container {
         } else if (roll < 0.65) {
           tl.to(this.fx, { rear: 0.6, duration: 0.4, ease: 'sine.out' }).to(this.fx, { rear: 0, strike: 0.4, duration: 0.14, ease: 'power3.in' }).to(this.fx, { strike: 0, duration: 0.5, ease: 'sine.out' });
         } else if (roll < 0.85) {
+          this.sweep(0.8, 1.4);
           tl.to(this.fx, { raise: 0.5, orb: 0.6, duration: 0.8, ease: 'sine.inOut' }).to(this.fx, { raise: 0, orb: 0, duration: 1, ease: 'sine.inOut' }, '+=0.9');
         } else {
           tl.to(this.fx, { chin: 0.6, flare: 0.4, duration: 0.5, ease: 'sine.inOut' }).to(this.fx, { chin: 0, flare: 0, duration: 0.9, ease: 'sine.inOut' }, '+=0.4');
@@ -804,6 +812,7 @@ export class Mascot extends Container {
         tl.to(this.fx, { rear: 0.8, duration: 0.12, ease: 'power2.out' }).to(this.fx, { rear: 0, strike: 0.8, flare: 0.5, duration: 0.1, ease: 'power3.in' }).to(this.fx, { strike: 0, flare: 0, duration: 0.5 });
         break;
       case 'win':
+        this.sweep(1);
         this.lookAt(-0.2, 0.1);
         tl.to(this.fx, { raise: 1, orb: 1, flare: 0.6, chin: 0.3, duration: 0.55, ease: 'back.out(1.4)' })
           .add(() => this.burst(18, this.pose(...PALM), 170), 0.4)
@@ -814,6 +823,7 @@ export class Mascot extends Container {
           .add(() => this.lookAt(0.5, 0.2));
         break;
       case 'big':
+        this.sweep(1.3, 0.9);
         this.lookAt(0.4, -0.6);
         tl.to(this.fx, { lean: 1, chin: 1, raise: 1, orb: 1, rear: 1, flare: 1, y: -6, duration: 0.5, ease: 'back.out(1.3)' })
           .to(this.fx, { rear: 0, strike: 1, flare: 1.4, shake: 4, duration: 0.12, ease: 'power3.in' })
