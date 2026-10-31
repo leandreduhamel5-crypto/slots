@@ -19,13 +19,13 @@ import { ReelBoard } from './ReelBoard';
 import type { SymbolTextures } from './textures';
 
 const BOARD_Y = 152;
-const WORLD_TOP = -140;
-const WORLD_BOTTOM = BOARD_Y + BOARD_H + 118;
+const WORLD_TOP = -178;
+const WORLD_BOTTOM = BOARD_Y + BOARD_H + 150;
 /** Cleopatra stands left of the reels, her cobra staff right beside the frame */
-const MASCOT_X = -255;
+const MASCOT_X = -365;
 const MASCOT_SCALE = 0.82;
 const SHOW_MASCOT = true;
-const WORLD_W = BOARD_W + 200;
+const WORLD_W = BOARD_W + 300;
 
 class FeatureBanner extends Container {
   private count: Text;
@@ -289,13 +289,13 @@ export class Game {
     const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
     this.teaser.visible = portrait && !this.inFeature;
     this.logo.scale.set(portrait ? 1.12 : 1);
-    this.logo.y = portrait ? -50 : -30;
+    this.logo.y = portrait ? -70 : -66;
     this.baseScale = scale;
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     // on wide screens the reels slide right a little to give Cleopatra the stage on the left
     const wide = !portrait && w / h > 1.45;
-    const shift = wide ? Math.min(w * 0.06, 140) : 0;
+    const shift = wide ? Math.min(w * 0.085, 200) : 0;
     this.world.position.set(w / 2 + shift, availH / 2);
     // shown when her face is on screen (the veil and arm may run off the left edge)
     const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2 + shift;

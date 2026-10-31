@@ -21,6 +21,12 @@ import { goldGrad, paintCoin, paintEgyptFrame, paintGoldWinFrame, paintRisingCol
 export const TEX_SIZE = 320;
 export const FRAME_PAD = 40;
 export const FRAME_BLEED = 60;
+/** the art-direction frame (egypt/frame.webp): size, reel window and ruby centres in its pixels */
+export const FRAME_ART = {
+  size: [1535, 985],
+  window: [158, 160, 1220, 660],
+  rubies: [[133, 132], [1403, 132], [133, 835], [1403, 835], [766, 110], [766, 840], [546, 148], [989, 148]],
+} as const;
 
 export interface SymbolRig {
   /** the symbol without its animated parts */
@@ -318,7 +324,7 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     expanded,
     glowMaps: glowCanvases.map((c) => Texture.from(c)),
     // the 3D-rendered frame (art/frame3d.ts) is 2x; the painted one is the fallback
-    frame: frameArt ? Texture.from({ resource: frameArt, resolution: 2 }) : Texture.from(framed()),
+    frame: frameArt ? Texture.from(frameArt) : Texture.from(framed()),
     reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
     winFrame: Texture.from(paintGoldWinFrame(CELL_W, CELL_H)),

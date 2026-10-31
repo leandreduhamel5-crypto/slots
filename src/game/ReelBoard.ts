@@ -6,7 +6,7 @@ import { Digits } from './Digits';
 import { Particles } from './Particles';
 import { Reel } from './Reel';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, LINE_COLORS, REEL_GAP, SYMBOL_SIZE, cellCenter, reelX } from './layout';
-import { FRAME_BLEED, FRAME_PAD, TEX_SIZE, type SymbolTextures } from './textures';
+import { FRAME_ART, FRAME_BLEED, FRAME_PAD, TEX_SIZE, type SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 import { paintCartouche } from './art/egyptFrame';
 
@@ -151,8 +151,15 @@ export class ReelBoard extends Container {
     shade.height = BOARD_H;
     shade.x = -6;
 
+    // the painted art-direction frame: its window is fitted onto the reels, 5 px of overlap
+    const fit = FRAME_ART;
+    const k = (BOARD_W + 10) / fit.window[2];
+    const toBoard = (x: number, y: number): [number, number] => [-5 + (x - fit.window[0]) * k, -5 + (y - fit.window[1]) * k];
     const frame = new Sprite(tex.frame);
-    frame.position.set(-FRAME_PAD - FRAME_BLEED, -FRAME_PAD - FRAME_BLEED);
+    if (tex.frame.width === fit.size[0]) {
+      frame.scale.set(k);
+      frame.position.set(...toBoard(0, 0));
+    } else frame.position.set(-FRAME_PAD - FRAME_BLEED, -FRAME_PAD - FRAME_BLEED);
     this.infectionGlow = new Sprite(tex.glow);
     this.infectionGlow.anchor.set(0.5);
     this.infectionGlow.position.set(BOARD_W / 2, BOARD_H / 2);
@@ -161,8 +168,17 @@ export class ReelBoard extends Container {
     this.infectionGlow.tint = COLORS.infection;
     this.infectionGlow.blendMode = 'add';
     this.infectionGlow.alpha = 0;
-    this.frameLayer.addChild(this.infectionGlow, frame);
-    // live lights on the frame ornaments: the hazard beacon and the four corner eyes
+    // warm halo behind the gold, like the glow around the frame in the concept
+    const halo = new Sprite(tex.glow);
+    halo.anchor.set(0.5);
+    halo.position.set(BOARD_W / 2, BOARD_H / 2);
+    halo.width = BOARD_W * 1.55;
+    halo.height = BOARD_H * 1.7;
+    halo.tint = 0xff6a20;
+    halo.blendMode = 'add';
+    halo.alpha = 0.16;
+    gsap.to(halo, { alpha: 0.26, duration: 2.4, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.frameLayer.addChild(halo, this.infectionGlow, frame);
     const light = (x: number, y: number, size: number, tint: number) => {
       const g = new Sprite(tex.glow);
       g.anchor.set(0.5);
@@ -173,31 +189,31 @@ export class ReelBoard extends Container {
       this.frameLayer.addChild(g);
       return g;
     };
-    // rubies on the frame (corner blocks, the crown's sun, the bottom sun) pulse with the infection
-    const colW = FRAME_PAD - 2;
-    [
-      [-FRAME_PAD + colW / 2, -FRAME_PAD / 2 - 3],
-      [BOARD_W + FRAME_PAD - colW / 2, -FRAME_PAD / 2 - 3],
-      [-FRAME_PAD + colW / 2, BOARD_H + FRAME_PAD / 2 + 3],
-      [BOARD_W + FRAME_PAD - colW / 2, BOARD_H + FRAME_PAD / 2 + 3],
-      [BOARD_W / 2, -FRAME_PAD / 2 - 4 - 380 * 0.11 * 0.35],
-      [BOARD_W / 2, BOARD_H + FRAME_PAD / 2 + 3],
-    ].forEach(([x, y], i) => {
-      const eye = light(x, y, i === 4 ? 90 : 46, COLORS.infection);
-      gsap.fromTo(eye, { alpha: 0.15 }, { alpha: 0.5, duration: 1.1 + i * 0.17, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
+    // every ruby of the frame glows and pulses, a little out of phase
+    fit.rubies.forEach(([rx, ry], i) => {
+      const [x, y] = toBoard(rx, ry);
+      const big = i === 4;
+      const eye = light(x, y, (big ? 70 : i < 4 ? 44 : 22) * k * 2.1, COLORS.infection);
+      gsap.fromTo(eye, { alpha: 0.2 }, { alpha: big ? 0.7 : 0.55, duration: 1.1 + i * 0.17, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
+      // a star glint crosses each ruby now and then
+      const star = light(x - 3 * k, y - 4 * k, (big ? 46 : 26) * k * 2.1, 0xffffff);
+      star.alpha = 0;
+      const tw = () => gsap.timeline({ delay: 2 + Math.random() * 7, onComplete: tw }).to(star, { alpha: 0.9, duration: 0.12 }).to(star, { alpha: 0, duration: 0.5 });
+      tw();
     });
-    // a glint of light sweeping along the gold rails now and then
-    for (const y of [-FRAME_PAD / 2 - 3, BOARD_H + FRAME_PAD / 2 + 3]) {
-      const glint = light(-FRAME_PAD, y, 90, 0xfff2cc);
-      glint.scale.y *= 0.25;
+    // a glint of light sweeps along the gold rails now and then
+    const railY = [toBoard(0, fit.window[1] - 14)[1], toBoard(0, fit.window[1] + fit.window[3] + 14)[1]];
+    for (const y of railY) {
+      const glint = light(-60, y, 110, 0xfff2cc);
+      glint.scale.y *= 0.2;
       glint.alpha = 0;
       const run = () =>
         gsap
           .timeline({ delay: 3 + Math.random() * 5, onComplete: run })
-          .set(glint, { x: -FRAME_PAD, alpha: 0 })
-          .to(glint, { alpha: 0.9, duration: 0.2 })
-          .to(glint, { x: BOARD_W + FRAME_PAD, duration: 1.4, ease: 'sine.inOut' }, 0)
-          .to(glint, { alpha: 0, duration: 0.25 }, 1.15);
+          .set(glint, { x: -60, alpha: 0 })
+          .to(glint, { alpha: 0.85, duration: 0.2 })
+          .to(glint, { x: BOARD_W + 60, duration: 1.5, ease: 'sine.inOut' }, 0)
+          .to(glint, { alpha: 0, duration: 0.25 }, 1.25);
       run();
     }
 
@@ -866,7 +882,7 @@ export class ReelBoard extends Container {
 
   /** Gold coins spraying out of the win plaque. */
   coinBurst(n: number): void {
-    this.fx.coins(BOARD_W / 2, BOARD_H + FRAME_PAD + 10, n, 0.85);
+    this.fx.coins(BOARD_W / 2, BOARD_H + 70, n, 0.85);
   }
 
   /** Total-win plaque hanging under the reels. */
@@ -897,7 +913,7 @@ export class ReelBoard extends Container {
     val.value = 0;
     val.y = 14;
     c.addChild(plate, lab, val);
-    c.position.set(BOARD_W / 2, BOARD_H + FRAME_PAD + 26);
+    c.position.set(BOARD_W / 2, BOARD_H + 108);
     this.labelLayer.parent!.addChild(c);
     this.plaque = c;
     gsap.fromTo(c.scale, { x: 0.3, y: 0.3 }, { x: 1, y: 1, duration: 0.6, ease: 'elastic.out(1.1, 0.45)' });
