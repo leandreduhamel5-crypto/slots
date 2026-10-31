@@ -80,8 +80,8 @@ export class Reel extends Container {
     gsap
       .timeline({ delay: delay / 1000 })
       .to(tug, {
-        v: -16,
-        duration: 0.13,
+        v: -12,
+        duration: 0.08,
         ease: 'sine.out',
         onUpdate: () => this.applyOffset(tug.v),
       })
@@ -89,7 +89,7 @@ export class Reel extends Container {
         this.phase = 'spinning';
         this.speed = 0;
         this.offset = tug.v;
-        gsap.to(this, { speed: MAX_SPEED, duration: 0.25, ease: 'power1.in' });
+        gsap.to(this, { speed: MAX_SPEED, duration: 0.16, ease: 'power1.in' });
       });
   }
 

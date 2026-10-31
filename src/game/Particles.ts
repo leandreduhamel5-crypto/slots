@@ -8,11 +8,9 @@ export interface ParticleTextures {
   spore: Texture;
   /** gold coin (128 px), optional */
   coin?: Texture;
-  /** stone shards */
-  rocks?: Texture[];
 }
 
-type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark' | 'tex' | 'coin' | 'sand' | 'rock';
+type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark' | 'tex' | 'coin' | 'sand';
 
 interface P {
   s: Sprite;
@@ -24,8 +22,6 @@ interface P {
   spin: number;
   g: number;
   size: number;
-  /** y of a surface it bounces on */
-  floor?: number;
 }
 
 /** Cartoon VFX: ink-outlined blood drops, comic stars, smoke puffs and glowing sparks. */
@@ -46,7 +42,6 @@ export class Particles extends Container {
       puff: this.tex.puff,
       spark: this.tex.spore,
       sand: this.tex.spore,
-      rock: this.tex.rocks?.[Math.floor(Math.random() * this.tex.rocks.length)] ?? this.tex.spore,
       tex: this.tex.spore,
       coin: this.tex.coin ?? this.tex.spore,
     };
@@ -65,7 +60,7 @@ export class Particles extends Container {
     }
     s.position.set(x, y);
     this.addChild(s);
-    const g = kind === 'rock' ? 1500 : kind === 'sand' ? 620 : kind === 'puff' ? -60 : kind === 'star' ? 300 : kind === 'tex' ? 700 : kind === 'coin' ? 1150 : 1300;
+    const g = kind === 'sand' ? 620 : kind === 'puff' ? -60 : kind === 'star' ? 300 : kind === 'tex' ? 700 : kind === 'coin' ? 1150 : 1300;
     const spin = kind === 'coin' ? (6 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1) : (Math.random() - 0.5) * 10;
     this.ps.push({ s, kind, vx, vy, life: Math.random() * (kind === 'coin' ? 0.3 : 0), max, spin, g, size });
     this.scaleOf(this.ps[this.ps.length - 1]);
@@ -74,7 +69,7 @@ export class Particles extends Container {
   private scaleOf(p: P): void {
     const k = p.life / p.max;
     let sc = p.size;
-    if (p.kind === 'tex' || p.kind === 'rock') {
+    if (p.kind === 'tex') {
       p.s.scale.set(sc / p.s.texture.width);
       return;
     }
@@ -149,22 +144,20 @@ export class Particles extends Container {
     }
   }
 
-  /** Stone shards blown up from a line, falling back and bouncing on it. */
-  rubble(x: number, y: number, width: number, n: number, power = 1): void {
-    if (!this.tex.rocks) return;
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2;
-      const v = (380 + Math.random() * 900) * power;
-      this.add('rock', x + (Math.random() - 0.5) * width, y, Math.cos(a) * v, Math.sin(a) * v, 0.8 + Math.random() * 0.6, 14 + Math.random() * Math.random() * 52);
-      this.ps[this.ps.length - 1].floor = y + 16;
-    }
-  }
-
   /** A wall of dust crossing the whole screen. */
   storm(w: number, h: number, n: number): void {
     for (let i = 0; i < n; i++) {
       this.add('puff', -200 - Math.random() * w * 0.5, Math.random() * h, 1500 + Math.random() * 900, (Math.random() - 0.5) * 120, 1.1 + Math.random() * 0.5, 240 + Math.random() * 320);
       this.ps[this.ps.length - 1].s.tint = 0xb8843e;
+    }
+  }
+
+  /** A clean fan of gold thrown up from the point where a reel stops. */
+  goldFan(x: number, y: number, width: number, n: number, power = 1): void {
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.5;
+      const v = (260 + Math.random() * 520) * power;
+      this.add('sand', x + (Math.random() - 0.5) * width, y, Math.cos(a) * v, Math.sin(a) * v, 0.35 + Math.random() * 0.4, 6 + Math.random() * 11);
     }
   }
 
@@ -243,15 +236,9 @@ export class Particles extends Container {
       p.vy *= p.kind === 'puff' ? drag : 1;
       p.s.x += p.vx * dt;
       p.s.y += p.vy * dt;
-      if (p.floor !== undefined && p.s.y > p.floor && p.vy > 0) {
-        p.s.y = p.floor;
-        p.vy *= -0.32;
-        p.vx *= 0.6;
-        p.spin *= 0.5;
-      }
       if (p.kind === 'drop' || p.kind === 'cyan') p.s.rotation = Math.atan2(p.vy, p.vx) - Math.PI / 2;
       else if (p.kind === 'coin') p.s.rotation = p.vx * 0.0006;
-      else p.s.rotation += p.spin * dt * (p.kind === 'puff' ? 0.1 : p.kind === 'tex' ? 0.35 : p.kind === 'rock' ? 1.6 : 1);
+      else p.s.rotation += p.spin * dt * (p.kind === 'puff' ? 0.1 : p.kind === 'tex' ? 0.35 : 1);
       this.scaleOf(p);
       const k = p.life / p.max;
       p.s.alpha = p.kind === 'puff' ? Math.max(0, 1 - k) * 0.6 : k > 0.7 ? Math.max(0, (1 - k) / 0.3) : 1;

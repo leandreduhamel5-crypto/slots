@@ -29,7 +29,7 @@ const RIFFS = [
   [59, 0, 0, 57, 56, 0, 57, 0, 53, 0, 52, 0, 0, 0, 0, 0],
   [40, 0, 52, 0, 0, 53, 52, 0, 47, 0, 0, 0, 52, 0, 0, 0],
 ];
-const SPIN_LEVEL = 0.1;
+const SPIN_LEVEL = 0.06;
 const MUSIC_LEVEL = 0.42;
 
 export class Audio {
@@ -644,15 +644,15 @@ export class Audio {
     this.hiss({ at, dur: 0.018, type: 'bandpass', f0: 1900, q: 2, vol: 0.12, a: 0.001, dest: this.ui });
   }
 
-  /** The lever: a stone latch drops, sand breathes out as the wheels begin to turn. */
+  /** The press: a crisp click and a short rush of air as the wheels go. */
   spinStart(): void {
     if (!this.ctx) return;
     const at = this.t;
-    this.voice({ at, f: 120, to: 52, glide: 0.09, vol: 0.26, r: 0.15, a: 0.002 });
-    this.hiss({ at, dur: 0.03, type: 'bandpass', f0: 720, q: 2.4, vol: 0.2, a: 0.001 });
-    this.hiss({ at: at + 0.03, dur: 0.42, type: 'bandpass', f0: 500, f1: 1900, q: 0.8, vol: 0.075, a: 0.1, pan: -0.45, pan1: 0.45 });
-    this.hiss({ at, dur: 0.34, type: 'lowpass', f0: 190, f1: 90, vol: 0.2, a: 0.03 }); // the wheels take up the weight
-    this.startSpinLoop(at + 0.06);
+    this.voice({ at, f: 210, to: 96, glide: 0.05, vol: 0.2, r: 0.08, a: 0.001 });
+    this.hiss({ at, dur: 0.012, type: 'bandpass', f0: 3000, q: 1.5, vol: 0.12, a: 0.0005 });
+    this.hiss({ at: at + 0.01, dur: 0.24, type: 'bandpass', f0: 700, f1: 3200, q: 0.8, vol: 0.08, a: 0.05, pan: -0.4, pan1: 0.4 });
+    this.sagat(at + 0.01, midi(83), 0.016, 0);
+    this.startSpinLoop(at + 0.03);
   }
 
   /** One second of a stone wheel turning: a low rumble pulsed by the passing cells; seamless when looped. */
@@ -726,21 +726,19 @@ export class Audio {
   }
 
   /**
-   * Reel seats: a block of rock dropped on stone. A deep body, the crack of the impact, then the
-   * rubble: small stones skittering away, more and heavier as the reels pile up.
+   * Reel seats: a tight, round knock with a bell note on it. The five notes climb the scale, so a
+   * whole spin plays as one little rising phrase.
    */
   reelStop(i: number): void {
     if (!this.ctx) return;
     const at = this.t;
     const pan = (i - 2) * 0.3;
-    const last = i >= 4;
-    this.voice({ at, f: 92 - i * 3, to: 36, glide: 0.1, vol: last ? 0.62 : 0.5, r: 0.26, a: 0.0015, pan });
-    this.voice({ at, f: 190, to: 74, glide: 0.05, type: 'triangle', vol: 0.2, r: 0.09, a: 0.001, pan });
-    this.hiss({ at, dur: 0.05, type: 'bandpass', f0: 420, q: 1.1, vol: 0.34, a: 0.001, pan });
-    this.hiss({ at, dur: 0.018, type: 'highpass', f0: 1900, vol: 0.2, a: 0.0005, pan });
-    this.rubble(at + 0.015, last ? 12 : 8, pan);
-    this.hiss({ at: at + 0.03, dur: 0.4, type: 'bandpass', f0: 900, f1: 3000, q: 0.7, vol: 0.03, a: 0.04, pan: pan * 1.4 });
-    if (last) this.spinLoop?.stop(at);
+    const note = [71, 72, 76, 77, 83][Math.min(4, i)];
+    this.voice({ at, f: 150 - i * 6, to: 62, glide: 0.05, vol: 0.34, r: 0.1, a: 0.001, pan });
+    this.hiss({ at, dur: 0.012, type: 'bandpass', f0: 1500, q: 1.4, vol: 0.13, a: 0.0005, pan });
+    this.sagat(at, midi(note), 0.045, pan);
+    this.voice({ at, f: midi(note - 12), type: 'triangle', vol: 0.05, r: 0.2, a: 0.002, pan });
+    if (i >= 4) this.spinLoop?.stop(at);
     else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
   }
 
@@ -946,18 +944,19 @@ export class Audio {
   }
 
   /** Win: finger cymbals running up the Hijaz scale over a mizmar call, then a warm chord. size 0..3. */
-  win(size: number): void {
+  win(size: number, streak = 1): void {
     if (!this.ctx) return;
     const at = this.t;
-    const scale = [76, 77, 80, 81, 83, 84, 87, 88, 89, 92, 93];
+    const up = Math.min(Math.max(0, streak - 1), 4) * 2; // wins in a row climb
+    const scale = [76, 77, 80, 81, 83, 84, 87, 88, 89, 92, 93].map((n) => n + up);
     const count = 4 + size * 2;
     const gap = 0.07 - size * 0.006;
     for (let i = 0; i < count; i++) this.sagat(at + i * gap, midi(scale[i % scale.length]), 0.035, (i / count - 0.5) * 1.1);
     const end = at + count * gap;
     this.sistrum(at, 0.04, -0.3, 3);
     this.sistrum(end, 0.05 + size * 0.01, 0.3, 4);
-    this.reed(at, 64, count * gap, 0.05, 0, this.sfx, 0.3);
-    this.reed(end, 71, 0.5 + size * 0.15, 0.07, 0, this.sfx, 0.4);
+    this.reed(at, 64 + up, count * gap, 0.05, 0, this.sfx, 0.3);
+    this.reed(end, 71 + up, 0.5 + size * 0.15, 0.07, 0, this.sfx, 0.4);
     if (size >= 1) this.choir(end, [midi(52), midi(59)], 1.2, 0.05);
     if (size >= 2) {
       this.brass(end, [midi(40), midi(47), midi(52), midi(56)], 0.06, 1.2);

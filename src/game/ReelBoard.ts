@@ -179,8 +179,8 @@ export class ReelBoard extends Container {
       const edge = new Sprite(tex.glow);
       edge.anchor.set(0.5);
       edge.position.set(reelX(r) + CELL_W / 2, BOARD_H + 6);
-      edge.width = CELL_W * 2;
-      edge.height = 130;
+      edge.width = CELL_W * 1.5;
+      edge.height = 46;
       edge.blendMode = 'add';
       edge.alpha = 0;
       this.edgeLights.push(edge);
@@ -321,7 +321,7 @@ export class ReelBoard extends Container {
   async spin(plan: SpinPlan): Promise<void> {
     this.clearWins();
     this.hurried = false;
-    const startGap = plan.turbo ? 0.03 : 0.07;
+    const startGap = plan.turbo ? 0.02 : 0.045;
     this.reels.forEach((r, i) => {
       r.start(i * startGap * 1000);
       const run = this.spinLights[i];
@@ -330,9 +330,9 @@ export class ReelBoard extends Container {
       gsap.to(run, { alpha: 0.2, duration: 0.3, delay: i * startGap });
     });
 
-    const first = plan.turbo ? 380 : 760;
-    const gap = plan.turbo ? 90 : 200;
-    const anticipation = plan.turbo ? 900 : 1500;
+    const first = plan.turbo ? 260 : 500;
+    const gap = plan.turbo ? 65 : 130;
+    const anticipation = plan.turbo ? 800 : 1300;
     let t = first;
     const stops: Promise<void>[] = [];
     for (let i = 0; i < REELS; i++) {
@@ -371,18 +371,15 @@ export class ReelBoard extends Container {
     seat.tint = this.accent;
     gsap.killTweensOf(seat);
     gsap.fromTo(seat, { y: 0, alpha: 0.85 }, { y: BOARD_H, alpha: 0, duration: 0.2, ease: 'power2.in' });
-    // the blow on the bottom edge of the frame: a line of light, then the stone gives way
+    // a line of light where the reel stops, and a clean fan of gold
     const heavy = reel === REELS - 1;
     const y = BOARD_H + 8;
     const edge = this.edgeLights[reel];
     edge.tint = this.accent;
     gsap.killTweensOf(edge);
-    gsap.fromTo(edge, { alpha: 1 }, { alpha: 0, duration: 0.42, ease: 'power2.out' });
-    this.fx.rubble(x, y, CELL_W * 1.05, heavy ? 42 : 26, heavy ? 1.25 : 1);
-    this.fx.sand(x, y, CELL_W * 1.1, heavy ? 110 : 70, heavy ? 2.4 : 1.9);
-    this.fx.dust(x, y, CELL_W * 1.05, heavy ? 12 : 7);
-    this.fx.sparks(x, y, heavy ? 24 : 14, 1);
-    this.fx.sand(x, 6, CELL_W * 0.8, 8, 0.5);
+    gsap.fromTo(edge, { alpha: 0.85 }, { alpha: 0, duration: 0.28, ease: 'power2.out' });
+    this.fx.goldFan(x, y, CELL_W * 0.9, heavy ? 26 : 16, heavy ? 1.15 : 1);
+    this.fx.sparks(x, y, heavy ? 6 : 3, 0.7);
   }
 
   /** Slam-stop: lands all remaining reels as fast as possible. */
@@ -916,7 +913,7 @@ export class ReelBoard extends Container {
       const c = cellCenter(mid[0], mid[1]);
       this.addLabel(fmt(scatter.win), c.x, c.y + CELL_H * 0.36, COLORS.yellow);
     }
-    await wait(celebrate ? 1500 : 1000);
+    await wait(celebrate ? 1150 : 750);
 
     // each win is shown once, then the board goes quiet until the next spin
     const items: { cells: Cell[]; line?: number; win: number }[] = [
@@ -941,9 +938,9 @@ export class ReelBoard extends Container {
           this.highlightCells(it.cells, false, 0.04);
           onLine?.(i);
         });
-        tl.to({}, { duration: 1.25 });
+        tl.to({}, { duration: 0.9 });
       });
-    } else tl.to({}, { duration: 1.2 });
+    } else tl.to({}, { duration: 0.9 });
     this.cycleTl = tl;
   }
 

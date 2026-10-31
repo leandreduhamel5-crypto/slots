@@ -356,6 +356,8 @@ export class Game {
   }
 
   private worldX = 0;
+  /** wins in a row: each one sings a little higher */
+  private streak = 0;
   /** where the eye is: the scene shifts a little with the pointer, near things more than far */
   private view = { x: 0, y: 0, tx: 0, ty: 0 };
 
@@ -484,6 +486,7 @@ export class Game {
       return;
     }
     this.hud.setBalance(this.server.state.balance);
+    if (round.base.win <= round.bet) this.streak = 0;
     this.audio.spinStart();
     this.hud.pulseSpin();
     this.mascot.react('spin');
@@ -512,7 +515,7 @@ export class Game {
     if (this.autoLeft > 0) {
       this.autoLeft--;
       this.hud.setAuto(this.autoLeft);
-      if (this.autoLeft > 0) setTimeout(() => void this.play(), round.totalWin > 0 ? 900 : 250);
+      if (this.autoLeft > 0) setTimeout(() => void this.play(), round.totalWin > 0 ? 550 : 120);
     }
   }
 
@@ -535,7 +538,8 @@ export class Game {
       anticipate,
       onReelStop: (r) => {
         this.audio.reelStop(r);
-        this.shake(r === REELS - 1 ? 8 : 4.5);
+        if (r === REELS - 1) this.shake(2.5);
+        navigator.vibrate?.(r === REELS - 1 ? 16 : 7);
         for (let row = 0; row < ROWS; row++) {
           const s = grid[r][row];
           if (s === Sym.CODEX) {
@@ -567,7 +571,8 @@ export class Game {
       const celebrate = lineSum > bet;
       const size = lineSum >= bet * 5 ? 2 : lineSum > bet ? 1 : 0;
       if (celebrate) {
-        this.audio.win(size);
+        this.streak++;
+        this.audio.win(size, this.streak);
         this.bg.flare(0.45 + size * 0.2);
         this.board.coinBurst(size * 8);
         this.audio.coins(6 + size * 8);

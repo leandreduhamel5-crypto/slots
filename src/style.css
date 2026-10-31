@@ -2338,3 +2338,30 @@ button {
   font-size: 10px;
   letter-spacing: 0.06em;
 }
+
+/* the spin button breathes between spins, and answers the finger at once */
+#hud.console:not(.spinning) .spin {
+  animation: spin-breathe 2.1s ease-in-out infinite;
+}
+@keyframes spin-breathe {
+  0%, 100% { box-shadow: 0 8px 18px rgba(0, 0, 0, 0.65), 0 0 12px rgba(255, 70, 40, 0.35); }
+  50% { box-shadow: 0 8px 18px rgba(0, 0, 0, 0.65), 0 0 34px rgba(255, 110, 60, 0.85); }
+}
+#hud.console .spin {
+  transition: transform 0.09s ease-out, filter 0.15s;
+}
+#hud.console .spin:hover {
+  transform: scale(1.05);
+  filter: brightness(1.12);
+}
+#hud.console .spin:active {
+  transform: scale(0.93);
+  filter: brightness(1.3);
+}
+#hud.console .spin.pulse .spin-halo {
+  animation: spin-flash 0.34s ease-out;
+}
+@keyframes spin-flash {
+  from { opacity: 1; transform: scale(0.8); }
+  to { opacity: 0; transform: scale(1.5); }
+}
