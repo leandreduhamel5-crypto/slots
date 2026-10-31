@@ -1,6 +1,7 @@
 import { Container, DisplacementFilter, Graphics, Sprite, Texture } from 'pixi.js';
 import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
+import { LITE, slim } from './device';
 import { paintSoftRays } from './art/egyptFrame';
 import { makeCanvas } from './art/painters';
 import { paintFlameBlob } from './Fire';
@@ -270,11 +271,11 @@ export async function buildMascotTextures(painting: HTMLImageElement): Promise<M
   const noise = t(noiseCanvas());
   noise.source.addressMode = 'repeat';
   return {
-    art: Texture.from(painting),
-    gold: t(goldCanvas(art)),
-    silhouette: t(silhouetteCanvas(art)),
-    rim: t(rimCanvas(art)),
-    cracks: [t(cr[0]), t(cr[1])],
+    art: slim(painting, 0.62),
+    gold: slim(goldCanvas(art)),
+    silhouette: slim(silhouetteCanvas(art)),
+    rim: slim(rimCanvas(art)),
+    cracks: [slim(cr[0]), slim(cr[1])],
     sparkles: sparklePoints(art),
     edge: edgePoints(art),
     glow: t(glowCanvas()),
@@ -367,7 +368,7 @@ export class Mascot extends Container {
     this.aura = layer(tex.silhouette, true);
     const auraGroup = new Container();
     auraGroup.addChild(this.aura);
-    auraGroup.filters = [this.displace];
+    if (!LITE) auraGroup.filters = [this.displace];
 
     this.halo = new Sprite(tex.rays);
     this.halo.anchor.set(0.5);

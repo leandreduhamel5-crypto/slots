@@ -13,13 +13,14 @@ import {
 } from './art/painters';
 import { BOARD_H, BOARD_W, CELL_W, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP } from './layout';
 import { containCanvas } from './assets';
+import { LITE, slim } from './device';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
 import { goldGrad, paintCoin, paintEgyptFrame, paintGem, paintGoldFlakes, paintGrain, paintSeal, paintReelSurround, paintRisingColumn, paintStonePanel } from './art/egyptFrame';
 
-/** the painted symbols are 512 px: keep all of it, the screens that show it are getting bigger */
-export const TEX_SIZE = 512;
+/** the painted symbols are 512 px: keep all of it, the screens that show it are getting bigger (phones show them small) */
+export const TEX_SIZE = LITE ? 256 : 512;
 /** textures used to be 320 px: effects laid out on the art are written in those units */
 export const TEX_UNIT = TEX_SIZE / 320;
 export const FRAME_PAD = 40;
@@ -215,7 +216,7 @@ function motionBlur(src: HTMLCanvasElement): HTMLCanvasElement {
  * row at a little under its reel size so the column reads as three winning symbols, not as a poster.
  */
 function drawExpanded(symbolCanvas: HTMLCanvasElement, w: number, h: number): HTMLCanvasElement {
-  const S = 2;
+  const S = LITE ? 1 : 2;
   const [c, ctx] = makeCanvas(w * S, h * S);
   ctx.scale(S, S);
   const box = (inset: number, r: number) => {
@@ -378,9 +379,9 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     expanded,
     glowMaps: glowCanvases.map((c) => Texture.from(c)),
     // the 3D-rendered frame (art/frame3d.ts) is 2x; the painted one is the fallback
-    frame: frameArt ? Texture.from(frameArt) : Texture.from(framed()),
-    surround: Texture.from(paintReelSurround(BOARD_W + (FRAME_MARGIN_X + 16) * 2, BOARD_H + (FRAME_MARGIN_Y + 16) * 2, FRAME_MARGIN_X + 16, FRAME_MARGIN_Y + 16, BOARD_W, BOARD_H)),
-    reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
+    frame: frameArt ? slim(frameArt, 0.6) : Texture.from(framed()),
+    surround: slim(paintReelSurround(BOARD_W + (FRAME_MARGIN_X + 16) * 2, BOARD_H + (FRAME_MARGIN_Y + 16) * 2, FRAME_MARGIN_X + 16, FRAME_MARGIN_Y + 16, BOARD_W, BOARD_H)),
+    reelPanels: [0, 1, 2, 3, 4].map((r) => slim(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
     crest: Texture.from(cleanCrest(frameArt)),
     seal: Texture.from(paintSeal()),

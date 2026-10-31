@@ -1,6 +1,6 @@
 import { Sym } from '../math/config';
 import cleo from '../game/art/egypt/cleo_full.webp';
-import temple from '../game/art/egypt/temple_night.webp';
+import { TEMPLE_NIGHT_URL as temple } from '../game/art/egypt';
 
 const SKIP_KEY = 'codex-infecta:skip-intro';
 

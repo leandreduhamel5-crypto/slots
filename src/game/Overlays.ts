@@ -7,6 +7,10 @@ import { SYMBOLS, Sym } from '../math/config';
 import { PREMIUM_EXPANDERS } from '../math/engine';
 import type { Audio } from './Audio';
 import { Particles } from './Particles';
+import { LITE, slim } from './device';
+
+/** pixels of a big title per unit of its size */
+const TITLE_DENSITY = LITE ? 1.2 : 2;
 import { makeSeal, type SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
@@ -68,11 +72,12 @@ export class Overlays extends Container {
     const key = `${text}|${size}|${material}`;
     let t = this.headCache.get(key);
     if (!t) {
-      // cast-metal lettering like the logo, painted at 2x
+      // cast-metal lettering like the logo, painted at 2x (less on a phone, where casting it takes half a second)
       const spec = material === 'infection' || material === 'blood' ? BLOOD_METAL : material === 'bone' ? IVORY : GOLD;
-      const mask = textMask(text, 'Cinzel, serif', size * 2, size * 0.12, size * 0.5);
+      const mask = textMask(text, 'Cinzel, serif', size * TITLE_DENSITY, (size * 0.12 * TITLE_DENSITY) / 2, (size * 0.5 * TITLE_DENSITY) / 2);
       const cracks = spec === BLOOD_METAL ? Math.max(4, Math.round(text.length * 1.4)) : 0;
-      t = Texture.from(metalTitle(mask, { ...spec, bevel: size * 0.11 }, { outline: size * 0.11, cracks, seed: text.length * 7 }));
+      const edge = (size * 0.11 * TITLE_DENSITY) / 2;
+      t = Texture.from(metalTitle(mask, { ...spec, bevel: edge }, { outline: edge, cracks, seed: text.length * 7 }));
       this.headCache.set(key, t);
     }
     const s = new Sprite(t);
@@ -83,8 +88,9 @@ export class Overlays extends Container {
 
   /** Scale of a title so its letters (not the transparent padding) fit in maxWidth. */
   private fitScale(t: Texture, size: number, maxWidth: number): number {
-    const ink = t.width * 0.5 - size * 0.9;
-    return Math.min(0.5, 0.5 * (maxWidth / Math.max(1, ink)));
+    const unit = 1 / TITLE_DENSITY;
+    const ink = t.width * unit - size * 0.9;
+    return Math.min(unit, unit * (maxWidth / Math.max(1, ink)));
   }
 
   /** Paint the big titles ahead of time, a frame apart, so nothing hitches when they appear. */
@@ -95,7 +101,7 @@ export class Overlays extends Container {
       () => this.plaqueTex(1240, 290),
       () => this.plaqueTex(960, 430),
       () => this.shrineArt(300),
-      () => (this.drumShade ??= Texture.from(paintDrumShade(1184, 234))),
+      () => (this.drumShade ??= slim(paintDrumShade(1184, 234))),
       () => this.raysTex(),
     ];
     const next = () => {
@@ -104,7 +110,7 @@ export class Overlays extends Container {
       if (job) job();
       else if (j) this.head3d(...j);
       else return;
-      setTimeout(next, 120);
+      setTimeout(next, LITE ? 500 : 120);
     };
     setTimeout(next, 1500);
   }
@@ -262,7 +268,7 @@ export class Overlays extends Container {
 
   private rays: Texture | null = null;
   private raysTex(): Texture {
-    this.rays ??= Texture.from(paintSoftRays());
+    this.rays ??= Texture.from(paintSoftRays(LITE ? 512 : 1024));
     return this.rays;
   }
 
@@ -316,7 +322,7 @@ export class Overlays extends Container {
     const key = `${w}x${h}`;
     let t = this.plaques.get(key);
     if (!t) {
-      t = Texture.from(paintPlaque(w, h));
+      t = slim(paintPlaque(w, h));
       this.plaques.set(key, t);
     }
     return t;
@@ -539,6 +545,7 @@ export class Overlays extends Container {
       duration,
       ease: 'power1.inOut',
       onUpdate: () => {
+        if (amount.destroyed) return;
         amount.value = counter.v;
         if (!punching) amount.scale.set(fitted());
         showMult(counter.v);
@@ -670,7 +677,7 @@ export class Overlays extends Container {
     shaft.blendMode = 'add';
     shaft.alpha = 0;
     const plaque = this.plaque(PW, PH, 0);
-    this.drumShade ??= Texture.from(paintDrumShade(PW - 56, PH - 56));
+    this.drumShade ??= slim(paintDrumShade(PW - 56, PH - 56));
     const shade = new Sprite(this.drumShade);
     shade.anchor.set(0.5);
     this.shrineArt(WINDOW);
@@ -909,7 +916,7 @@ export class Overlays extends Container {
     fade.addColorStop(1, 'rgba(0,0,0,0)');
     x.fillStyle = fade;
     x.fillRect(0, 0, S, S);
-    this.doorTex = Texture.from(c);
+    this.doorTex = slim(c);
     return this.doorTex;
   }
 
@@ -1139,6 +1146,7 @@ export class Overlays extends Container {
       duration: Math.min(4, 1 + total / bet / 40),
       ease: 'power2.out',
       onUpdate: () => {
+        if (amount.destroyed) return;
         amount.value = counter.v;
         amount.scale.set(Math.min(1, AMOUNT_W / Math.max(1, amount.inkWidth)));
         onTick?.(counter.v);

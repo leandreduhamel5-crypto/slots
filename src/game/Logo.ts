@@ -3,6 +3,7 @@ import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { INK, makeCanvas, paintShine, softGlow } from './art/painters';
 import { goldGrad } from './art/egyptFrame';
+import { LITE } from './device';
 import { GOLD, cheapBlur, dilateMask, metalTitle, textMask } from './art/logoArt';
 
 
@@ -134,12 +135,14 @@ export function paintLogo(_eye?: HTMLCanvasElement): HTMLCanvasElement {
 export function logoCanvas(eye: HTMLCanvasElement, custom: HTMLImageElement | null): HTMLCanvasElement {
   if (!custom) return paintLogo(eye);
   // the logo is kept at 2×: it is the first thing a player reads on a big screen
-  const [c, ctx] = makeCanvas(2200, 720);
-  const k = Math.min(2200 / custom.naturalWidth, 720 / custom.naturalHeight);
+  const W = LITE ? 1100 : 2200;
+  const H = LITE ? 360 : 720;
+  const [c, ctx] = makeCanvas(W, H);
+  const k = Math.min(W / custom.naturalWidth, H / custom.naturalHeight);
   const w = custom.naturalWidth * k;
   const h = custom.naturalHeight * k;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(custom, (2200 - w) / 2, (720 - h) / 2, w, h);
+  ctx.drawImage(custom, (W - w) / 2, (H - h) / 2, w, h);
   return c;
 }
 

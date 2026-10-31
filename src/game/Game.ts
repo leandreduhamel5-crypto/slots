@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import { BASE_STRIPS, BET_LEVELS, FREE_STRIPS, REELS, ROWS, Sym, minCount } from '../math/config';
 import type { FreeSpinOutcome, Grid, Round, SpinOutcome } from '../math/engine';
 import { GameServer } from '../server/GameServer';
+import { LITE } from './device';
 import { Hud } from '../ui/Hud';
 import { Paytable } from '../ui/Paytable';
 import { paintBonusPanel } from './art/egyptFrame';
@@ -19,6 +20,14 @@ import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
 import type { SymbolTextures } from './textures';
 
+const PREFS_KEY = 'codex-infecta:prefs';
+/** the gold of the frame, in world units */
+const FRAME_OUTER_W = 1490;
+const FRAME_OUTER_H = 847;
+const FRAME_TOP = 65;
+const UPRIGHT_LOGO_H = 340;
+/** the painting of the queen */
+const QUEEN_H = 1003;
 const BOARD_Y = 186;
 const WORLD_TOP = -172;
 /** just under the frame: everything on screen stays clear of the console */
@@ -35,6 +44,7 @@ class FeatureBanner extends Container {
   private icons = new Container();
   /** the strains the icons show: a new bonus can have another strain, with the same count */
   private shown = '';
+  private caption: Text;
   private bar = new Graphics().roundRect(0, 0, 244, 4, 2).fill(0xf2c25a);
   private glow: Sprite;
 
@@ -51,7 +61,8 @@ class FeatureBanner extends Container {
       letterSpacing: size * 0.1,
       dropShadow: { color: 0x000000, blur: 3, distance: 2, angle: Math.PI / 2, alpha: 0.9 },
     });
-    const label = new Text({ text: 'TOURS GRATUITS', style: caps(17, 0xe8c878) });
+    this.caption = new Text({ text: 'TOURS GRATUITS', style: caps(17, 0xe8c878) });
+    const label = this.caption;
     label.anchor.set(0.5);
     label.position.set(-150, -32);
     this.count = new Text({
@@ -103,6 +114,15 @@ class FeatureBanner extends Container {
     gsap.fromTo(this.count.scale, { x: 1.2, y: 1.2 }, { x: 1, y: 1, duration: 0.35, ease: 'power3.out' });
   }
 
+  /** The next free spin is the player's to launch: the banner says so, for anyone new to the game. */
+  setAwaiting(on: boolean): void {
+    gsap.killTweensOf(this.caption);
+    this.caption.alpha = 1;
+    this.caption.text = on ? 'À VOUS DE LANCER' : 'TOURS GRATUITS';
+    this.caption.style.fill = on ? 0xfff0c8 : 0xe8c878;
+    if (on) gsap.to(this.caption, { alpha: 0.45, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+  }
+
   /** The strain has just taken a reel. */
   flash(): void {
     gsap.killTweensOf(this.glow);
@@ -134,7 +154,7 @@ export class Game {
   private viewH = 0;
 
   constructor(
-    app: Application,
+    private app: Application,
     tex: SymbolTextures,
     codexCanvas: HTMLCanvasElement,
     mascotTex: MascotTextures,
@@ -183,8 +203,10 @@ export class Game {
       thump: (p) => this.bg.thump(p),
     });
     // bloom: emissive bits (eyes, veins, orb, neon, glows) radiate
-    this.bloom.resolution = app.renderer.resolution;
-    this.scene.filters = [this.bloom];
+    if (!LITE) {
+      this.bloom.resolution = app.renderer.resolution;
+      this.scene.filters = [this.bloom];
+    }
     this.shock.resolution = app.renderer.resolution;
     app.stage.addChild(this.scene, this.overlays);
 
@@ -195,11 +217,13 @@ export class Game {
         this.turbo = !this.turbo;
         this.hud.setTurbo(this.turbo);
         this.audio.click();
+        this.savePrefs();
       },
       toggleSound: () => {
         this.sound = !this.sound;
         this.audio.setMuted(!this.sound);
         this.hud.setSound(this.sound);
+        this.savePrefs();
       },
       openInfo: () => {
         this.audio.click();
@@ -232,17 +256,23 @@ export class Game {
         else if (!this.hud.buyOpen) this.onSpinPressed();
       }
     });
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'Escape') return;
+      this.paytable.close();
+      this.hud.closeMenus();
+    });
+    document.addEventListener('visibilitychange', () => this.audio.setHidden(document.hidden));
     const unlock = () => this.audio.unlock();
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
+    // Safari only lets sound start on the end of a touch, not on its beginning
+    for (const e of ['pointerdown', 'touchend', 'click', 'keydown']) window.addEventListener(e, unlock);
 
     app.ticker.add((t) => this.update(t.deltaMS));
     window.addEventListener('resize', () => this.layout());
     new ResizeObserver(() => this.layout()).observe(this.hud.root);
     this.layout();
     this.refreshHud();
-    this.hud.setTurbo(false);
-    this.hud.setSound(true);
+    this.loadPrefs();
+    this.hud.setBuyArt(tex.images[Sym.CODEX]);
 
     showIntro(logoArt.toDataURL('image/png'), tex.images, () => {
       this.audio.unlock();
@@ -276,32 +306,32 @@ export class Game {
     for (let i = 0; i < 3; i++) {
       const s = new Sprite(tex.normal[Sym.CODEX]);
       s.anchor.set(0.5);
-      s.width = s.height = 118;
-      s.position.set((i - 1) * 104, 0);
+      s.width = s.height = 164;
+      s.position.set((i - 1) * 142, -158);
       s.rotation = (i - 1) * 0.12;
       c.addChild(s);
-      gsap.to(s, { y: -8, duration: 1.4, delay: i * 0.25, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
     const t = new Text({
-      text: '10 TOURS GRATUITS',
+      text: '10 TOURS\nGRATUITS',
       style: {
         fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
-        fontSize: 64,
+        fontSize: 92,
+        lineHeight: 100,
+        align: 'center',
         fill: COLORS.yellow,
-        stroke: { color: COLORS.ink, width: 12, join: 'round' },
-        dropShadow: { color: COLORS.ink, blur: 0, distance: 6, angle: Math.PI / 2, alpha: 1 },
+        stroke: { color: COLORS.ink, width: 14, join: 'round' },
+        dropShadow: { color: COLORS.ink, blur: 0, distance: 7, angle: Math.PI / 2, alpha: 1 },
       },
     });
     t.anchor.set(0.5);
-    t.position.set(0, 100);
+    t.position.set(0, 20);
     const sub = new Text({
-      text: 'la souche envahit tout le rouleau',
-      style: { fontFamily: 'Nunito, sans-serif', fontWeight: '900' as const, fontSize: 34, fill: 0xffffff, stroke: { color: COLORS.ink, width: 7, join: 'round' } },
+      text: 'LA SOUCHE ENVAHIT\nTOUT LE ROULEAU',
+      style: { fontFamily: 'Nunito, sans-serif', fontWeight: '900' as const, fontSize: 44, lineHeight: 52, align: 'center', fill: 0xfff0d0, stroke: { color: COLORS.ink, width: 9, join: 'round' } },
     });
     sub.anchor.set(0.5);
-    sub.position.set(0, 154);
+    sub.position.set(0, 180);
     c.addChild(t, sub);
-    c.position.set(BOARD_W / 2, WORLD_BOTTOM);
     c.visible = false;
     return c;
   }
@@ -314,41 +344,67 @@ export class Game {
     // the console's gold rail stands 24 px above it
     const hudH = (this.hud.root.getBoundingClientRect().height || 120) + 24;
     const availH = h - hudH;
-    const portrait = w < h;
-    const bottom = portrait ? WORLD_BOTTOM + 270 : WORLD_BOTTOM;
-    const worldH = bottom - WORLD_TOP;
-    const worldW = portrait ? BOARD_W + 340 : WORLD_W;
-    const scale = Math.min((w * 0.98) / worldW, (availH * 0.985) / worldH);
-    this.teaser.visible = portrait && !this.inFeature;
-    this.logo.scale.set(portrait ? 1.04 : 0.8);
-    this.logo.y = portrait ? -100 : -68;
+    if (w < h) this.layoutUpright(w, availH);
+    else this.layoutWide(w, availH);
+    this.bg.resize(w, h, hudH);
+    this.overlays.resize(w, h, hudH);
+  }
+
+  /** Wide screens: the reels in the very middle, the queen on their left. */
+  private layoutWide(w: number, availH: number): void {
+    const scale = Math.min((w * 0.98) / WORLD_W, (availH * 0.985) / (WORLD_BOTTOM - WORLD_TOP));
+    this.teaser.visible = false;
+    this.logo.scale.set(0.8);
+    this.logo.y = -68;
     this.logoShade.position.set(this.logo.x, this.logo.y + 20);
-    this.logoShade.width = portrait ? 1200 : 1000;
-    this.logoShade.height = portrait ? 440 : 380;
-    this.banner.y = portrait ? -92 : -62;
-    this.banner.scale.set(portrait ? 1.1 : 1);
+    this.logoShade.width = 1000;
+    this.logoShade.height = 380;
+    this.banner.y = -62;
+    this.banner.scale.set(1);
     this.world.scale.set(scale);
-    this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
-    // the reels stand in the very middle of the screen
+    this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + WORLD_BOTTOM) / 2);
     this.world.position.set(w / 2, availH / 2);
     // shown when her face is on screen (the veil and arm may run off the left edge)
     const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
-    if (portrait) {
-      // upright screens: she stands under the reels, cut by the console, beside the feature's reminder
-      this.mascot.x = BOARD_W * 0.74;
-      this.mascot.scale.set(1.05);
-      this.mascot.y = BOARD_Y + BOARD_H + 46 + 1003 * 1.05;
-      this.mascot.visible = SHOW_MASCOT;
-      this.teaser.scale.set(0.8);
-      this.teaser.x = BOARD_W * 0.3;
-    } else {
-      this.mascot.x = MASCOT_X;
-      this.mascot.scale.set(MASCOT_SCALE);
-      this.mascot.y = WORLD_BOTTOM;
-      this.mascot.visible = SHOW_MASCOT && faceX > 40;
-    }
-    this.bg.resize(w, h, hudH);
-    this.overlays.resize(w, h, hudH);
+    this.mascot.x = MASCOT_X;
+    this.mascot.scale.set(MASCOT_SCALE);
+    this.mascot.y = WORLD_BOTTOM;
+    this.mascot.visible = SHOW_MASCOT && faceX > 40;
+  }
+
+  /**
+   * Upright screens are read from the top: the logo, the reels as wide as the screen allows, and in
+   * whatever room is left above the console, the queen and the reminder of the feature.
+   */
+  private layoutUpright(w: number, availH: number): void {
+    const inset = 16;
+    const scale = Math.min((w * 0.985) / FRAME_OUTER_W, (availH - inset) / (UPRIGHT_LOGO_H + FRAME_OUTER_H));
+    let room = (availH - inset) / scale - UPRIGHT_LOGO_H - FRAME_OUTER_H;
+    // on very tall screens the slack goes above the logo, so the queen is not left floating
+    const slack = Math.max(0, room - QUEEN_H * 1.2);
+    room -= slack * 0.45;
+    this.world.scale.set(scale);
+    this.world.pivot.set(BOARD_W / 2, 0);
+    this.world.position.set(w / 2, inset + (slack * 0.45 + UPRIGHT_LOGO_H - FRAME_TOP) * scale);
+    const logoY = FRAME_TOP - UPRIGHT_LOGO_H / 2;
+    this.logo.scale.set(1.3);
+    this.logo.y = logoY;
+    this.logoShade.position.set(this.logo.x, logoY + 20);
+    this.logoShade.width = 1500;
+    this.logoShade.height = 520;
+    this.banner.y = logoY;
+    this.banner.scale.set(2.1);
+    const frameBottom = FRAME_TOP + FRAME_OUTER_H;
+    const shown = room > 300;
+    const k = Math.max(0.6, Math.min(1.2, room / (QUEEN_H * 0.8)));
+    this.mascot.visible = SHOW_MASCOT && shown;
+    this.mascot.scale.set(k);
+    this.mascot.x = BOARD_W * 0.76;
+    // cut by the console at the thighs, her head always clear of the frame
+    this.mascot.y = Math.max(frameBottom + room + QUEEN_H * k * 0.2, frameBottom - 8 + QUEEN_H * k);
+    this.teaser.visible = shown && !this.inFeature;
+    this.teaser.scale.set(Math.max(0.62, Math.min(1.05, room / 620)));
+    this.teaser.position.set(BOARD_W * 0.15, frameBottom + room / 2 - 4);
   }
 
   /** Time warp for hit-stops (1 = normal). */
@@ -372,7 +428,7 @@ export class Game {
     }, 170);
   }
 
-  /** 0 full, 1 no god rays, 2 no bloom either. The game steps down by itself on a slow machine. */
+  /** 0 full, 1 no god rays, 2 no bloom either (on a phone: fewer pixels). The game steps down by itself on a slow machine. */
   private quality = 0;
   private frameAvg = 16;
   private frameCount = 0;
@@ -381,11 +437,12 @@ export class Game {
     // a long gap is a hidden tab or a one-off hitch, not the machine's real speed
     if (dt > 120 || document.hidden) return;
     this.frameAvg += (dt - this.frameAvg) * 0.04;
-    if (++this.frameCount < 120 || this.frameAvg < 22 || this.quality >= 2) return;
+    if (++this.frameCount < 300 || this.frameAvg < 28 || this.quality >= 2) return;
     this.frameCount = 0;
     this.frameAvg = 16;
     this.quality++;
     if (this.quality === 1) this.bg.setRays(false);
+    else if (LITE) this.app.renderer.resize(this.viewW, this.viewH, 1);
     else this.scene.filters = [];
   }
 
@@ -415,6 +472,7 @@ export class Game {
   private bloom = new AdvancedBloomFilter({ threshold: 0.7, bloomScale: 0.6, brightness: 1, blur: 5, quality: 2 });
 
   private shockwave(): void {
+    if (LITE) return;
     this.shock.center = { x: this.viewW / 2, y: this.viewH / 2 };
     this.shock.time = 0;
     this.scene.filters = this.quality >= 2 ? [this.shock] : [this.bloom, this.shock];
@@ -427,6 +485,28 @@ export class Game {
         this.scene.filters = this.quality >= 2 ? [] : [this.bloom];
       },
     });
+  }
+
+  /** Sound and turbo stay as the player left them. */
+  private loadPrefs(): void {
+    try {
+      const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as { sound?: boolean; turbo?: boolean };
+      this.sound = p.sound ?? true;
+      this.turbo = p.turbo ?? false;
+    } catch {
+      /* storage unavailable */
+    }
+    this.audio.setMuted(!this.sound);
+    this.hud.setSound(this.sound);
+    this.hud.setTurbo(this.turbo);
+  }
+
+  private savePrefs(): void {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ sound: this.sound, turbo: this.turbo }));
+    } catch {
+      /* storage unavailable */
+    }
   }
 
   private refreshHud(): void {
@@ -450,6 +530,7 @@ export class Game {
   /** A free spin never starts by itself, autoplay or not. */
   private waitForPress(): Promise<void> {
     this.hud.setAwaiting(true);
+    this.banner.setAwaiting(true);
     return new Promise((resolve) => (this.spinGate = resolve));
   }
 
@@ -459,6 +540,7 @@ export class Game {
       const go = this.spinGate;
       this.spinGate = null;
       this.hud.setAwaiting(false);
+      this.banner.setAwaiting(false);
       go();
       return;
     }

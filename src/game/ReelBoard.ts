@@ -209,7 +209,7 @@ export class ReelBoard extends Container {
     const ky = (BOARD_H + FRAME_MARGIN_Y * 2) / fit.window[3];
     const toBoard = (x: number, y: number): [number, number] => [-FRAME_MARGIN_X + (x - fit.window[0]) * k, -FRAME_MARGIN_Y + (y - fit.window[1]) * ky];
     const frame = new Sprite(tex.frame);
-    if (tex.frame.width === fit.size[0]) {
+    if (Math.abs(tex.frame.width - fit.size[0]) < 2) {
       frame.scale.set(k, ky);
       frame.position.set(...toBoard(0, 0));
     } else frame.position.set(-FRAME_PAD - FRAME_BLEED, -FRAME_PAD - FRAME_BLEED);
@@ -232,6 +232,32 @@ export class ReelBoard extends Container {
     halo.alpha = 0.16;
     gsap.to(halo, { alpha: 0.26, duration: 2.4, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.frameLayer.addChild(halo, this.infectionGlow, frame);
+    // now and then the light slides across the gold of the frame; nothing moves but the light
+    const goldOnly = new Sprite(tex.frame);
+    goldOnly.scale.copyFrom(frame.scale);
+    goldOnly.position.copyFrom(frame.position);
+    const sheen = new Sprite(tex.shine);
+    sheen.anchor.set(0.5);
+    sheen.width = 260;
+    sheen.height = BOARD_H * 2;
+    sheen.rotation = 0.32;
+    sheen.y = BOARD_H / 2;
+    sheen.blendMode = 'add';
+    sheen.alpha = 0.55;
+    sheen.mask = goldOnly;
+    sheen.visible = false;
+    this.frameLayer.addChild(goldOnly, sheen);
+    gsap.fromTo(sheen, { x: -320 }, {
+      x: BOARD_W + 320,
+      duration: 1.7,
+      ease: 'sine.inOut',
+      repeat: -1,
+      repeatDelay: 7,
+      delay: 4,
+      onStart: () => (sheen.visible = true),
+      onRepeat: () => (sheen.visible = true),
+      onComplete: () => (sheen.visible = false),
+    });
     const light = (x: number, y: number, size: number, tint: number) => {
       const g = new Sprite(tex.glow);
       g.anchor.set(0.5);

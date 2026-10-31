@@ -1,6 +1,6 @@
 /**
  * "Book of Infection" painted artwork (from the art-direction concept sheet), matted onto
- * transparency. Keys are the game's symbol keys; extra art (pyramid, virus…) is used by screens.
+ * transparency. Keys are the game's symbol keys; extra art (pyramid…) is used by screens.
  */
 import pharaoh from './egypt/pharaoh.webp';
 import anubis from './egypt/anubis.webp';
@@ -12,12 +12,17 @@ import q from './egypt/q.webp';
 import j from './egypt/j.webp';
 import ten from './egypt/ten.webp';
 import pyramid from './egypt/pyramid.webp';
-import virus from './egypt/virus.webp';
 import cleoFull from './egypt/cleo_full.webp';
 import frame from './egypt/frame.webp';
 import logo from './egypt/logo.webp';
 import templeNight from './egypt/temple_night.webp';
 import templeInfected from './egypt/temple_infected.webp';
+import templeNightLite from './egypt/temple_night_m.webp';
+import templeInfectedLite from './egypt/temple_infected_m.webp';
+import { LITE } from '../device';
+
+/** the sky of the title screen and of the game */
+export const TEMPLE_NIGHT_URL = LITE ? templeNightLite : templeNight;
 
 export const SYMBOL_ART_URLS: Record<string, string> = {
   // the red pyramid from the concept sheet is the wild/scatter
@@ -33,7 +38,7 @@ export const SYMBOL_ART_URLS: Record<string, string> = {
   ten,
 };
 
-export const EXTRA_ART_URLS = { pyramid, virus, templeNight, templeInfected, cleoFull, frame, logo };
+export const EXTRA_ART_URLS = { pyramid, templeNight: TEMPLE_NIGHT_URL, templeInfected: LITE ? templeInfectedLite : templeInfected, cleoFull, frame, logo };
 
 function load(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

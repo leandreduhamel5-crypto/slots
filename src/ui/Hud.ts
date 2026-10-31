@@ -74,6 +74,7 @@ export class Hud {
       <button class="refill" data-k="refill">Recharger 1 000 crédits</button>
       <div class="buy-modal" data-k="buyModal">
         <div class="buy-card">
+          <div class="buy-art" data-k="buyArt"></div>
           <h3>Acheter le bonus</h3>
           <p>Entrez directement dans la pyramide avec <b>10 tours gratuits</b> et une souche qui envahit les rouleaux.</p>
           <div class="buy-cost"><label>Prix</label><span data-k="buyCost">0,00</span></div>
@@ -96,6 +97,7 @@ export class Hud {
     this.el.refill.addEventListener('click', () => h.refill());
     this.el.buy.addEventListener('click', () => this.el.buyModal.classList.add('open'));
     this.el.buyNo.addEventListener('click', () => this.el.buyModal.classList.remove('open'));
+    this.el.buyModal.addEventListener('click', (e) => e.target === this.el.buyModal && this.el.buyModal.classList.remove('open'));
     this.el.buyYes.addEventListener('click', () => {
       this.el.buyModal.classList.remove('open');
       h.buy();
@@ -131,6 +133,15 @@ export class Hud {
     }
     this.root.classList.toggle('mobile', mobile);
     for (const k of ['balance', 'bet', 'win', 'buyPrice']) this.fit(this.el[k]);
+  }
+
+  setBuyArt(src: string): void {
+    this.el.buyArt.innerHTML = `<img src="${src}" alt=""><img src="${src}" alt=""><img src="${src}" alt="">`;
+  }
+
+  closeMenus(): void {
+    this.el.buyModal.classList.remove('open');
+    this.autoMenu.classList.remove('open');
   }
 
   setBuy(price: number, enabled: boolean): void {

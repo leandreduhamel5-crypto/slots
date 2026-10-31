@@ -52,6 +52,7 @@ export class Paytable {
           <h3>Tours gratuits : la souche</h3>
           <p>Avant les tours gratuits, la Pyramide choisit au hasard un <b>symbole infecté</b>, la souche. Quand elle apparaît sur assez de rouleaux pour payer, elle <b>s'étend sur toute la hauteur de chaque rouleau</b>. Elle paie alors sur les 10 lignes, même si les rouleaux ne sont pas côte à côte.</p>
           <p><b>Mutation</b> : chaque fois que 3 Pyramides retombent pendant les tours gratuits, vous gagnez <b>+10 tours</b> et une <b>souche supplémentaire</b> s'ajoute (jusqu'à ${MAX_EXPANDING} souches actives en même temps).</p>
+          <p>Chaque tour gratuit se lance <b>d'un appui sur le bouton</b> : c'est vous qui menez le rythme.</p>
           <p><b>Achat bonus</b> : pour ${BONUS_BUY_X}× la mise, vous entrez directement dans les tours gratuits.</p>
         </section>
 

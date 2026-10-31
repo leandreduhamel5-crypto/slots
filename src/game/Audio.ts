@@ -1,3 +1,4 @@
+import { LITE } from './device';
 /**
  * Procedural sound design with the Web Audio API: no audio files, everything is synthesised.
  *
@@ -123,7 +124,7 @@ export class Audio {
     headroom.gain.value = 0.5;
     const warm = ctx.createWaveShaper();
     warm.curve = softClip();
-    warm.oversample = '2x';
+    warm.oversample = LITE ? 'none' : '2x';
     const low = ctx.createBiquadFilter();
     low.type = 'lowshelf';
     low.frequency.value = 95;
@@ -136,7 +137,7 @@ export class Audio {
 
     // corridor reverb
     const verb = ctx.createConvolver();
-    verb.buffer = this.makeImpulse(3.2, 2.6);
+    verb.buffer = this.makeImpulse(LITE ? 2.2 : 3.2, 2.6);
     const verbTone = ctx.createBiquadFilter();
     verbTone.type = 'lowpass';
     verbTone.frequency.value = 3800;
@@ -180,6 +181,13 @@ export class Audio {
     this.musicDuck = ctx.createGain();
     this.musicDuck.connect(music);
     this.music = this.musicDuck;
+  }
+
+  /** The game falls silent while its tab is hidden, and picks up where it was. */
+  setHidden(hidden: boolean): void {
+    const live = this.ctx as AudioContext | null;
+    if (!live?.suspend) return;
+    void (hidden ? live.suspend() : live.resume());
   }
 
   setMuted(m: boolean): void {

@@ -4,12 +4,11 @@ import '@fontsource/nunito/800.css';
 import '@fontsource/nunito/900.css';
 import '@fontsource/cinzel/700.css';
 import '@fontsource/cinzel/900.css';
-import '@fontsource/cinzel-decorative/900.css';
-import '@fontsource/creepster/400.css';
 import './style.css';
 import { Application, TextureSource } from 'pixi.js';
 import gsap from 'gsap';
 import { Game } from './game/Game';
+import { LITE } from './game/device';
 import { bookCanvas, buildSymbolTextures } from './game/textures';
 import { buildMascotTextures } from './game/Mascot';
 import { warmDigits } from './game/Digits';
@@ -18,6 +17,13 @@ import { loadEgyptArt } from './game/art/egypt';
 
 // large art shown small must be filtered through mipmaps, or it shimmers and looks pixelated
 TextureSource.defaultOptions.autoGenerateMipmaps = true;
+
+/** The browser can take the graphics away (low memory, a locked phone). Pixi gets them back by itself; failing that the page reloads, and the round in play is saved. */
+function watchContext(canvas: HTMLCanvasElement): void {
+  let timer = 0;
+  canvas.addEventListener('webglcontextlost', () => (timer = window.setTimeout(() => location.reload(), 4000)));
+  canvas.addEventListener('webglcontextrestored', () => clearTimeout(timer));
+}
 
 async function boot(): Promise<void> {
   const loader = document.getElementById('loader');
@@ -35,8 +41,6 @@ async function boot(): Promise<void> {
     document.fonts.load('900 64px Nunito'),
     document.fonts.load('700 64px Cinzel'),
     document.fonts.load('900 64px Cinzel'),
-    document.fonts.load('900 64px "Cinzel Decorative"'),
-    document.fonts.load('400 64px Creepster'),
   ]);
   setProgress(0.3);
 
@@ -44,11 +48,13 @@ async function boot(): Promise<void> {
   await app.init({
     resizeTo: window,
     background: '#07080b',
-    antialias: true,
+    antialias: !LITE,
     powerPreference: 'high-performance',
-    resolution: Math.min(window.devicePixelRatio || 1, 2),
+    resolution: Math.min(window.devicePixelRatio || 1, LITE ? 1.5 : 2),
     autoDensity: true,
   });
+  if (LITE) app.ticker.maxFPS = 60;
+  watchContext(app.canvas);
   document.getElementById('stage')!.appendChild(app.canvas);
   setProgress(0.5);
 
@@ -69,4 +75,8 @@ async function boot(): Promise<void> {
   }
 }
 
-void boot();
+boot().catch((e: unknown) => {
+  console.error(e);
+  const caption = document.querySelector('.ld-caption');
+  if (caption) caption.textContent = "Le jeu n'a pas pu démarrer sur cet appareil. Essaie un autre navigateur, ou active l'accélération graphique.";
+});

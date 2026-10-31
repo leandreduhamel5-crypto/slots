@@ -1,4 +1,5 @@
 import { Container, Sprite, type Texture } from 'pixi.js';
+import { LITE } from './device';
 
 export interface ParticleTextures {
   drop: Texture;
@@ -41,6 +42,7 @@ export class Particles extends Container {
   }
 
   private add(kind: Kind, x: number, y: number, vx: number, vy: number, max: number, size: number, custom?: Texture): void {
+    if (LITE && this.ps.length >= 160) return;
     const byKind: Record<Kind, Texture> = {
       drop: this.tex.drop,
       cyan: this.tex.dropCyan,

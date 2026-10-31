@@ -3,22 +3,14 @@ import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import gsap from 'gsap';
 import { paintDunes, paintSoftRays } from './art/egyptFrame';
 import { makeCanvas, seeded } from './art/painters';
-import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, OBELISK_TIP_Y, PYRAMID_HALF, RS, TH as H, TW as W } from './art/templeHD';
+import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, OBELISK_TIP_Y, PYRAMID_HALF, TH as H, TW as W } from './art/templeHD';
+import { LITE, slim } from './device';
 import { Fire, paintFlameBlob } from './Fire';
 import { TempleFx } from './TempleFx';
 import { COLORS } from './layout';
 
-/** Soft disc for the spreading-infection mask: opaque core, feathered rim. */
-function revealCanvas(): HTMLCanvasElement {
-  const [c, ctx] = makeCanvas(256, 256);
-  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.72, 'rgba(255,255,255,1)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
-  return c;
-}
+/** radius of the circle that reveals the infected temple, before scaling */
+const REVEAL_R = 100;
 
 /** Tileable value-noise fog. */
 function paintFog(size = 512): HTMLCanvasElement {
@@ -178,8 +170,14 @@ export class Background extends Container {
   private feature = 0;
   private nextStrike = 9;
   templeFx: TempleFx | null = null;
-  /** soft circle growing from the capstone: the infection spreading over the night scene */
-  private reveal: Sprite | null = null;
+  /**
+   * Circle growing from the capstone: the infection spreading over the night scene. It is drawn, not
+   * a soft sprite: a sprite mask takes a render target as large as itself, and this one ends up
+   * thousands of pixels wide, more than a phone can hold. The ring of light gives it its soft front.
+   */
+  private reveal: Graphics | null = null;
+  private revealFront: Sprite | null = null;
+  private revealing = false;
   private spread = { r: 0 };
   private groundFog: TilingSprite | null = null;
   private fires: Fire[] = [];
@@ -204,27 +202,35 @@ export class Background extends Container {
     // the temple is a 3D scene rendered offline in two states (art/temple3d.ts); live lights, lightning and fire go on top
     this.scene = new Sprite(Texture.from(custom ? coverCanvas(custom, W, H) : night));
     this.scene.anchor.set(0.5);
-    if (!custom) this.scene.scale.set(1 / RS);
+    const artScale = W / night.naturalWidth;
+    if (!custom) this.scene.scale.set(artScale);
+    const fogTex = slim(paintFog());
     this.sceneC.addChild(this.scene);
     const flameTex = Texture.from(paintFlameBlob());
     if (!custom) {
       const tex = Texture.from(infected);
+      // the temple fills the screen, never smaller than its pixels on a phone: no need for mipmaps
+      if (LITE) tex.source.autoGenerateMipmaps = this.scene.texture.source.autoGenerateMipmaps = false;
       this.infected = new Sprite(tex);
       this.infectedPulse = new Sprite(tex);
       for (const s of [this.infected, this.infectedPulse]) {
         s.anchor.set(0.5);
-        s.scale.set(1 / RS);
+        s.scale.set(artScale);
         s.alpha = 0;
       }
       this.infectedPulse.blendMode = 'add';
-      this.reveal = new Sprite(Texture.from(revealCanvas()));
-      this.reveal.anchor.set(0.5);
+      this.reveal = new Graphics().circle(0, 0, REVEAL_R).fill(0xffffff);
       this.reveal.position.set(APEX[0] - W / 2, APEX[1] - H / 2);
-      this.reveal.renderable = true;
-      this.sceneC.addChild(this.infected, this.infectedPulse, this.reveal);
-      this.infected.mask = this.reveal;
+      this.reveal.visible = false;
+      this.revealFront = new Sprite(Texture.from(paintHaloRing()));
+      this.revealFront.anchor.set(0.5);
+      this.revealFront.position.copyFrom(this.reveal.position);
+      this.revealFront.blendMode = 'add';
+      this.revealFront.tint = 0xff4a24;
+      this.revealFront.visible = false;
+      this.sceneC.addChild(this.infected, this.infectedPulse, this.reveal, this.revealFront);
       // low mist drifting over the polished floor
-      this.groundFog = new TilingSprite({ texture: Texture.from(paintFog()), width: W * 1.2, height: 260 });
+      this.groundFog = new TilingSprite({ texture: fogTex, width: W * 1.2, height: 260 });
       this.groundFog.position.set(-W * 0.6, H / 2 - 330);
       this.groundFog.tileScale.set(2.2, 0.7);
       this.groundFog.alpha = 0.16;
@@ -310,18 +316,18 @@ export class Background extends Container {
     this.redWash.tint = COLORS.infection;
     this.redWash.blendMode = 'add';
     this.redWash.alpha = 0;
-    this.fog = new TilingSprite({ texture: Texture.from(paintFog()), width: W, height: H });
+    this.fog = new TilingSprite({ texture: fogTex, width: W, height: H });
     this.fog.tint = 0x6a5070;
     this.fog.alpha = 0.07;
 
     // sky rays are painted once and turned slowly: a filter on the scene costs either the
     // frame rate or, at low resolution, the sharpness of the whole picture
-    this.rayLayer = new Sprite(Texture.from(paintSoftRays()));
+    this.rayLayer = new Sprite(Texture.from(paintSoftRays(LITE ? 512 : 1024)));
     this.rayLayer.anchor.set(0.5);
     this.rayLayer.blendMode = 'add';
-    this.dunes = new Sprite(Texture.from(paintDunes(2560, 560)));
+    this.dunes = new Sprite(slim(paintDunes(2560, 560)));
     this.dunes.anchor.set(0.5, 1);
-    this.blown = new TilingSprite({ texture: Texture.from(paintFog()), width: 400, height: 200 });
+    this.blown = new TilingSprite({ texture: fogTex, width: 400, height: 200 });
     this.blown.tileScale.set(1.7, 0.42);
     this.blown.blendMode = 'add';
     this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.dunes, this.blown, this.sporeLayer, this.pulse);
@@ -533,11 +539,24 @@ export class Background extends Container {
     this.fog.alpha = 0.07 + f * 0.05;
     this.redWash.alpha = f * (0.1 + beat * 0.1);
     if (this.infected && this.infectedPulse) {
+      const r = this.spread.r;
       this.infected.alpha = Math.min(1, f * 3);
-      if (this.reveal) {
-        // the mask texture fades to transparent at its rim: scale so it covers the screen at r=1
-        const size = 80 + this.spread.r * 5200;
-        this.reveal.width = this.reveal.height = size;
+      this.infected.visible = r > 0;
+      this.infectedPulse.visible = r > 0;
+      if (this.reveal && this.revealFront) {
+        // the mask is only there while the infection spreads: fully out, the picture simply shows
+        const spreading = r > 0 && r < 1;
+        if (spreading !== this.revealing) {
+          this.revealing = spreading;
+          this.infected.mask = spreading ? this.reveal : null;
+          this.reveal.visible = spreading;
+          this.revealFront.visible = spreading;
+        }
+        const radius = 40 + r * 2700;
+        this.reveal.scale.set(radius / REVEAL_R);
+        // the ring of the halo texture sits at 36% of its radius
+        this.revealFront.width = this.revealFront.height = (radius * 2) / 0.36;
+        this.revealFront.alpha = Math.min(1, Math.sin(Math.PI * r) * 3);
       }
       this.infectedPulse.alpha = f * (beat * 0.1 + this.boltLight * 0.3 + this.flareV * 0.2);
     }
