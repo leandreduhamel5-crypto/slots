@@ -6,7 +6,7 @@ import { Digits } from './Digits';
 import { Particles } from './Particles';
 import { Reel } from './Reel';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP, SYMBOL_SIZE, TILE_H, TILE_W, cellCenter, reelX } from './layout';
-import { FRAME_ART, FRAME_BLEED, FRAME_PAD, TEX_SIZE, TEX_UNIT, type SymbolTextures } from './textures';
+import { FRAME_ART, FRAME_BLEED, FRAME_PAD, TEX_SIZE, TEX_UNIT, makeSeal, type SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
 export interface SpinPlan {
@@ -866,12 +866,7 @@ export class ReelBoard extends Container {
   private addLabel(text: string, x: number, y: number, _color = 0xffffff, scale = 1): Digits {
     const t = new Digits(54);
     t.text = text;
-    const pool = new Sprite(this.tex.glow);
-    pool.anchor.set(0.5);
-    pool.width = 34 + t.inkWidth * 1.5;
-    pool.height = 104;
-    pool.tint = 0x000000;
-    t.addChildAt(pool, 0);
+    t.addChildAt(makeSeal(this.tex.seal, t.inkWidth + 96, 72), 0);
     t.position.set(x, y);
     this.labelLayer.addChild(t);
     gsap.fromTo(t.scale, { x: 0.2 * scale, y: 0.2 * scale }, { x: scale, y: scale, duration: 0.5, ease: 'power3.out' });
@@ -935,10 +930,10 @@ export class ReelBoard extends Container {
     c.position.set(BOARD_W / 2, BOARD_H / 2);
     const shade = new Sprite(this.tex.glow);
     shade.anchor.set(0.5);
-    shade.width = 760;
-    shade.height = 320;
+    shade.width = 900;
+    shade.height = 400;
     shade.tint = 0x000000;
-    shade.alpha = 0.72;
+    shade.alpha = 0.6;
     const flash = new Sprite(this.tex.glow);
     flash.anchor.set(0.5);
     flash.width = 900;
@@ -949,9 +944,11 @@ export class ReelBoard extends Container {
     const val = new Digits(118);
     val.value = amount;
     const k = (size >= 2 ? 1 : 0.8) * Math.min(1, (BOARD_W * 0.7) / Math.max(1, val.inkWidth));
-    c.addChild(shade, flash, val);
+    const seal = makeSeal(this.tex.seal, val.inkWidth * k + 170, 150 * Math.max(0.8, k));
+    c.addChild(shade, flash, seal, val);
     this.labelLayer.addChild(c);
     gsap.fromTo(c, { alpha: 0 }, { alpha: 1, duration: 0.12 });
+    gsap.fromTo(seal.scale, { x: 1.9, y: 1.9 }, { x: 1, y: 1, duration: 0.3, ease: 'power3.in' });
     gsap.fromTo(val.scale, { x: k * 1.9, y: k * 1.9 }, {
       x: k,
       y: k,

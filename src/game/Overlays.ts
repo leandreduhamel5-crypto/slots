@@ -1,13 +1,13 @@
 import { Container, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
 import { BLOOD_METAL, GOLD, IVORY, metalTitle, textMask } from './art/logoArt';
-import { paintArrowHead, paintShrineFrame, paintSoftRays, paintStrainBand } from './art/egyptFrame';
+import { paintArrowHead, paintDrumShade, paintPlaque, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
 import { Digits } from './Digits';
 import gsap from 'gsap';
 import { SYMBOLS, Sym } from '../math/config';
 import { PREMIUM_EXPANDERS } from '../math/engine';
 import type { Audio } from './Audio';
 import { Particles } from './Particles';
-import type { SymbolTextures } from './textures';
+import { makeSeal, type SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
 export const WIN_TIERS = [
@@ -19,7 +19,7 @@ export const WIN_TIERS = [
 
 /** Widest a tier title and an amount may be, in overlay units: they stay inside their plates. */
 const BIG_TITLE_W = 850;
-const AMOUNT_W = 560;
+const AMOUNT_W = 720;
 
 export function winTier(win: number, bet: number): number {
   let t = -1;
@@ -290,25 +290,8 @@ export class Overlays extends Container {
 
   private shrineTex: Texture | null = null;
   private rimTex: Texture | null = null;
-  private bandArt: Texture | null = null;
-  private band: Texture | null = null;
-  private bandTex(): Texture {
-    if (!this.band) {
-      const c = document.createElement('canvas');
-      c.width = 256;
-      c.height = 64;
-      const ctx = c.getContext('2d')!;
-      const g = ctx.createRadialGradient(128, 32, 4, 128, 32, 128);
-      g.addColorStop(0, 'rgba(4,1,2,0.75)');
-      g.addColorStop(0.6, 'rgba(4,1,2,0.45)');
-      g.addColorStop(1, 'rgba(4,1,2,0)');
-      ctx.setTransform(1, 0, 0, 0.25, 0, 24);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, -96, 256, 256);
-      this.band = Texture.from(c);
-    }
-    return this.band;
-  }
+  private plaques = new Map<string, Texture>();
+  private drumShade: Texture | null = null;
   private arrowTex: Texture | null = null;
 
   /** The winged ruby of the frame, crowning a title: it sits just above the given height. */
@@ -319,13 +302,70 @@ export class Overlays extends Container {
     return s;
   }
 
-  /** A pool of darkness that lifts an amount off the screen. */
-  private plate(width: number, height: number): Sprite {
-    const s = new Sprite(this.bandTex());
+  /** A plaque of the big screens, unfolding sideways out of its centre. */
+  private plaque(w: number, h: number, y: number): Sprite {
+    const key = `${w}x${h}`;
+    let t = this.plaques.get(key);
+    if (!t) {
+      t = Texture.from(paintPlaque(w, h));
+      this.plaques.set(key, t);
+    }
+    const s = new Sprite(t);
     s.anchor.set(0.5);
-    s.width = width * 1.5;
-    s.height = height * 1.7;
+    s.scale.set(0.5);
+    s.y = y;
+    gsap.fromTo(s.scale, { x: 0.02 }, { x: 0.5, duration: 0.42, ease: 'power3.out' });
     return s;
+  }
+
+  /** Lamps along the rim of a plaque: they chase round it, and all blaze when something lands. */
+  private lampChain(w: number, h: number): { root: Container; chase: (phase: number) => void; blaze: (ms: number) => void } {
+    const root = new Container();
+    const lamps: Sprite[] = [];
+    const put = (x: number, y: number) => {
+      const s = new Sprite(this.tex.glow);
+      s.anchor.set(0.5);
+      s.width = s.height = 34;
+      s.blendMode = 'add';
+      s.tint = 0xffdc98;
+      s.position.set(x, y);
+      root.addChild(s);
+      lamps.push(s);
+    };
+    const nx = Math.round(w / 44);
+    const ny = Math.round(h / 44);
+    for (let i = 0; i < nx; i++) put(-w / 2 + ((i + 0.5) * w) / nx, -h / 2);
+    for (let i = 0; i < ny; i++) put(w / 2, -h / 2 + ((i + 0.5) * h) / ny);
+    for (let i = 0; i < nx; i++) put(w / 2 - ((i + 0.5) * w) / nx, h / 2);
+    for (let i = 0; i < ny; i++) put(-w / 2, h / 2 - ((i + 0.5) * h) / ny);
+    let until = 0;
+    return {
+      root,
+      chase: (phase) => {
+        const all = performance.now() < until;
+        lamps.forEach((l, i) => {
+          l.alpha = all || (((i - phase) % 4) + 4) % 4 < 1 ? 1 : 0.1;
+        });
+      },
+      blaze: (ms) => {
+        until = performance.now() + ms;
+      },
+    };
+  }
+
+  /** Keeps a chain of lamps running on its own for as long as it is on screen. */
+  private runLamps(lamps: { root: Container; chase: (phase: number) => void }): gsap.core.Tween {
+    const run = { p: 0 };
+    const tween = gsap.to(run, {
+      p: 1200,
+      duration: 200,
+      ease: 'none',
+      onUpdate: () => {
+        if (lamps.root.destroyed) tween.kill();
+        else lamps.chase(run.p);
+      },
+    });
+    return tween;
   }
 
   private popIn(o: Container, delay = 0, from = 0.2): void {
@@ -356,14 +396,14 @@ export class Overlays extends Container {
   }
 
   /** A blade of light crossing a title, masked by its letters. */
-  private titleSweep(title: Sprite, parent: Container = this.content): void {
+  private titleSweep(title: Sprite, parent: Container = this.content, height = 340): void {
     const mask = new Sprite(title.texture);
     mask.anchor.set(0.5);
     mask.scale.copyFrom(title.scale);
     mask.position.copyFrom(title.position);
     const blade = new Sprite(this.tex.shine);
     blade.anchor.set(0.5);
-    blade.height = 340;
+    blade.height = height;
     blade.width = 150;
     blade.rotation = 0.35;
     blade.blendMode = 'add';
@@ -381,38 +421,45 @@ export class Overlays extends Container {
     const t0 = WIN_TIERS[0];
     const rays = this.sunburst(t0.ray);
     this.burstRays = rays;
-    const ribbon = this.ribbon(1040, 150, 0x1e0a08);
-    ribbon.y = -100;
+    const plaque = this.plaque(1020, 500, 40);
+    const lamps = this.lampChain(1000, 480);
+    lamps.root.y = 40;
+    const crown = new Sprite(this.tex.crest);
+    crown.anchor.set(0.5);
+    crown.scale.set(0.98);
+    crown.y = -216;
     const heading = this.head3d(t0.name, 104, t0.material, BIG_TITLE_W);
-    heading.y = -100;
-    const plate = this.plate(760, 190);
-    plate.y = 100;
+    heading.y = -105;
+    const pips = this.tierPips();
+    pips.y = -22;
     const amount = new Digits(118);
     amount.value = 0;
-    amount.y = 100;
-    const low = new Sprite(this.tex.crestLow);
-    low.anchor.set(0.5);
-    low.scale.set(0.82);
-    low.y = 292;
+    amount.y = 72;
     const mult = new Digits(54);
-    mult.y = 190;
+    mult.y = 178;
     const showMult = (v: number) => {
       mult.text = `×${Math.floor(v / bet)}`;
     };
     showMult(0);
-    const pips = this.tierPips();
-    pips.y = -12;
+    const multSeal = makeSeal(this.tex.seal, 290, 84);
+    multSeal.y = 178;
+    const foot = new Sprite(this.tex.crest);
+    foot.anchor.set(0.5);
+    foot.scale.set(0.62);
+    foot.y = 292;
     const sub = new Text({ text: 'TOUCHEZ POUR PASSER', style: body(18, 0xd8b878) });
     sub.anchor.set(0.5);
     sub.y = 378;
     gsap.to(sub, { alpha: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.content.addChild(plate, ribbon, heading, pips, amount, mult, low, sub);
-    this.popIn(ribbon, 0.06);
-    this.popIn(heading, 0.1);
-    this.popIn(amount, 0.2);
-    this.popIn(mult, 0.24);
-    this.popIn(pips, 0.26);
-    this.popIn(low, 0.26);
+    this.content.addChild(plaque, lamps.root, heading, pips, amount, multSeal, mult, crown, foot, sub);
+    const chaser = this.runLamps(lamps);
+    gsap.fromTo(crown, { y: crown.y - 130, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.12 });
+    gsap.fromTo(foot, { y: foot.y + 110, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.12 });
+    this.popIn(heading, 0.14);
+    this.popIn(amount, 0.24);
+    this.popIn(multSeal, 0.28);
+    this.popIn(mult, 0.28);
+    this.popIn(pips, 0.3);
     this.lightPip(pips, 0);
     this.audio.bigWinStart();
     gsap.delayedCall(0.42, () => {
@@ -422,8 +469,10 @@ export class Overlays extends Container {
       this.fx.shake(10);
       this.fx.thump(0.35);
       this.fx.punch(1);
-      this.titleHit(-100);
+      this.titleHit(-105);
       this.titleSweep(heading);
+      this.titleSweep(plaque, this.content, 640);
+      lamps.blaze(500);
     });
     this.particles.startFountain(this.w * 0.14, this.h * 0.86, 16);
     this.particles.startFountain2(this.w * 0.86, this.h * 0.86, 16);
@@ -462,6 +511,9 @@ export class Overlays extends Container {
           this.upgrade(heading, tier);
           this.lightPip(pips, tier);
           punch();
+          lamps.blaze(600);
+          chaser.timeScale(1 + tier * 0.8);
+          this.titleSweep(plaque, this.content, 640);
         }
       },
     });
@@ -477,11 +529,13 @@ export class Overlays extends Container {
     gsap.fromTo(amount.scale, { x: k * 1.3, y: k * 1.3 }, { x: k, y: k, duration: 0.3, ease: 'power3.in' });
     gsap.delayedCall(0.3, () => {
       if (!this.visible || heading.destroyed) return;
-      this.bloom(120, 0xfff0c0, 1700);
+      this.bloom(72, 0xfff0c0, 1700);
       this.fx.shake(14);
       this.fx.thump(0.5);
       this.titleSweep(heading);
-      this.titleHit(100, 760);
+      this.titleSweep(plaque, this.content, 640);
+      lamps.blaze(1400);
+      this.titleHit(72, 760);
       this.particles.coins(this.w / 2, this.h * 0.62, 26 + top * 12, 1.25);
     });
     this.audio.bigWinEnd(top);
@@ -535,7 +589,7 @@ export class Overlays extends Container {
       this.fx.glitch(1 + tier);
       this.fx.thump(0.3 + tier * 0.1);
       this.fx.punch(1 + tier * 0.3);
-      this.titleHit(-100, 900 + tier * 60);
+      this.titleHit(-105, 900 + tier * 60);
       this.titleSweep(heading);
     });
     this.particles.setRainRate(12 + tier * 10);
@@ -543,33 +597,43 @@ export class Overlays extends Container {
   }
 
   /**
-   * The strain reel: the premium symbols race sideways along a lapis band, through a gold window
-   * crowned with the winged ruby of the frame, slow down and lock onto the strain with a blaze of
-   * gold.
+   * The strain drum: the premium symbols turn on a wheel inside a plaque of lapis and gold, coming
+   * forward as they pass behind a gold window, while lamps chase round the rim at the wheel's speed.
+   * It throws back, spins up, slows to a stop on the strain, and everything blazes.
    */
   private async roulette(y: number, final: Sym, exclude: Sym[] = []): Promise<void> {
     const pool = PREMIUM_EXPANDERS.filter((s) => s === final || !exclude.includes(s));
     const box = new Container();
+    box.y = y;
     const WINDOW = 300;
+    const PW = 1240;
+    const PH = 290;
     const aura = new Sprite(this.tex.glow);
     aura.anchor.set(0.5);
-    aura.width = 1050;
-    aura.height = 640;
+    aura.width = 1500;
+    aura.height = 760;
     aura.tint = 0xffa030;
     aura.blendMode = 'add';
-    aura.alpha = 0.3;
-    gsap.to(aura, { alpha: 0.42, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    aura.alpha = 0.26;
+    gsap.to(aura, { alpha: 0.38, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     const rays = new Sprite(this.raysTex());
     rays.anchor.set(0.5);
-    rays.width = rays.height = 1250;
+    rays.width = rays.height = 1500;
     rays.tint = 0xffc060;
     rays.blendMode = 'add';
     rays.alpha = 0;
     gsap.to(rays, { rotation: Math.PI * 2, duration: 40, repeat: -1, ease: 'none' });
-    this.bandArt ??= Texture.from(paintStrainBand(1500, 270));
-    const band = new Sprite(this.bandArt);
-    band.anchor.set(0.5);
-    band.scale.set(0.5);
+    const shaft = new Sprite(this.tex.glow);
+    shaft.anchor.set(0.5);
+    shaft.width = 420;
+    shaft.height = 1500;
+    shaft.tint = 0xffd080;
+    shaft.blendMode = 'add';
+    shaft.alpha = 0;
+    const plaque = this.plaque(PW, PH, 0);
+    this.drumShade ??= Texture.from(paintDrumShade(PW - 56, PH - 56));
+    const shade = new Sprite(this.drumShade);
+    shade.anchor.set(0.5);
     if (!this.shrineTex || !this.rimTex) {
       const art = paintShrineFrame(WINDOW, WINDOW);
       this.shrineTex = Texture.from(art);
@@ -591,14 +655,21 @@ export class Overlays extends Container {
       f.anchor.set(0.5);
       f.scale.set(0.5);
     }
+    const well = new Sprite(this.tex.glow);
+    well.anchor.set(0.5);
+    well.width = well.height = 340;
+    well.tint = 0xffc060;
+    well.blendMode = 'add';
+    well.alpha = 0;
     const crown = new Sprite(this.tex.crest);
-    crown.anchor.set(0.5, 1);
-    crown.scale.set(0.5);
-    crown.y = -WINDOW / 2 + 16;
-    const foot = new Sprite(this.tex.crestLow);
-    foot.anchor.set(0.5, 0);
-    foot.scale.set(0.5);
-    foot.y = WINDOW / 2 - 18;
+    crown.anchor.set(0.5);
+    crown.scale.set(0.56);
+    crown.y = -WINDOW / 2 - 34;
+    const foot = new Sprite(this.tex.crest);
+    foot.anchor.set(0.5);
+    foot.scale.set(0.42);
+    foot.y = WINDOW / 2 + 26;
+    const lamps = this.lampChain(PW - 22, PH - 22);
     this.arrowTex ??= Texture.from(paintArrowHead());
     const arrowL = new Sprite(this.arrowTex);
     const arrowR = new Sprite(this.arrowTex);
@@ -625,36 +696,39 @@ export class Overlays extends Container {
     flash.anchor.set(0.5);
     flash.blendMode = 'add';
     flash.alpha = 0;
-    box.addChild(aura, rays, band, frame, strip, rim, crown, foot, arrowL, arrowR, flash);
-    box.y = y;
+    box.addChild(aura, rays, shaft, plaque, frame, well, strip, shade, rim, lamps.root, crown, foot, arrowL, arrowR, flash);
     this.content.addChild(box);
     gsap.fromTo(box, { alpha: 0 }, { alpha: 1, duration: 0.3 });
-    gsap.fromTo(band.scale, { x: 0.03 }, { x: 0.5, duration: 0.5, ease: 'power3.out' });
-    gsap.fromTo(crown, { y: crown.y - 90, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.1 });
-    gsap.fromTo(foot, { y: foot.y + 90, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.1 });
+    gsap.fromTo(crown, { y: crown.y - 100, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.1 });
+    gsap.fromTo(foot, { y: foot.y + 100, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.1 });
     this.popIn(frame, 0, 0.4);
     this.popIn(rim, 0, 0.4);
 
     const state = { off: 0 };
-    let lastIdx = -1;
+    let lastIdx = 0;
+    const end = target * spacing;
+    /** radians of wheel between two symbols */
+    const TURN = 0.58;
     const layout = () => {
       for (let k = 0; k < count; k++) {
         const sp = items[k];
-        const d = k * spacing - state.off;
-        const ad = Math.abs(d);
-        const near = Math.max(0, 1 - ad / 760);
-        sp.visible = ad < 900;
-        sp.x = d * (0.85 + near * 0.15);
-        const size = 118 + 122 * Math.pow(near, 2.4);
-        sp.width = sp.height = size;
-        sp.alpha = Math.min(1, near * 1.6);
-        const v = Math.round(90 + 165 * Math.pow(near, 3));
+        const a = ((k * spacing - state.off) / spacing) * TURN;
+        sp.visible = Math.abs(a) < 1.42;
+        if (!sp.visible) continue;
+        const depth = Math.cos(a);
+        sp.x = Math.sin(a) * 560;
+        sp.width = sp.height = 92 + 150 * Math.pow(depth, 1.6);
+        sp.alpha = Math.min(1, depth * 2.4);
+        const v = Math.round(96 + 159 * Math.pow(depth, 4));
         sp.tint = (v << 16) | (v << 8) | v;
       }
+      lamps.chase((state.off / spacing) * 2);
+      // the window warms as the wheel runs out of speed
+      well.alpha = Math.max(0, 1 - (end - state.off) / (spacing * 3)) * 0.42;
       const idx = Math.round(state.off / spacing);
       if (idx !== lastIdx) {
         lastIdx = idx;
-        this.audio.tick(Math.min(1, state.off / (target * spacing)));
+        this.audio.tick(Math.min(1, Math.max(0, state.off / end)));
         gsap.fromTo([frame.scale, rim.scale], { x: 0.512, y: 0.512 }, { x: 0.5, y: 0.5, duration: 0.12 });
         gsap.fromTo(arrowL, { x: -(WINDOW / 2 + 16), alpha: 1 }, { x: -(WINDOW / 2 + 28), alpha: 0.7, duration: 0.16 });
         gsap.fromTo(arrowR, { x: WINDOW / 2 + 16, alpha: 1 }, { x: WINDOW / 2 + 28, alpha: 0.7, duration: 0.16 });
@@ -662,20 +736,23 @@ export class Overlays extends Container {
     };
     layout();
     await new Promise<void>((resolve) => {
-      this.audio.riser(3.1, 0.8);
-      gsap.to(state, { off: target * spacing, duration: 3.4, ease: 'power4.out', onUpdate: layout, onComplete: resolve });
+      this.audio.riser(3.5, 0.8);
+      const tl = gsap
+        .timeline({ onComplete: resolve })
+        .to(state, { off: -spacing * 0.45, duration: 0.42, ease: 'power2.out', onUpdate: layout })
+        .to(state, { off: end, duration: 3.5, ease: 'power4.out', onUpdate: layout });
       const skipWatch = () => {
         if (this.skipRequested) {
           this.skipRequested = false;
-          gsap.killTweensOf(state);
-          state.off = target * spacing;
+          tl.kill();
+          state.off = end;
           layout();
           resolve();
-        } else if (gsap.isTweening(state)) requestAnimationFrame(skipWatch);
+        } else if (tl.isActive() || tl.progress() === 0) requestAnimationFrame(skipWatch);
       };
       requestAnimationFrame(skipWatch);
     });
-    // lock: everything else falls away, the strain blazes in its window
+    // lock: the wheel empties, the strain blazes in its window and the light goes straight up
     const chosen = items[target];
     for (const sp of items) if (sp !== chosen) gsap.to(sp, { alpha: 0, duration: 0.3 });
     this.audio.impact(1.2);
@@ -684,18 +761,36 @@ export class Overlays extends Container {
     this.fx.thump(0.45);
     this.fx.shake(12);
     this.fx.punch(1.2);
-    gsap.fromTo(flash, { alpha: 1, width: 240, height: 240 }, { alpha: 0, width: 1100, height: 1100, duration: 0.65, ease: 'power2.out' });
+    lamps.blaze(1500);
+    lamps.chase(0);
+    const chaser = this.runLamps(lamps);
+    chaser.timeScale(0.5);
+    gsap.fromTo(flash, { alpha: 1, width: 240, height: 240 }, { alpha: 0, width: 1300, height: 1300, duration: 0.65, ease: 'power2.out' });
+    gsap.fromTo(shaft, { alpha: 1 }, { alpha: 0.3, duration: 0.9, ease: 'power2.out' });
     const size = chosen.width;
     gsap.fromTo(chosen, { width: size * 1.45, height: size * 1.45 }, { width: 262, height: 262, duration: 0.32, ease: 'power3.in' });
     gsap.fromTo([frame.scale, rim.scale], { x: 0.6, y: 0.6 }, { x: 0.5, y: 0.5, duration: 0.32, ease: 'power3.in' });
     gsap.to(rays, { alpha: 0.55, duration: 0.3 });
     gsap.killTweensOf(aura, 'alpha');
-    gsap.to(aura, { alpha: 0.75, duration: 0.2 });
-    gsap.delayedCall(0.34, () => !chosen.destroyed && this.titleSweep(chosen, box));
+    gsap.to(aura, { alpha: 0.7, duration: 0.2 });
+    gsap.to(well, { alpha: 0.5, duration: 0.2 });
+    gsap.delayedCall(0.34, () => {
+      if (chosen.destroyed) return;
+      this.titleSweep(chosen, box);
+      this.titleSweep(plaque, box, 500);
+    });
     gsap.to(chosen, { y: -6, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.4 });
+    // the emptied wings of the plaque say what the strain will do
+    for (const [text, side] of [['ENVAHIT\nTOUT LE ROULEAU', -1], ['PAIE SUR\nLES 10 LIGNES', 1]] as const) {
+      const t = new Text({ text, style: { ...body(30, 0xffe2ac), lineHeight: 46 } });
+      t.anchor.set(0.5);
+      t.x = side * 400;
+      box.addChild(t);
+      gsap.fromTo(t, { x: side * 330, alpha: 0 }, { x: side * 400, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.3 });
+    }
     const sc = this.content.scale.y;
     const sy = this.content.y + y * sc;
-    this.particles.sand(this.w / 2, sy, 900 * sc, 90, 2.2);
+    this.particles.sand(this.w / 2, sy, 1100 * sc, 110, 2.2);
     this.particles.sparks(this.w / 2, sy, 24, 1.3);
   }
 
@@ -908,16 +1003,20 @@ export class Overlays extends Container {
       });
     });
     await this.waitOrSkip(1050);
-    const caption = new Text({ text: 'LE ROULEAU CHOISIT VOTRE SOUCHE…', style: body(26, 0xffd9a0) });
+    const seal = makeSeal(this.tex.seal, 840, 96);
+    seal.y = 236;
+    this.content.addChild(seal);
+    this.popIn(seal);
+    const caption = new Text({ text: 'LE ROULEAU CHOISIT VOTRE SOUCHE…', style: body(24, 0xffd9a0) });
     caption.anchor.set(0.5);
-    caption.y = 232;
+    caption.y = 236;
     this.content.addChild(caption);
     gsap.fromTo(caption, { alpha: 0 }, { alpha: 1, duration: 0.4 });
     gsap.to(caption, { alpha: 0.55, duration: 0.6, yoyo: true, repeat: -1, delay: 0.4 });
     await this.roulette(-30, special);
     gsap.killTweensOf(caption);
     caption.destroy();
-    const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 56, 'gold', 1000);
+    const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 50, 'gold', 660);
     strain.y = 236;
     this.content.addChild(strain);
     this.popIn(strain);
@@ -926,15 +1025,12 @@ export class Overlays extends Container {
       this.titleHit(strain.y, 640);
       this.titleSweep(strain);
     });
-    const rule = new Text({ text: 'ELLE ENVAHIT TOUT LE ROULEAU ET PAIE SUR LES 10 LIGNES', style: body(22, 0xe8d8c0) });
-    rule.anchor.set(0.5);
-    rule.y = 300;
     const go = new Text({ text: 'TOUCHEZ POUR COMMENCER', style: body(24, 0xffd27a) });
     go.anchor.set(0.5);
-    go.y = 350;
+    go.y = 322;
     gsap.to(go, { alpha: 0.4, duration: 0.7, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.content.addChild(rule, go);
-    gsap.fromTo([rule, go], { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.3 });
+    this.content.addChild(go);
+    gsap.fromTo(go, { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.3 });
     await this.waitOrSkip(4500);
     await this.close();
   }
@@ -955,15 +1051,19 @@ export class Overlays extends Container {
     this.popIn(head, 0.05);
     this.particles.impact(this.w / 2, this.h / 2, 1.4);
     if (mutation !== null) {
-      const sub = new Text({ text: 'MUTATION ! UNE NOUVELLE SOUCHE', style: body(30, 0xff8a70) });
+      const seal = makeSeal(this.tex.seal, 840, 96);
+      seal.y = 236;
+      this.content.addChild(seal);
+      this.popIn(seal, 0.2);
+      const sub = new Text({ text: 'MUTATION ! UNE NOUVELLE SOUCHE', style: body(24, 0xffd9a0) });
       sub.anchor.set(0.5);
-      sub.y = 232;
+      sub.y = 236;
       this.content.addChild(sub);
       this.popIn(sub, 0.2);
       await this.roulette(-30, mutation, active);
       sub.destroy();
-      const name = this.head3d(SYMBOLS[mutation].name.toUpperCase(), 56, 'gold');
-      name.y = 262;
+      const name = this.head3d(SYMBOLS[mutation].name.toUpperCase(), 50, 'gold', 660);
+      name.y = 236;
       this.content.addChild(name);
       this.popIn(name);
     }
@@ -975,23 +1075,34 @@ export class Overlays extends Container {
     this.open();
     this.audio.stinger(1);
     this.sunburst(0x3a2408);
-    const ribbon = this.ribbon(900, 150, 0x1e0a08);
-    ribbon.y = -200;
-    const head = this.head3d('INFECTION TERMINÉE', 80, 'bone', 740);
-    head.y = -210;
-    const plate = this.plate(620, 180);
-    plate.y = 20;
+    const plaque = this.plaque(960, 430, 0);
+    const lamps = this.lampChain(940, 410);
+    const crown = new Sprite(this.tex.crest);
+    crown.anchor.set(0.5);
+    crown.scale.set(0.9);
+    crown.y = -214;
+    const head = this.head3d('INFECTION TERMINÉE', 74, 'gold', 760);
+    head.y = -98;
     const amount = new Digits(114);
     amount.value = 0;
-    amount.y = 20;
-    const sub = new Text({ text: `${spins} tours gratuits · ${fmt(total / bet)}× la mise`, style: body(32, 0xe8dcf0) });
+    amount.y = 34;
+    const seal = makeSeal(this.tex.seal, 620, 78);
+    seal.y = 142;
+    const sub = new Text({ text: `${spins} tours gratuits · ${fmt(total / bet)}× la mise`, style: body(22, 0xffe2ac) });
     sub.anchor.set(0.5);
-    sub.y = 170;
-    this.content.addChild(ribbon, head, plate, amount, sub);
-    this.popIn(ribbon);
-    this.popIn(head, 0.05);
-    this.popIn(plate, 0.15);
+    sub.y = 142;
+    const foot = new Sprite(this.tex.crest);
+    foot.anchor.set(0.5);
+    foot.scale.set(0.56);
+    foot.y = 228;
+    this.content.addChild(plaque, lamps.root, head, amount, seal, sub, crown, foot);
+    this.runLamps(lamps);
+    gsap.fromTo(crown, { y: crown.y - 120, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.1 });
+    gsap.fromTo(foot, { y: foot.y + 100, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.1 });
+    this.popIn(head, 0.12);
     this.popIn(amount, 0.2);
+    this.popIn(seal, 0.26);
+    this.popIn(sub, 0.26);
     if (total > 0) {
       this.particles.startFountain(this.w / 2, this.h * 0.7, 30);
       this.audio.coins(20);
@@ -1010,6 +1121,8 @@ export class Overlays extends Container {
     await Promise.race([new Promise<void>((r) => tween.eventCallback('onComplete', () => r())), this.waitOrSkip(5000)]);
     tween.progress(1);
     this.audio.bigWinEnd(1);
+    lamps.blaze(1200);
+    this.titleSweep(plaque, this.content, 640);
     await this.waitOrSkip(2600);
     await this.close();
   }

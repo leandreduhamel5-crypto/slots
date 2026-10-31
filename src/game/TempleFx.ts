@@ -1,7 +1,7 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import gsap from 'gsap';
 import { makeCanvas } from './art/painters';
-import { APEX, MOON, OBELISK_SHAFTS, PYRAMID_EDGES, TH as H, TW as W } from './art/templeHD';
+import { APEX, OBELISK_SHAFTS, PYRAMID_EDGES, TH as H, TW as W } from './art/templeHD';
 
 type Pt = [number, number];
 
@@ -84,7 +84,7 @@ interface Band {
 
 /**
  * Live energy on the temple: light comets climbing the pyramid's edges and bursting at the
- * capstone, an anamorphic flare on the capstone and the moon, light rising up the obelisks'
+ * capstone, an anamorphic flare on the capstone, light rising up the obelisks'
  * engraved shafts, sheet lightning inside the night clouds, and in the free spins red energy
  * arcing from the obelisk tips into the capstone.
  */
@@ -96,7 +96,6 @@ export class TempleFx extends Container {
   private capStreak: Sprite;
   private capStar: Sprite;
   private capCore: Sprite;
-  private moonStreak: Sprite;
   private comets: Comet[] = [];
   private bands: Band[] = [];
   private arcs = new Graphics();
@@ -122,14 +121,6 @@ export class TempleFx extends Container {
     this.sheet.blendMode = 'add';
     this.sheet.alpha = 0;
 
-    const [mx, my] = sc([MOON[0], MOON[1]]);
-    this.moonStreak = new Sprite(this.streak);
-    this.moonStreak.anchor.set(0.5);
-    this.moonStreak.position.set(mx, my);
-    this.moonStreak.blendMode = 'add';
-    this.moonStreak.width = MOON[2] * 9;
-    this.moonStreak.height = 18;
-
     this.capStreak = new Sprite(this.streak);
     this.capStreak.anchor.set(0.5);
     this.capStreak.blendMode = 'add';
@@ -143,7 +134,7 @@ export class TempleFx extends Container {
     this.capFlare.position.set(...sc([APEX[0], APEX[1] + 6]));
 
     this.arcs.blendMode = 'add';
-    this.addChild(this.sheet, this.moonStreak, this.arcs, this.capFlare);
+    this.addChild(this.sheet, this.arcs, this.capFlare);
   }
 
   private spawnComet(edge: [Pt, Pt], speed: number): void {
@@ -209,9 +200,9 @@ export class TempleFx extends Container {
     // capstone flare: breathing, spiking when energy arrives
     const pulse = 0.5 + 0.5 * Math.sin(t * 1.7);
     const p = 0.55 + pulse * 0.25 + this.flash + f * 0.35 + boltLight * 0.5;
-    this.capStreak.width = 520 + p * 520;
-    this.capStreak.height = 10 + p * 10;
-    this.capStreak.alpha = Math.min(1, 0.35 + p * 0.45);
+    this.capStreak.width = 260 + p * 340;
+    this.capStreak.height = 8 + p * 6;
+    this.capStreak.alpha = Math.min(1, 0.2 + p * 0.4);
     this.capStar.scale.set((60 + p * 110) / 256);
     this.capStar.rotation = Math.sin(t * 0.3) * 0.15;
     this.capStar.alpha = Math.min(1, 0.5 + p * 0.4);
@@ -220,8 +211,6 @@ export class TempleFx extends Container {
     const tint = red ? 0xff4a30 : 0xffd9a0;
     this.capStreak.tint = this.capCore.tint = tint;
     this.capStar.tint = red ? 0xffb0a0 : 0xfff2d8;
-    this.moonStreak.tint = red ? 0xff5040 : 0xdfe6ff;
-    this.moonStreak.alpha = 0.22 + 0.06 * Math.sin(t * 0.8) + f * 0.15;
 
     // comets climbing the edges
     this.nextComet -= dt;

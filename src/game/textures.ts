@@ -1,4 +1,4 @@
-import { Texture } from 'pixi.js';
+import { Container, NineSliceSprite, Texture } from 'pixi.js';
 import { SYMBOLS, Sym } from '../math/config';
 import {
   INK,
@@ -16,7 +16,7 @@ import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintCoin, paintEgyptFrame, paintGoldFlakes, paintGrain, paintReelSurround, paintRisingColumn, paintStonePanel } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintGem, paintGoldFlakes, paintGrain, paintSeal, paintReelSurround, paintRisingColumn, paintStonePanel } from './art/egyptFrame';
 
 /** the painted symbols are 512 px: keep all of it, the screens that show it are getting bigger */
 export const TEX_SIZE = 512;
@@ -56,7 +56,8 @@ export interface SymbolTextures {
   shade: Texture;
   /** the winged rubies of the frame, cut out to crown the big screens */
   crest: Texture;
-  crestLow: Texture;
+  /** cartouche for amounts, see makeSeal */
+  seal: Texture;
   veins: Texture;
   glow: Texture;
   spore: Texture;
@@ -132,6 +133,34 @@ function insetCanvas(src: HTMLCanvasElement, k: number): HTMLCanvasElement {
 function cropFrame(frame: HTMLImageElement | null, x: number, y: number, w: number, h: number): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(w, h);
   if (frame) ctx.drawImage(frame, x, y, w, h, 0, 0, w, h);
+  return c;
+}
+
+/** The winged ruby of the frame, freed from the rails it grows out of. */
+function cleanCrest(frame: HTMLImageElement | null): HTMLCanvasElement {
+  const c = cropFrame(frame, 515, 0, 645, 172);
+  const ctx = c.getContext('2d')!;
+  // the outline of the wing's tips, on the left; the right wing mirrors it round the ruby
+  const stub: [number, number][] = [[-8, 30], [0, 30], [4, 38], [12, 47], [14, 52], [13, 59], [20, 66], [32, 73], [33, 81], [44, 88], [48, 92], [46, 100], [60, 106], [82, 118], [84, 180], [-8, 180]];
+  ctx.globalCompositeOperation = 'destination-out';
+  for (const mirror of [false, true]) {
+    ctx.beginPath();
+    for (const [x, y] of stub) ctx.lineTo(mirror ? 642 - x : x, y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  return c;
+}
+
+/** A cartouche of the given size, centred on its origin. */
+export function makeSeal(tex: Texture, w: number, h: number): Container {
+  const c = new Container();
+  const k = h / 300;
+  const s = new NineSliceSprite({ texture: tex, leftWidth: 240, rightWidth: 240, topHeight: 40, bottomHeight: 40, anchor: 0.5 });
+  s.width = Math.max(500, w / k);
+  s.height = tex.height;
+  s.scale.set(k);
+  c.addChild(s);
   return c;
 }
 
@@ -229,7 +258,7 @@ function drawExpanded(symbolCanvas: HTMLCanvasElement, w: number, h: number): HT
     ctx.fillRect(14, y - 2, w - 28, 5);
     ctx.fillStyle = goldGrad(ctx, 14, y, w - 14, y);
     ctx.fillRect(14, y - 1, w - 28, 2.5);
-    gem(ctx, w / 2, y, 6.5);
+    paintGem(ctx, w / 2, y, 6.5);
   }
   const size = w * 0.74;
   for (let r = 0; r < rows; r++) {
@@ -255,22 +284,6 @@ function drawExpanded(symbolCanvas: HTMLCanvasElement, w: number, h: number): HT
   ctx.lineWidth = 1;
   ctx.stroke();
   return c;
-}
-
-/** A small cut ruby in a gold bezel. */
-function gem(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  ctx.beginPath();
-  ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
-  ctx.fillStyle = goldGrad(ctx, x - r, y - r, x + r, y + r);
-  ctx.fill();
-  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, 0.5, x, y, r);
-  g.addColorStop(0, '#ffb4a0');
-  g.addColorStop(0.4, '#e01830');
-  g.addColorStop(1, '#5a0410');
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = g;
-  ctx.fill();
 }
 
 function radial(size: number, stops: [number, string][]): HTMLCanvasElement {
@@ -369,8 +382,8 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     surround: Texture.from(paintReelSurround(BOARD_W + (FRAME_MARGIN_X + 16) * 2, BOARD_H + (FRAME_MARGIN_Y + 16) * 2, FRAME_MARGIN_X + 16, FRAME_MARGIN_Y + 16, BOARD_W, BOARD_H)),
     reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
-    crest: Texture.from(cropFrame(frameArt, 515, 0, 645, 172)),
-    crestLow: Texture.from(cropFrame(frameArt, 535, 778, 605, 163)),
+    crest: Texture.from(cleanCrest(frameArt)),
+    seal: Texture.from(paintSeal()),
     veins: Texture.from(paintRisingColumn(CELL_W, BOARD_H)),
     glow: Texture.from(radial(256, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
     spore: Texture.from(radial(64, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),

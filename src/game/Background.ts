@@ -164,6 +164,7 @@ export class Background extends Container {
   private boltLight = 0;
   private rayLayer: Sprite;
   private dunes: Sprite;
+  private duneScale = 1;
   /** sand blown low along the ground */
   private blown: TilingSprite;
   private view = { x: 0, y: 0 };
@@ -348,7 +349,7 @@ export class Background extends Container {
     this.redWash.position.set(w / 2, h * 0.45);
     this.redWash.width = w * 1.2;
     this.redWash.height = h * 1.2;
-    this.dunes.scale.set(Math.max(w / 2300, 0.62));
+    this.duneScale = Math.max(w / 2300, 0.62);
     this.blown.width = w * 1.2;
     this.blown.height = h * 0.3;
     this.blown.position.set(-w * 0.1, h * 0.72);
@@ -360,7 +361,11 @@ export class Background extends Container {
   }
 
   private placeDunes(): void {
-    this.dunes.position.set(this.w / 2 - this.view.x * 20, this.h - this.ground + 150 * this.dunes.scale.y - this.view.y * 7);
+    // they are close to the camera: when it dives they swell and sink out of the bottom of the frame
+    const z = this.camera.k - 1;
+    this.dunes.scale.set(this.duneScale * (1 + z * 0.7));
+    this.dunes.alpha = Math.max(0, 1 - z * 1.6);
+    this.dunes.position.set(this.w / 2 - this.view.x * 20, this.h - this.ground + 150 * this.dunes.scale.y - this.view.y * 7 + z * this.h * 0.75);
   }
 
   /** Where the viewer's eye is (-1..1): the far temple moves a little, the near dunes more. */
@@ -381,6 +386,7 @@ export class Background extends Container {
     const f = [this.camera.fx - W / 2, this.camera.fy - H / 2];
     this.sceneC.scale.set(s);
     this.sceneC.position.set(this.w / 2 - f[0] * (s - base) - this.view.x * 11, this.h / 2 - f[1] * (s - base) - this.view.y * 5);
+    this.placeDunes();
   }
 
   /** Dolly the camera into (k > 1) or back out of the pyramid. */
@@ -524,7 +530,7 @@ export class Background extends Container {
     this.blown.tilePosition.x += dt * (150 + f * 170);
     this.blown.tilePosition.y += dt * 8;
     this.blown.tint = f > 0.5 ? 0xff5a40 : 0xd8a868;
-    this.blown.alpha = 0.1 + f * 0.1;
+    this.blown.alpha = (0.1 + f * 0.1) * this.dunes.alpha;
     this.fog.tilePosition.x += dt * 12;
     this.fog.tilePosition.y += dt * 3;
     this.fog.tint = f > 0.5 ? 0xa02030 : 0x6a5070;

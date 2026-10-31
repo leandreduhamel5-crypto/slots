@@ -716,49 +716,188 @@ export function paintGoldFlakes(): HTMLCanvasElement[] {
   ];
 }
 
-/** The band the strain reel runs along: lapis between two gold rails, fading out at both ends. */
-export function paintStrainBand(w: number, h: number): HTMLCanvasElement {
+/** A small cut ruby in a gold bezel. */
+export function paintGem(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.beginPath();
+  ctx.arc(x, y, r + r * 0.4, 0, Math.PI * 2);
+  ctx.fillStyle = goldGrad(ctx, x - r, y - r, x + r, y + r);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(50,24,2,0.85)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, 0.5, x, y, r);
+  g.addColorStop(0, '#ffb4a0');
+  g.addColorStop(0.4, '#e01830');
+  g.addColorStop(1, '#5a0410');
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = g;
+  ctx.fill();
+}
+
+/** Lapis flecked with gold. */
+function lapis(ctx: CanvasRenderingContext2D, w: number, h: number, seed: number): void {
+  const g = ctx.createRadialGradient(w / 2, h * 0.42, 10, w / 2, h / 2, Math.max(w, h) * 0.62);
+  g.addColorStop(0, '#1d3c8c');
+  g.addColorStop(0.55, '#102258');
+  g.addColorStop(1, '#050a20');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  const r = seeded(seed);
+  for (let i = 0; i < (w * h) / 900; i++) {
+    ctx.fillStyle = `rgba(255,214,130,${0.06 + r() * 0.34})`;
+    ctx.fillRect(r() * w, r() * h, 1 + r() * 1.5, 1 + r() * 1.5);
+  }
+}
+
+/**
+ * The plaque of the big screens, of one family with the frame: a pylon of gold with stepped
+ * corners and a rubied rim, round a well of lapis.
+ */
+export function paintPlaque(w: number, h: number): HTMLCanvasElement {
   const S = 2;
-  const [c, ctx] = makeCanvas(w * S, h * S);
+  const pad = 30;
+  const [c, ctx] = makeCanvas((w + pad * 2) * S, (h + pad * 2) * S);
   ctx.scale(S, S);
-  const bg = ctx.createLinearGradient(0, 0, 0, h);
-  bg.addColorStop(0, '#050a1e');
-  bg.addColorStop(0.5, '#142a64');
-  bg.addColorStop(1, '#050a1e');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, w, h);
-  // the speckle of gold in real lapis
-  const r = seeded(41);
-  for (let i = 0; i < 520; i++) {
-    ctx.fillStyle = `rgba(255,214,130,${0.08 + r() * 0.34})`;
-    ctx.fillRect(r() * w, r() * h, 1 + r() * 1.6, 1 + r() * 1.6);
+  ctx.translate(pad, pad);
+  const STEP = 30;
+  const pylon = (i: number) => {
+    const s = STEP;
+    ctx.beginPath();
+    ctx.moveTo(i + s, i);
+    ctx.lineTo(w - i - s, i);
+    ctx.lineTo(w - i - s, i + s);
+    ctx.lineTo(w - i, i + s);
+    ctx.lineTo(w - i, h - i - s);
+    ctx.lineTo(w - i - s, h - i - s);
+    ctx.lineTo(w - i - s, h - i);
+    ctx.lineTo(i + s, h - i);
+    ctx.lineTo(i + s, h - i - s);
+    ctx.lineTo(i, h - i - s);
+    ctx.lineTo(i, i + s);
+    ctx.lineTo(i + s, i + s);
+    ctx.closePath();
+  };
+  ctx.save();
+  ctx.filter = 'blur(14px)';
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  pylon(0);
+  ctx.fill();
+  ctx.restore();
+  pylon(0);
+  ctx.fillStyle = goldGrad(ctx, 0, 0, w * 0.22, h);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(50,24,2,0.95)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  pylon(3);
+  ctx.strokeStyle = 'rgba(255,246,214,0.6)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // the rim is engraved all the way round
+  ctx.fillStyle = 'rgba(70,36,4,0.8)';
+  const tick = (x: number, y: number, flat: boolean) => {
+    ctx.beginPath();
+    const [a, b] = flat ? [8, 4.2] : [4.2, 8];
+    ctx.moveTo(x - a, y);
+    ctx.lineTo(x, y - b);
+    ctx.lineTo(x + a, y);
+    ctx.lineTo(x, y + b);
+    ctx.closePath();
+    ctx.fill();
+  };
+  for (let x = STEP + 34; x < w - STEP - 24; x += 34) {
+    tick(x, 11, true);
+    tick(x, h - 11, true);
   }
-  for (const y of [0, h - 15]) {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, y === 0 ? 15 : y - 5, w, 5);
-    ctx.fillStyle = goldGrad(ctx, 0, y, 0, y + 15);
-    ctx.fillRect(0, y, w, 15);
-    ctx.fillStyle = 'rgba(255,245,210,0.65)';
-    ctx.fillRect(0, y + 2, w, 1.5);
-    ctx.fillStyle = 'rgba(70,36,4,0.85)';
-    for (let x = 12; x < w; x += 42) {
-      ctx.beginPath();
-      ctx.moveTo(x, y + 3);
-      ctx.lineTo(x + 8, y + 7.5);
-      ctx.lineTo(x, y + 12);
-      ctx.lineTo(x - 8, y + 7.5);
-      ctx.closePath();
-      ctx.fill();
-    }
+  for (let y = STEP + 30; y < h - STEP - 20; y += 34) {
+    tick(11, y, false);
+    tick(w - 11, y, false);
   }
-  ctx.globalCompositeOperation = 'destination-in';
-  const fade = ctx.createLinearGradient(0, 0, w, 0);
-  fade.addColorStop(0, 'rgba(0,0,0,0)');
-  fade.addColorStop(0.16, 'rgba(0,0,0,1)');
-  fade.addColorStop(0.84, 'rgba(0,0,0,1)');
-  fade.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = fade;
+  const well = 22;
+  ctx.save();
+  pylon(well);
+  ctx.clip();
+  ctx.translate(well, well);
+  lapis(ctx, w - well * 2, h - well * 2, 41);
+  ctx.restore();
+  pylon(well);
+  ctx.strokeStyle = '#080408';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  pylon(well + 5);
+  ctx.strokeStyle = 'rgba(242,194,90,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  for (const [x, y] of [[STEP - 2, STEP - 2], [w - STEP + 2, STEP - 2], [STEP - 2, h - STEP + 2], [w - STEP + 2, h - STEP + 2]]) paintGem(ctx, x, y, 9);
+  return c;
+}
+
+/** Sinks the ends of the strain drum into the dark. */
+export function paintDrumShade(w: number, h: number): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(w, h);
+  const g = ctx.createLinearGradient(0, 0, w, 0);
+  g.addColorStop(0, 'rgba(3,7,26,0.96)');
+  g.addColorStop(0.28, 'rgba(3,7,26,0)');
+  g.addColorStop(0.72, 'rgba(3,7,26,0)');
+  g.addColorStop(1, 'rgba(3,7,26,0.96)');
+  ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
+  const v = ctx.createLinearGradient(0, 0, 0, h);
+  v.addColorStop(0, 'rgba(3,7,26,0.55)');
+  v.addColorStop(0.22, 'rgba(3,7,26,0)');
+  v.addColorStop(0.78, 'rgba(3,7,26,0)');
+  v.addColorStop(1, 'rgba(3,7,26,0.55)');
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, w, h);
+  return c;
+}
+
+/** A cartouche for amounts: gold round lapis, a ruby at each end. Stretches between its end caps. */
+export function paintSeal(): HTMLCanvasElement {
+  const S = 2;
+  const pad = 14;
+  const w = 520;
+  const h = 150;
+  const [c, ctx] = makeCanvas((w + pad * 2) * S, (h + pad * 2) * S);
+  ctx.scale(S, S);
+  ctx.translate(pad, pad);
+  const pill = (i: number) => {
+    ctx.beginPath();
+    ctx.roundRect(i, i, w - i * 2, h - i * 2, (h - i * 2) / 2);
+  };
+  ctx.save();
+  ctx.filter = 'blur(7px)';
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  pill(0);
+  ctx.fill();
+  ctx.restore();
+  pill(0);
+  ctx.fillStyle = goldGrad(ctx, 0, 0, 0, h);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(50,24,2,0.95)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  pill(3);
+  ctx.strokeStyle = 'rgba(255,246,214,0.6)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.save();
+  pill(12);
+  ctx.clip();
+  ctx.translate(12, 12);
+  lapis(ctx, w - 24, h - 24, 53);
+  ctx.restore();
+  pill(12);
+  ctx.strokeStyle = '#080408';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  pill(17);
+  ctx.strokeStyle = 'rgba(242,194,90,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  paintGem(ctx, 44, h / 2, 13);
+  paintGem(ctx, w - 44, h / 2, 13);
   return c;
 }
 
