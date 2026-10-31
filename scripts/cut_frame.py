@@ -5,7 +5,7 @@ colour of the nearest solid paint. Run from the repo root: python scripts/cut_fr
 """
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageOps
 from scipy import ndimage as ni
 
 rgb = np.asarray(Image.open('scripts/frame_source.webp').convert('RGB'))
@@ -19,3 +19,17 @@ solid = alpha > 0.98
 ind = ni.distance_transform_edt(~solid, return_distances=False, return_indices=True)
 out = np.dstack([rgb[ind[0], ind[1]], (alpha * 255).astype(np.uint8)])
 Image.fromarray(out, 'RGBA').save('src/game/art/egypt/frame.webp', 'WEBP', quality=95, alpha_quality=100, method=6)
+
+# pieces of the frame for the console (CSS)
+frame = Image.fromarray(out, 'RGBA')
+D = 'src/game/art/egypt/'
+ruby = frame.crop((781, 11, 889, 119)).resize((256, 256), Image.LANCZOS)
+disc = Image.new('L', (256 * 4, 256 * 4), 0)
+ImageDraw.Draw(disc).ellipse((6, 6, 1018, 1018), fill=255)
+ruby.putalpha(disc.resize((256, 256), Image.LANCZOS))
+ruby.save(D + 'ui_ruby.webp', 'WEBP', quality=94, alpha_quality=100, method=6)
+strip = frame.crop((215, 42, 500, 106))
+rail = Image.new('RGBA', (strip.width * 2, strip.height), (0, 0, 0, 0))
+rail.paste(strip, (0, 0))
+rail.paste(ImageOps.mirror(strip), (strip.width, 0))
+rail.save(D + 'ui_rail.webp', 'WEBP', quality=93, alpha_quality=100, method=6)

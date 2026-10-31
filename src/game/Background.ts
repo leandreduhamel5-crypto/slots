@@ -155,6 +155,7 @@ export class Background extends Container {
   private heart: Sprite | null = null;
   private flareV = 0;
   private bolts = new Graphics();
+  private strikeGlow: Sprite;
   private boltLight = 0;
   private rayLayer: Sprite;
   private redWash: Sprite;
@@ -287,7 +288,11 @@ export class Background extends Container {
     this.meteor.anchor.set(0.92, 0.5);
     this.meteor.blendMode = 'add';
     this.meteor.visible = false;
-    this.sceneC.addChild(this.bolts, this.meteor);
+    this.strikeGlow = new Sprite(glowTex);
+    this.strikeGlow.anchor.set(0.5);
+    this.strikeGlow.blendMode = 'add';
+    this.strikeGlow.alpha = 0;
+    this.sceneC.addChild(this.bolts, this.strikeGlow, this.meteor);
 
     this.redWash = new Sprite(sporeTex);
     this.redWash.anchor.set(0.5);
@@ -381,44 +386,75 @@ export class Background extends Container {
       to = [x, ay + ((HORIZON - ay) * Math.abs(x - ax)) / PYRAMID_HALF];
     }
     const from: Pt = [to[0] + (Math.random() - 0.5) * 500, -40];
-    const main = boltPath(from, to, 0.28);
-    const g = this.bolts;
-    g.clear();
-    const stroke = (pts: Pt[], scale: number) => {
-      for (const [w, color, alpha] of [[34, 0xff2020, 0.2], [13, 0xff5a50, 0.5], [5, 0xffc0b0, 0.95], [2.2, 0xffffff, 1]] as const) {
-        g.moveTo(pts[0][0] - W / 2, pts[0][1] - H / 2);
-        for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0] - W / 2, pts[i][1] - H / 2);
-        g.stroke({ width: w * scale, color, alpha, cap: 'round', join: 'round' });
+    const infected = this.feature > 0.5;
+    const glow = infected ? 0xff3020 : 0x5a7cff;
+    const mid = infected ? 0xffa890 : 0xc4d6ff;
+    // a tree of channels: the main bolt, its forks and their twigs
+    const main = boltPath(from, to, 0.24);
+    const tree: { pts: Pt[]; w: number; start: number }[] = [{ pts: main, w: power, start: 0 }];
+    const forkOf = (src: Pt[], w: number, start: number, depth: number) => {
+      const n = depth === 0 ? 3 + Math.floor(power * 4) : 2;
+      for (let k = 0; k < n; k++) {
+        const i = 4 + Math.floor(Math.random() * (src.length * 0.75));
+        const q = src[Math.min(i, src.length - 2)];
+        const r = src[Math.min(i + 1, src.length - 1)];
+        const dir = Math.atan2(r[1] - q[1], r[0] - q[0]) + (Math.random() < 0.5 ? -1 : 1) * (0.35 + Math.random() * 0.6);
+        const len = (depth === 0 ? 120 + Math.random() * 240 : 40 + Math.random() * 90) * (0.6 + power * 0.5);
+        const pts = boltPath(q, [q[0] + Math.cos(dir) * len, q[1] + Math.sin(dir) * len], 0.32);
+        const s0 = start + (i / src.length) * (1 - start);
+        tree.push({ pts, w: w * 0.5, start: s0 });
+        if (depth < 1) forkOf(pts, w * 0.5, s0, depth + 1);
       }
     };
-    stroke(main, power);
-    // forks peel off the main channel
-    for (let k = 0; k < 3 + Math.floor(power * 3); k++) {
-      const i = 6 + Math.floor(Math.random() * (main.length * 0.7));
-      const p = main[Math.min(i, main.length - 2)];
-      const len = 80 + Math.random() * 200 * power;
-      const ang = Math.PI / 2 + (Math.random() - 0.5) * 2.2;
-      stroke(boltPath(p, [p[0] + Math.cos(ang) * len, p[1] + Math.sin(ang) * len], 0.35), power * 0.45);
-    }
-    // impact: a burst of light where it lands
-    g.circle(to[0] - W / 2, to[1] - H / 2, 60 * power).fill({ color: 0xff6a5a, alpha: 0.35 });
-    g.circle(to[0] - W / 2, to[1] - H / 2, 18 * power).fill({ color: 0xffffff, alpha: 0.9 });
-    const o = { v: 1 };
+    forkOf(main, power, 0, 0);
+    const g = this.bolts;
+    const draw = (reveal: number) => {
+      g.clear();
+      for (const b of tree) {
+        const k = (reveal - b.start) / Math.max(0.05, 1 - b.start);
+        if (k <= 0) continue;
+        const count = Math.max(2, Math.ceil(b.pts.length * Math.min(1, k)));
+        // the channel is drawn in lengths, thinner as it runs: a bolt tapers, it is not a cable
+        const chunks = 5;
+        for (let c = 0; c < chunks; c++) {
+          const i0 = Math.floor((c / chunks) * (count - 1));
+          const i1 = Math.ceil(((c + 1) / chunks) * (count - 1));
+          const taper = 1 - (c / chunks) * 0.65;
+          for (const [wd, color, alpha] of [[26, glow, 0.1], [9, glow, 0.32], [3.4, mid, 0.9], [1.5, 0xffffff, 1]] as const) {
+            g.moveTo(b.pts[i0][0] - W / 2, b.pts[i0][1] - H / 2);
+            for (let i = i0 + 1; i <= i1 && i < b.pts.length; i++) g.lineTo(b.pts[i][0] - W / 2, b.pts[i][1] - H / 2);
+            g.stroke({ width: Math.max(0.7, wd * b.w * taper), color, alpha, cap: 'round', join: 'round' });
+          }
+        }
+      }
+    };
+    const o = { v: 1, r: 0 };
     gsap.killTweensOf(this.bolts);
+    this.bolts.alpha = 1;
+    draw(0.02);
+    // the stepped leader races down, then the return stroke lights the whole channel
     gsap
       .timeline({ onUpdate: () => ((this.bolts.alpha = o.v), (this.boltLight = o.v * power)) })
-      .set(o, { v: 1 })
-      .to(o, { v: 0.15, duration: 0.05 })
+      .to(o, { r: 1, duration: 0.08, ease: 'none', onUpdate: () => draw(o.r) })
+      .add(() => {
+        const hit = this.strikeGlow;
+        hit.position.set(to[0] - W / 2, to[1] - H / 2);
+        hit.tint = mid;
+        gsap.killTweensOf(hit);
+        gsap.fromTo(hit, { alpha: 0.9 * power, width: 220, height: 220 }, { alpha: 0, width: 620 * power, height: 620 * power, duration: 0.55, ease: 'power2.out' });
+        if (power >= 0.5) this.onLightning?.(power);
+      })
+      .to(o, { v: 0.2, duration: 0.05 })
       .to(o, { v: 1, duration: 0.03 })
-      .to(o, { v: 0.4, duration: 0.07 })
-      .to(o, { v: 0.9, duration: 0.03 })
-      .to(o, { v: 0, duration: 0.45, ease: 'power2.in' });
-    // the whole sky flashes
-    this.pulse.clear().rect(0, 0, this.w, this.h).fill({ color: 0xffd0c8 });
+      .to(o, { v: 0.35, duration: 0.08 })
+      .to(o, { v: 0.85, duration: 0.03 })
+      .to(o, { v: 0, duration: 0.42, ease: 'power2.in' });
+    // the sky answers, softly
+    this.pulse.clear().rect(0, 0, this.w, this.h).fill({ color: infected ? 0xff9080 : 0xa0b4ff });
     this.pulse.blendMode = 'add';
-    gsap.fromTo(this.pulse, { alpha: 0.28 * power }, { alpha: 0, duration: 0.5, ease: 'power3.out' });
-    this.flare(0.6 * power);
-    this.onLightning?.(power);
+    gsap.fromTo(this.pulse, { alpha: 0.13 * power }, { alpha: 0, duration: 0.55, ease: 'power3.out' });
+    this.flare(0.5 * power);
+    if (power < 0.5) this.onLightning?.(power);
   }
 
   /** Kept for callers: a dramatic strike on the capstone. */

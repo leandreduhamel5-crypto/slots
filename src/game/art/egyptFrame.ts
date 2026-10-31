@@ -514,9 +514,9 @@ export function paintCartouche(width: number, height: number): HTMLCanvasElement
   ctx.fill();
   rr(ctx, x0 + 9, y0 + 9, width - 18, height - 18, r - 9);
   const face = ctx.createLinearGradient(0, y0, 0, y0 + height);
-  face.addColorStop(0, '#24110b');
-  face.addColorStop(0.55, '#0e0605');
-  face.addColorStop(1, '#050202');
+  face.addColorStop(0, '#1c3172');
+  face.addColorStop(0.55, '#101d4c');
+  face.addColorStop(1, '#0a1230');
   ctx.fillStyle = face;
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,194,90,0.6)';
@@ -634,43 +634,6 @@ export function paintArrowHead(): HTMLCanvasElement {
   ctx.strokeStyle = 'rgba(50,24,2,0.9)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
-  return c;
-}
-
-/** Ring of hieroglyphs in light: white, tinted and added at run time. */
-export function paintGlyphRing(size = 512): HTMLCanvasElement {
-  const [c, ctx] = makeCanvas(size, size);
-  const m = size / 2;
-  ctx.translate(m, m);
-  ctx.strokeStyle = '#fff';
-  ctx.lineCap = 'round';
-  for (const [r, w, a] of [[m * 0.97, 4, 0.9], [m * 0.92, 1.5, 0.5], [m * 0.7, 1.5, 0.5], [m * 0.66, 3, 0.8]]) {
-    ctx.globalAlpha = a;
-    ctx.lineWidth = w;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 0.95;
-  ctx.lineWidth = 4;
-  const glyphs: ((x: CanvasRenderingContext2D) => void)[] = [
-    (x) => { x.ellipse(0, -9, 7, 10, 0, 0, Math.PI * 2); x.moveTo(-11, 2); x.lineTo(11, 2); x.moveTo(0, 1); x.lineTo(0, 18); }, // ankh
-    (x) => { x.moveTo(-14, 0); x.quadraticCurveTo(0, -12, 14, 0); x.quadraticCurveTo(0, 10, -14, 0); x.moveTo(3, 0); x.arc(0, 0, 3, 0, Math.PI * 2); }, // eye
-    (x) => { x.moveTo(0, 15); x.quadraticCurveTo(-11, 0, 2, -15); x.quadraticCurveTo(9, 0, 0, 15); }, // reed
-    (x) => { x.arc(0, 0, 10, 0, Math.PI * 2); x.moveTo(-14, 14); x.lineTo(14, 14); }, // sun over the land
-    (x) => { x.moveTo(-13, 12); x.lineTo(0, -13); x.lineTo(13, 12); x.closePath(); }, // pyramid
-  ];
-  const n = 20;
-  for (let i = 0; i < n; i++) {
-    ctx.save();
-    ctx.rotate((i / n) * Math.PI * 2);
-    ctx.translate(0, -m * 0.81);
-    ctx.scale(m / 230, m / 230);
-    ctx.beginPath();
-    glyphs[i % glyphs.length](ctx);
-    ctx.stroke();
-    ctx.restore();
-  }
   return c;
 }
 

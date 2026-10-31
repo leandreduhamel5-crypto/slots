@@ -21,24 +21,6 @@ const DEFS = `<svg class="hud-defs" width="0" height="0" aria-hidden="true"><def
   </linearGradient>
 </defs></svg>`;
 
-/** The spin medallion's engraved band: ankh, eye and sun glyphs alternating with studs. */
-function glyphRing(): string {
-  const n = 12;
-  const parts: string[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * 360;
-    const g =
-      i % 3 === 0
-        ? '<ellipse cx="0" cy="-3" rx="1.7" ry="2.3"/><path d="M-3 0h6M0 -0.6v5.2"/>'
-        : i % 3 === 1
-          ? '<path d="M-3.6 0q3.6-3.2 7.2 0q-3.6 2.6-7.2 0z"/><circle cx="0" cy="0" r="0.9"/>'
-          : '<circle cx="0" cy="0" r="2.4"/><circle cx="0" cy="0" r="0.6"/>';
-    parts.push(`<g transform="rotate(${a}) translate(0 -42)">${g}</g>`);
-    parts.push(`<circle transform="rotate(${a + 15}) translate(0 -42)" r="1.1" class="stud"/>`);
-  }
-  return `<svg viewBox="-50 -50 100 100">${parts.join('')}</svg>`;
-}
-
 export interface HudHandlers {
   spin(): void;
   betDelta(d: number): void;
@@ -47,6 +29,7 @@ export interface HudHandlers {
   openInfo(): void;
   auto(count: number): void;
   refill(): void;
+  buy(): void;
 }
 
 export class Hud {
@@ -77,9 +60,10 @@ export class Hud {
           <div class="c-meter c-betmeter"><label>Mise</label><span data-k="bet">0,00</span></div>
           <button class="c-btn c-step" data-k="betInc" aria-label="Augmenter la mise">${ICONS.plus}</button>
         </div>
+        <button class="c-buy" data-k="buy" aria-label="Acheter le bonus"><b>Achat bonus</b><span data-k="buyPrice">0,00</span></button>
         <div class="c-play" data-k="play">
           <button class="c-btn c-auto" data-k="auto" aria-label="Jeu automatique">${ICONS.auto}</button>
-          <button class="spin" data-k="spin" aria-label="Lancer"><span class="spin-halo"></span><span class="spin-ring">${glyphRing()}</span><span class="spin-dome"></span><span class="spin-icon" data-k="spinIcon">${ICONS.spin}</span><span class="spin-count" data-k="autoCount"></span></button>
+          <button class="spin" data-k="spin" aria-label="Lancer"><span class="spin-halo"></span><span class="spin-gleam"></span><span class="spin-icon" data-k="spinIcon">${ICONS.spin}</span><span class="spin-count" data-k="autoCount"></span></button>
           <button class="c-btn c-turbo" data-k="turbo" aria-label="Turbo">${ICONS.turbo}</button>
         </div>
       </div>
@@ -88,6 +72,17 @@ export class Hud {
         <div>${[10, 25, 50, 100].map((n) => `<button data-auto="${n}">${n}</button>`).join('')}</div>
       </div>
       <button class="refill" data-k="refill">Recharger 1 000 crédits</button>
+      <div class="buy-modal" data-k="buyModal">
+        <div class="buy-card">
+          <h3>Acheter le bonus</h3>
+          <p>Entrez directement dans la pyramide avec <b>10 tours gratuits</b> et une souche qui envahit les rouleaux.</p>
+          <div class="buy-cost"><label>Prix</label><span data-k="buyCost">0,00</span></div>
+          <div class="buy-actions">
+            <button data-k="buyNo">Annuler</button>
+            <button class="yes" data-k="buyYes">Acheter</button>
+          </div>
+        </div>
+      </div>
     `;
     this.root.querySelectorAll<HTMLElement>('[data-k]').forEach((e) => (this.el[e.dataset.k!] = e));
     this.autoMenu = this.el.autoMenu;
@@ -99,6 +94,12 @@ export class Hud {
     this.el.sound.addEventListener('click', () => h.toggleSound());
     this.el.info.addEventListener('click', () => h.openInfo());
     this.el.refill.addEventListener('click', () => h.refill());
+    this.el.buy.addEventListener('click', () => this.el.buyModal.classList.add('open'));
+    this.el.buyNo.addEventListener('click', () => this.el.buyModal.classList.remove('open'));
+    this.el.buyYes.addEventListener('click', () => {
+      this.el.buyModal.classList.remove('open');
+      h.buy();
+    });
     this.el.auto.addEventListener('click', (e) => {
       e.stopPropagation();
       if (this.root.classList.contains('autoplaying')) h.auto(0);
@@ -121,14 +122,24 @@ export class Hud {
     const q = (c: string) => this.root.querySelector<HTMLElement>(c)!;
     const e = this.el;
     if (mobile) {
-      q('.c-row1').append(e.balanceBox, e.winBox);
+      q('.c-row1').append(e.balanceBox, e.buy, e.winBox);
       q('.c-row2').append(e.sys, e.betBox, e.play);
     } else {
-      q('.c-left').append(e.sys, e.balanceBox);
+      q('.c-left').append(e.sys, e.balanceBox, e.buy);
       q('.c-center').append(e.play);
       q('.c-right').append(e.betBox, e.winBox);
     }
     this.root.classList.toggle('mobile', mobile);
+  }
+
+  setBuy(price: number, enabled: boolean): void {
+    this.el.buyPrice.textContent = fmt(price);
+    this.el.buyCost.textContent = fmt(price);
+    (this.el.buy as HTMLButtonElement).disabled = !enabled;
+  }
+
+  get buyOpen(): boolean {
+    return this.el.buyModal.classList.contains('open');
   }
 
   setBalance(v: number): void {

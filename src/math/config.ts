@@ -119,3 +119,6 @@ export function buildStrip(counts: number[], offset: number): Sym[] {
 
 export const BASE_STRIPS: Sym[][] = BASE_COUNTS.map((c, r) => buildStrip(c, r));
 export const FREE_STRIPS: Sym[][] = FREE_COUNTS.map((c, r) => buildStrip(c, r + 11));
+
+/** Price of buying the free spins, in total bets */
+export const BONUS_BUY_X = 105;

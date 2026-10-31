@@ -192,6 +192,12 @@ export class Game {
         this.server.refill();
         this.refreshHud();
       },
+      buy: () => {
+        this.audio.click();
+        this.autoLeft = 0;
+        this.hud.setAuto(0);
+        void this.play(true);
+      },
     });
     this.paytable = new Paytable(tex.images);
     document.body.append(this.hud.root, this.paytable.root);
@@ -200,7 +206,7 @@ export class Game {
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
         if (this.paytable.isOpen) this.paytable.close();
-        else this.onSpinPressed();
+        else if (!this.hud.buyOpen) this.onSpinPressed();
       }
     });
     const unlock = () => this.audio.unlock();
@@ -416,6 +422,7 @@ export class Game {
     this.hud.setBalance(this.server.state.balance);
     this.hud.setBet(BET_LEVELS[i], i > 0 && !this.busy, i < BET_LEVELS.length - 1 && !this.busy);
     this.hud.setRefill(!this.busy && this.server.state.balance < this.server.bet);
+    this.hud.setBuy(this.server.bonusPrice, !this.busy && this.server.state.balance >= this.server.bonusPrice);
   }
 
   private changeBet(d: number): void {
@@ -443,9 +450,9 @@ export class Game {
     void this.play();
   }
 
-  private async play(): Promise<void> {
+  private async play(bought = false): Promise<void> {
     if (this.busy) return;
-    if (this.server.state.balance < this.server.bet) {
+    if (this.server.state.balance < (bought ? this.server.bonusPrice : this.server.bet)) {
       this.autoLeft = 0;
       this.hud.setAuto(0);
       this.refreshHud();
@@ -454,9 +461,10 @@ export class Game {
     this.busy = true;
     this.hud.setSpinning(true);
     this.hud.setWin(0);
+    this.refreshHud();
     let round: Round;
     try {
-      round = await this.server.spin();
+      round = await this.server.spin(bought);
     } catch {
       this.busy = false;
       this.hud.setSpinning(false);

@@ -30,9 +30,7 @@ interface Rig {
   body: Container;
   parts: Record<string, Sprite>;
   glow: Sprite;
-  burst: Sprite;
   halo: Sprite;
-  ring: Sprite;
   shine: Sprite;
   src: Sprite;
   tweens: gsap.core.Animation[];
@@ -422,8 +420,6 @@ export class ReelBoard extends Container {
           rig.tweens.push(
             gsap.to(rig.body.scale, { x: sc * 1.12, y: sc * 1.12, duration: 0.2, yoyo: true, repeat: -1, repeatDelay: 0.25, ease: 'power2.out' }),
             gsap.to(rig.glow, { alpha: 0.8, duration: 0.2, yoyo: true, repeat: -1, repeatDelay: 0.25 }),
-            gsap.to(rig.burst, { alpha: 0.5, duration: 0.3 }),
-            gsap.to(rig.burst, { rotation: Math.PI * 2, duration: 5, repeat: -1, ease: 'none' }),
           );
           this.throbbing.push(rig);
         }
@@ -465,12 +461,6 @@ export class ReelBoard extends Container {
     const root = new Container();
     const c = cellCenter(reel, row);
     root.position.set(c.x, c.y);
-    const burst = new Sprite(this.tex.sunburst);
-    burst.anchor.set(0.5);
-    burst.width = burst.height = CELL_W * 1.7;
-    burst.blendMode = 'add';
-    burst.tint = SYMBOL_GLOW[sym] ?? COLORS.yellow;
-    burst.alpha = 0;
     const halo = new Sprite(this.tex.glow);
     halo.anchor.set(0.5);
     halo.width = CELL_W * 1.5;
@@ -478,15 +468,9 @@ export class ReelBoard extends Container {
     halo.blendMode = 'add';
     halo.tint = SYMBOL_GLOW[sym] ?? COLORS.yellow;
     halo.alpha = 0;
-    const ring = new Sprite(this.tex.glyphRing);
-    ring.anchor.set(0.5);
-    ring.width = ring.height = Math.min(CELL_W, CELL_H) * 1.02;
-    ring.blendMode = 'add';
-    ring.tint = 0xffc860;
-    ring.alpha = 0;
     const body = new Container();
     body.scale.set(SYMBOL_SIZE / TEX_SIZE);
-    root.addChild(halo, burst, ring, body);
+    root.addChild(halo, body);
     const parts: Record<string, Sprite> = {};
     const r = this.tex.rigs.get(sym);
     const add = (t: import('pixi.js').Texture) => {
@@ -513,14 +497,14 @@ export class ReelBoard extends Container {
     shine.mask = shineMask;
     src.alpha = 0;
     this.rigLayer.addChild(root);
-    const rig: Rig = { key, reel, row, sym, root, body, parts, glow, burst, halo, ring, shine, src, tweens: [] };
+    const rig: Rig = { key, reel, row, sym, root, body, parts, glow, halo, shine, src, tweens: [] };
     this.rigs.set(key, rig);
     return rig;
   }
 
   private dropRig(rig: Rig): void {
     for (const t of rig.tweens) t.kill();
-    gsap.killTweensOf([rig.body, rig.body.scale, rig.glow, rig.burst, rig.burst.scale, rig.halo, rig.halo.scale, rig.ring, rig.ring.scale, rig.shine, ...Object.values(rig.parts), ...Object.values(rig.parts).map((p) => p.scale)]);
+    gsap.killTweensOf([rig.body, rig.body.scale, rig.glow, rig.halo, rig.halo.scale, rig.shine, ...Object.values(rig.parts), ...Object.values(rig.parts).map((p) => p.scale)]);
     rig.src.alpha = 1;
     rig.root.destroy({ children: true });
     this.rigs.delete(rig.key);
@@ -598,11 +582,31 @@ export class ReelBoard extends Container {
         tl.to(b, { rotation: 0.05 * amp, duration: 0.09, yoyo: true, repeat: 5, ease: 'sine.inOut' }, 0.18);
         break;
       case Sym.BLOOD: // Eye of Horus: throbs
-        tl.to(rig.burst, { alpha: 0.8, duration: 0.12 }, 0.3).to(rig.burst, { alpha: 0.4, duration: 0.6 }, 0.45);
+        tl.to(rig.glow, { alpha: 0.3, duration: 0.14 }, 0.3).to(rig.glow, { alpha: 0.05, duration: 0.6 }, 0.45);
         break;
       default: // royals
         // the royals simply catch the light
     }
+  }
+
+  /** A four-pointed star of light, on and off, somewhere on the symbol's edge. */
+  private twinkle(rig: Rig, delay: number): void {
+    const star = new Sprite(this.tex.star);
+    star.anchor.set(0.5);
+    star.blendMode = 'add';
+    star.tint = 0xffe6b0;
+    const a = Math.random() * Math.PI * 2;
+    star.position.set(Math.cos(a) * SYMBOL_SIZE * (0.26 + Math.random() * 0.2), Math.sin(a) * SYMBOL_SIZE * (0.26 + Math.random() * 0.2));
+    const size = (26 + Math.random() * 26) / star.texture.width;
+    star.scale.set(0);
+    rig.root.addChild(star);
+    rig.tweens.push(
+      gsap
+        .timeline({ delay, repeat: -1, repeatDelay: 0.9 + Math.random() * 1.2 })
+        .to(star.scale, { x: size, y: size, duration: 0.2, ease: 'sine.out' })
+        .to(star, { rotation: 0.8, duration: 0.45, ease: 'none' }, 0)
+        .to(star.scale, { x: 0, y: 0, duration: 0.25, ease: 'sine.in' }, 0.2),
+    );
   }
 
   private performIdle(rig: Rig): void {
@@ -660,9 +664,8 @@ export class ReelBoard extends Container {
   }
 
   /**
-   * A winning symbol ignites: a flash, light swelling behind it, a ring of hieroglyphs opening and
-   * turning, and the symbol rising toward us. Then it stays alive: it breathes, the light comes
-   * and goes, a blade of light crosses it.
+   * A winning symbol catches the light: it comes forward into a warm glow of gold, a blade of
+   * light crosses it and stars of light twinkle on its edges, like sun on polished metal.
    */
   private performWin(rig: Rig, strong: boolean, delay: number): void {
     const b = rig.body;
@@ -670,26 +673,19 @@ export class ReelBoard extends Container {
     const amp = strong ? 1 : 0.65;
     const pos = cellCenter(rig.reel, rig.row);
     const hs = rig.halo.scale.x;
-    const rs = rig.ring.scale.x;
-    const up = s * (1 + 0.14 * amp);
+    const up = s * (1 + 0.13 * amp);
     const tl = gsap.timeline({ delay });
-    // ignition
-    tl.fromTo(rig.halo, { alpha: 0 }, { alpha: strong ? 0.7 : 0.5, duration: 0.14, ease: 'power2.out' }, 0)
-      .to(rig.halo, { alpha: strong ? 0.34 : 0.24, duration: 0.6, ease: 'sine.out' }, 0.14)
-      .fromTo(rig.halo.scale, { x: hs * 0.5, y: hs * 0.5 }, { x: hs, y: hs, duration: 0.4, ease: 'power3.out' }, 0)
-      .fromTo(rig.ring, { alpha: 0 }, { alpha: strong ? 0.6 : 0.45, duration: 0.3, ease: 'sine.out' }, 0.06)
-      .fromTo(rig.ring.scale, { x: rs * 1.4, y: rs * 1.4 }, { x: rs, y: rs, duration: 0.5, ease: 'power3.out' }, 0.06)
-      .to(rig.burst, { alpha: strong ? 0.22 : 0.12, duration: 0.3 }, 0.06)
-      .to(b.scale, { x: up, y: up, duration: 0.36, ease: 'power3.out' }, 0)
-      .fromTo(rig.glow, { alpha: 0.2 }, { alpha: 0.05, duration: 0.7, ease: 'sine.out' }, 0);
-    // alive
+    tl.fromTo(rig.halo, { alpha: 0 }, { alpha: strong ? 0.62 : 0.42, duration: 0.2, ease: 'sine.out' }, 0)
+      .to(rig.halo, { alpha: strong ? 0.3 : 0.2, duration: 0.7, ease: 'sine.out' }, 0.2)
+      .fromTo(rig.halo.scale, { x: hs * 0.7, y: hs * 0.7 }, { x: hs, y: hs, duration: 0.45, ease: 'power2.out' }, 0)
+      .to(b.scale, { x: up, y: up, duration: 0.38, ease: 'power3.out' }, 0)
+      .fromTo(rig.glow, { alpha: 0.18 }, { alpha: 0.04, duration: 0.7, ease: 'sine.out' }, 0);
     rig.tweens.push(
-      gsap.to(rig.ring, { rotation: Math.PI * 2, duration: 16, repeat: -1, ease: 'none', delay }),
-      gsap.to(rig.burst, { rotation: -Math.PI * 2, duration: 22, repeat: -1, ease: 'none', delay }),
-      gsap.to(b.scale, { x: up * 0.965, y: up * 0.965, duration: 1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.45 }),
-      gsap.to(rig.halo, { alpha: strong ? 0.46 : 0.32, duration: 1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.8 }),
-      gsap.fromTo(rig.shine, { x: -TEX_SIZE }, { x: TEX_SIZE, duration: 0.7, ease: 'power1.inOut', repeat: -1, repeatDelay: 1.3, delay: delay + 0.1 }),
+      gsap.to(b.scale, { x: up * 0.97, y: up * 0.97, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.45 }),
+      gsap.to(rig.halo, { alpha: strong ? 0.4 : 0.28, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.9 }),
+      gsap.fromTo(rig.shine, { x: -TEX_SIZE }, { x: TEX_SIZE, duration: 0.75, ease: 'power1.inOut', repeat: -1, repeatDelay: 1.5, delay: delay + 0.1 }),
     );
+    for (let i = 0; i < (strong ? 5 : 3); i++) this.twinkle(rig, delay + 0.15 + i * 0.26);
     // one-shot particle effects, so a looping win cycle doesn't flood the screen
     const once = (fn: () => void) => rig.tweens.push(gsap.delayedCall(delay + 0.3, fn));
     once(() => this.fx.sand(pos.x, pos.y + CELL_H * 0.2, CELL_W * 0.7, strong ? 22 : 10, 1.1));

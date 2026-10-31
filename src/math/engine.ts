@@ -135,11 +135,18 @@ function round2(x: number): number {
   return Math.round(x * 100) / 100;
 }
 
-export function playRound(rng: Rng, bet: number): Round {
+/** One base-game spin; a bought bonus keeps drawing until the spin triggers the free spins. */
+function baseSpin(rng: Rng, bet: number, bought: boolean): ReturnType<typeof spinStops> {
+  let b = spinStops(rng, BASE_STRIPS);
+  while (bought && !evaluateScatter(b.grid, bet)) b = spinStops(rng, BASE_STRIPS);
+  return b;
+}
+
+export function playRound(rng: Rng, bet: number, bought = false): Round {
   const lineBet = bet / LINES.length;
   const cap = bet * MAX_WIN_X;
 
-  const b = spinStops(rng, BASE_STRIPS);
+  const b = baseSpin(rng, bet, bought);
   const lineWins = evaluateLines(b.grid, lineBet);
   const scatter = evaluateScatter(b.grid, bet);
   let total = Math.min(cap, sumWins(lineWins, scatter, []));

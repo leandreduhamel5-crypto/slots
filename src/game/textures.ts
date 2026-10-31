@@ -16,7 +16,7 @@ import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintCoin, paintEgyptFrame, paintGlyphRing, paintReelSurround, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintReelSurround, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
 
 /** the painted symbols are 512 px: keep all of it, the screens that show it are getting bigger */
 export const TEX_SIZE = 512;
@@ -52,8 +52,9 @@ export interface SymbolTextures {
   surround: Texture;
   reelPanels: Texture[];
   shade: Texture;
-  /** ring of hieroglyphs turning behind a winning symbol */
-  glyphRing: Texture;
+  /** the winged rubies of the frame, cut out to crown the big screens */
+  crest: Texture;
+  crestLow: Texture;
   veins: Texture;
   glow: Texture;
   spore: Texture;
@@ -123,6 +124,12 @@ function insetCanvas(src: HTMLCanvasElement, k: number): HTMLCanvasElement {
   const d = src.width * k;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, (src.width - d) / 2, (src.height - d) / 2, d, d);
+  return c;
+}
+
+function cropFrame(frame: HTMLImageElement | null, x: number, y: number, w: number, h: number): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(w, h);
+  if (frame) ctx.drawImage(frame, x, y, w, h, 0, 0, w, h);
   return c;
 }
 
@@ -348,7 +355,8 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     surround: Texture.from(paintReelSurround(BOARD_W + (FRAME_MARGIN_X + 16) * 2, BOARD_H + (FRAME_MARGIN_Y + 16) * 2, FRAME_MARGIN_X + 16, FRAME_MARGIN_Y + 16, BOARD_W, BOARD_H)),
     reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
-    glyphRing: Texture.from(paintGlyphRing()),
+    crest: Texture.from(cropFrame(frameArt, 515, 0, 645, 172)),
+    crestLow: Texture.from(cropFrame(frameArt, 535, 778, 605, 163)),
     veins: Texture.from(paintRisingColumn(CELL_W, BOARD_H)),
     glow: Texture.from(radial(256, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
     spore: Texture.from(radial(64, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),

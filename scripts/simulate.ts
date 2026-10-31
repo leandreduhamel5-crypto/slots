@@ -1,6 +1,8 @@
 import { playRound } from '../src/math/engine';
 import { SeededRng } from '../src/math/rng';
 
+import { BONUS_BUY_X } from '../src/math/config';
+
 const N = Number(process.argv[2] ?? 2_000_000);
 const seed = Number(process.argv[3] ?? 12345);
 const rng = new SeededRng(seed);
@@ -63,3 +65,9 @@ buckets.forEach((b, i) => {
   const freq = bucketCounts[i] ? `1 in ${(N / bucketCounts[i]).toFixed(1)}` : '—';
   console.log(`  ${label.padEnd(12)} ${freq}`);
 });
+
+// bonus buy: same rounds, conditioned on the trigger
+const M = Math.max(100_000, Math.floor(N / 10));
+let bought = 0;
+for (let i = 0; i < M; i++) bought += playRound(rng, bet, true).totalWin;
+console.log(`Bonus buy        avg ${(bought / M).toFixed(2)}x, price ${BONUS_BUY_X}x, RTP ${pct(bought / M / BONUS_BUY_X)}`);

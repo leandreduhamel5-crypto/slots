@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
 import { BLOOD_METAL, GOLD, IVORY, metalTitle, textMask } from './art/logoArt';
-import { paintArrowHead, paintBanner, paintCartouche, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
+import { paintArrowHead, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
 import { Digits } from './Digits';
 import gsap from 'gsap';
 import { SYMBOLS, Sym } from '../math/config';
@@ -12,10 +12,10 @@ import type { SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
 export const WIN_TIERS = [
-  { x: 15, name: 'CONTAMINATION', material: 'pharaoh', ray: 0x3a2408 },
-  { x: 40, name: 'ÉPIDÉMIE', material: 'gold', ray: 0x3e1806 },
-  { x: 100, name: 'PANDÉMIE', material: 'infection', ray: 0x46060c },
-  { x: 500, name: 'EXTINCTION', material: 'infection', ray: 0x5a0410 },
+  { x: 15, name: 'CONTAMINATION', material: 'gold', ray: 0x3a2408 },
+  { x: 40, name: 'ÉPIDÉMIE', material: 'gold', ray: 0x4a2c0a },
+  { x: 100, name: 'PANDÉMIE', material: 'gold', ray: 0x5a360c },
+  { x: 500, name: 'EXTINCTION', material: 'gold', ray: 0x6a400e },
 ];
 
 /** Widest a tier title and an amount may be, in overlay units: they stay inside their plates. */
@@ -212,12 +212,12 @@ export class Overlays extends Container {
     base.anchor.set(0.5);
     base.width = base.height = 2400;
     base.blendMode = 'add';
-    base.alpha = 0.3;
+    base.alpha = 0.16;
     const counter = new Sprite(this.raysTex());
     counter.anchor.set(0.5);
     counter.width = counter.height = 2000;
     counter.blendMode = 'add';
-    counter.alpha = 0.14;
+    counter.alpha = 0.07;
     counter.rotation = 0.08;
     const core = new Sprite(this.tex.glow);
     core.anchor.set(0.5);
@@ -289,7 +289,6 @@ export class Overlays extends Container {
   }
 
 
-  private bannerCache = new Map<string, { tex: Texture; cy: number }>();
   private shrineTex: Texture | null = null;
   private band: Texture | null = null;
   private bandTex(): Texture {
@@ -311,33 +310,20 @@ export class Overlays extends Container {
   }
   private arrowTex: Texture | null = null;
 
-  /** Gold-railed lacquer banner crowned by a winged sun (painted once per size). */
-  private ribbon(width: number, height: number, color: number): Sprite {
-    const tone = color === 0x8a0f26 ? 'red' : 'dark';
-    const key = `${width}|${height}|${tone}`;
-    let b = this.bannerCache.get(key);
-    if (!b) {
-      const p = paintBanner(width, height, tone);
-      b = { tex: Texture.from(p.canvas), cy: p.cy };
-      this.bannerCache.set(key, b);
-    }
-    const s = new Sprite(b.tex);
-    s.anchor.set(0.5, b.cy);
-    s.scale.set(0.5);
+  /** The winged ruby of the frame, crowning a title: it sits just above the given height. */
+  private ribbon(width: number, _height: number, _color: number): Sprite {
+    const s = new Sprite(this.tex.crest);
+    s.scale.set((width * 0.68) / this.tex.crest.width);
+    s.anchor.set(0.5, 1 + 58 / s.height);
     return s;
   }
 
-  /** Gold cartouche for the amounts. */
+  /** A pool of darkness that lifts an amount off the screen. */
   private plate(width: number, height: number): Sprite {
-    const key = `plate|${width}|${height}`;
-    let b = this.bannerCache.get(key);
-    if (!b) {
-      b = { tex: Texture.from(paintCartouche(width, height)), cy: 0.5 };
-      this.bannerCache.set(key, b);
-    }
-    const s = new Sprite(b.tex);
-    s.anchor.set(0.5, (16 + height / 2) / (height + 40));
-    s.scale.set(0.5);
+    const s = new Sprite(this.bandTex());
+    s.anchor.set(0.5);
+    s.width = width * 1.5;
+    s.height = height * 1.7;
     return s;
   }
 
@@ -348,33 +334,15 @@ export class Overlays extends Container {
     gsap.fromTo(o, { alpha: 0 }, { alpha: 1, duration: 0.2, delay });
   }
 
-  /** Thin ring of light racing out from a point of the content layer. */
-  private ring(y: number, tint: number, size = 1400): void {
-    const r = new Sprite(this.ringTex());
+  /** A soft bloom of gold opening from a point of the content layer. */
+  private bloom(y: number, tint: number, size = 1400): void {
+    const r = new Sprite(this.tex.glow);
     r.anchor.set(0.5);
     r.y = y;
     r.blendMode = 'add';
     r.tint = tint;
     this.content.addChildAt(r, 0);
-    gsap.fromTo(r, { width: 120, height: 120, alpha: 1 }, { width: size, height: size, alpha: 0, duration: 0.8, ease: 'power2.out', onComplete: () => r.destroy() });
-  }
-
-  private ringT: Texture | null = null;
-  private ringTex(): Texture {
-    if (!this.ringT) {
-      const c = document.createElement('canvas');
-      c.width = c.height = 512;
-      const x = c.getContext('2d')!;
-      const g = x.createRadialGradient(256, 256, 170, 256, 256, 256);
-      g.addColorStop(0, 'rgba(255,255,255,0)');
-      g.addColorStop(0.72, 'rgba(255,255,255,0.14)');
-      g.addColorStop(0.9, 'rgba(255,255,255,1)');
-      g.addColorStop(1, 'rgba(255,255,255,0)');
-      x.fillStyle = g;
-      x.fillRect(0, 0, 512, 512);
-      this.ringT = Texture.from(c);
-    }
-    return this.ringT;
+    gsap.fromTo(r, { width: size * 0.3, height: size * 0.3, alpha: 0.9 }, { width: size, height: size, alpha: 0, duration: 0.9, ease: 'power2.out', onComplete: () => r.destroy() });
   }
 
   /** A blade of light crossing a title, masked by its letters. */
@@ -403,30 +371,28 @@ export class Overlays extends Container {
     const t0 = WIN_TIERS[0];
     const rays = this.sunburst(t0.ray);
     this.burstRays = rays;
-    const eye = new Sprite(this.tex.normal[Sym.CODEX]);
-    eye.anchor.set(0.5);
-    eye.width = eye.height = 190;
-    eye.y = -295;
-    gsap.to(eye, { y: -305, duration: 2.2, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     const ribbon = this.ribbon(1040, 150, 0x1e0a08);
-    ribbon.y = -110;
+    ribbon.y = -100;
     const heading = this.head3d(t0.name, 104, t0.material, BIG_TITLE_W);
-    heading.y = -120;
-    const plate = this.plate(680, 170);
-    plate.y = 130;
+    heading.y = -100;
+    const plate = this.plate(760, 190);
+    plate.y = 100;
     const amount = new Digits(118);
     amount.value = 0;
-    amount.y = 130;
-    const sub = new Text({ text: 'TOUCHEZ POUR PASSER', style: body(20, 0xd8b878) });
+    amount.y = 100;
+    const low = new Sprite(this.tex.crestLow);
+    low.anchor.set(0.5);
+    low.scale.set(0.82);
+    low.y = 255;
+    const sub = new Text({ text: 'TOUCHEZ POUR PASSER', style: body(18, 0xd8b878) });
     sub.anchor.set(0.5);
-    sub.y = 262;
+    sub.y = 340;
     gsap.to(sub, { alpha: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.content.addChild(eye, ribbon, heading, plate, amount, sub);
-    this.popIn(eye, 0);
+    this.content.addChild(plate, ribbon, heading, amount, low, sub);
     this.popIn(ribbon, 0.06);
     this.popIn(heading, 0.1);
-    this.popIn(plate, 0.16);
     this.popIn(amount, 0.2);
+    this.popIn(low, 0.26);
     this.audio.bigWinStart();
     gsap.delayedCall(0.42, () => {
       if (!this.visible || heading.destroyed) return;
@@ -435,12 +401,12 @@ export class Overlays extends Container {
       this.fx.shake(10);
       this.fx.thump(0.35);
       this.fx.punch(1);
-      this.ring(-120, 0xffc860);
+      this.bloom(-120, 0xffc860);
       this.titleSweep(heading);
     });
     this.particles.startFountain(this.w * 0.14, this.h * 0.86, 16);
     this.particles.startFountain2(this.w * 0.86, this.h * 0.86, 16);
-    this.particles.startRain([this.tex.normal[Sym.CODEX]], this.w, 12);
+    this.particles.startRain([this.tex.coin], this.w, 12);
 
     const duration = 2.1 * (top + 1);
     this.audio.timpaniRoll(duration);
@@ -477,7 +443,7 @@ export class Overlays extends Container {
     gsap.fromTo(amount.scale, { x: k * 1.3, y: k * 1.3 }, { x: k, y: k, duration: 0.3, ease: 'power3.in' });
     gsap.delayedCall(0.3, () => {
       if (!this.visible || heading.destroyed) return;
-      this.ring(130, 0xfff0c0, 1700);
+      this.bloom(120, 0xfff0c0, 1700);
       this.fx.shake(14);
       this.fx.thump(0.5);
       this.titleSweep(heading);
@@ -503,7 +469,7 @@ export class Overlays extends Container {
       this.fx.glitch(1 + tier);
       this.fx.thump(0.3 + tier * 0.1);
       this.fx.punch(1 + tier * 0.3);
-      this.ring(-120, t.material === 'infection' ? 0xff3a24 : 0xffc860, 1500 + tier * 200);
+      this.bloom(-120, 0xffc860, 1500 + tier * 200);
       this.titleSweep(heading);
     });
     this.particles.setRainRate(12 + tier * 10);

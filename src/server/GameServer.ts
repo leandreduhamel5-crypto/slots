@@ -1,4 +1,4 @@
-import { BET_LEVELS, DEFAULT_BET_INDEX, START_BALANCE } from '../math/config';
+import { BET_LEVELS, BONUS_BUY_X, DEFAULT_BET_INDEX, START_BALANCE } from '../math/config';
 import { playRound, type Round } from '../math/engine';
 import { CryptoRng } from '../math/rng';
 
@@ -47,14 +47,20 @@ export class GameServer {
   /** Dev-only: when set, rounds are redrawn until the predicate matches (used to test features). */
   force: ((r: Round) => boolean) | null = null;
 
-  async spin(): Promise<Round> {
+  get bonusPrice(): number {
+    return round2(this.bet * BONUS_BUY_X);
+  }
+
+  /** bought: the player pays bonusPrice and the round starts on the free spins. */
+  async spin(bought = false): Promise<Round> {
     if (this.session.pending) throw new Error('round in progress');
     const bet = this.bet;
-    if (this.session.balance < bet - 1e-9) throw new Error('insufficient funds');
-    this.session.balance = round2(this.session.balance - bet);
-    let round = playRound(this.rng, bet);
+    const cost = bought ? this.bonusPrice : bet;
+    if (this.session.balance < cost - 1e-9) throw new Error('insufficient funds');
+    this.session.balance = round2(this.session.balance - cost);
+    let round = playRound(this.rng, bet, bought);
     if (import.meta.env.DEV && this.force) {
-      for (let i = 0; i < 2_000_000 && !this.force(round); i++) round = playRound(this.rng, bet);
+      for (let i = 0; i < 2_000_000 && !this.force(round); i++) round = playRound(this.rng, bet, bought);
       this.force = null;
     }
     this.session.pending = round;

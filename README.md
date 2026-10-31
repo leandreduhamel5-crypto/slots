@@ -18,6 +18,7 @@ En mode dev, la console permet de forcer une situation : `game.debug('win' | 'fe
 - **Livre (joker + scatter)** : il remplace tous les symboles sur une ligne. 3, 4 ou 5 Livres n'importe où paient 2×, 20× ou 200× la mise totale.
 - **3 Livres ou plus** déclenchent **10 tours gratuits**. Le Livre tire alors une **souche** : un symbole qui s'étend sur tout le rouleau et paie sur les 10 lignes, même si les rouleaux ne sont pas côte à côte.
 - **Mutation** : chaque re-déclenchement donne +10 tours et ajoute une souche (3 souches actives au maximum).
+- **Achat bonus** : 105× la mise pour entrer directement dans les tours gratuits (retour ≈ 95,5 %, simulé par `npm run sim`).
 - Gain maximal plafonné à **5 000×** la mise.
 
 ## Modèle mathématique
