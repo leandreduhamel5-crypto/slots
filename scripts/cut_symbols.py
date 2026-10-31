@@ -39,8 +39,6 @@ tile = Image.open('scripts/bonus_source.webp').convert('RGBA').crop((101, 114, 1
 disc = Image.new('L', (tile.width, tile.height), 0)
 ImageDraw.Draw(disc).rounded_rectangle((0, 0, tile.width - 1, tile.height - 1), 14, fill=255)
 tile.putalpha(disc)
-k = 496 / max(tile.size)
-tile = tile.resize((round(tile.width * k), round(tile.height * k)), Image.LANCZOS)
-c = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
-c.paste(tile, ((SIZE - tile.width) // 2, (SIZE - tile.height) // 2))
+# edge to edge: on the reels it fills the whole cell
+c = tile.resize((SIZE, SIZE), Image.LANCZOS)
 c.save('src/game/art/egypt/pyramid.webp', 'WEBP', quality=95, alpha_quality=100, method=6)

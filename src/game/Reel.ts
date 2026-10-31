@@ -1,7 +1,7 @@
 import { Container, Sprite } from 'pixi.js';
 import gsap from 'gsap';
 import { ROWS, Sym } from '../math/config';
-import { CELL_H, CELL_W, SYMBOL_SIZE } from './layout';
+import { CELL_H, CELL_W, SYMBOL_SIZE, TILE_H, TILE_W } from './layout';
 import type { SymbolTextures } from './textures';
 
 type Phase = 'idle' | 'starting' | 'spinning' | 'stopping' | 'landing';
@@ -10,6 +10,11 @@ const MAX_SPEED = 3800; // px / s
 const BLUR_SPEED = 1400;
 /** The last cell of travel: speed bleeds off into a dead stop, like a stone slab seating. */
 const SEAT_POWER = 2.6;
+
+function fit(sprite: Sprite, s: Sym): void {
+  sprite.width = s === Sym.CODEX ? TILE_W : SYMBOL_SIZE;
+  sprite.height = s === Sym.CODEX ? TILE_H : SYMBOL_SIZE;
+}
 
 /**
  * One reel column. Sprites[0] sits just above the window and sprites[ROWS + 1] just below it.
@@ -43,7 +48,7 @@ export class Reel extends Container {
     for (let i = 0; i < ROWS + 2; i++) {
       const s = new Sprite(tex.normal[all[i]]);
       s.anchor.set(0.5);
-      s.width = s.height = SYMBOL_SIZE;
+      fit(s, all[i]);
       s.x = CELL_W / 2;
       this.cells.push(s);
       this.symbols.push(all[i]);
@@ -64,7 +69,7 @@ export class Reel extends Container {
   setSymbol(index: number, s: Sym, blurred = false): void {
     this.symbols[index] = s;
     this.cells[index].texture = blurred ? this.tex.blur[s] : this.tex.normal[s];
-    this.cells[index].width = this.cells[index].height = SYMBOL_SIZE;
+    fit(this.cells[index], s);
   }
 
   private filler(): Sym {
@@ -133,7 +138,7 @@ export class Reel extends Container {
     this.symbols.unshift(next);
     const blurred = this.speed > BLUR_SPEED && !finishing;
     sprite.texture = blurred ? this.tex.blur[next] : this.tex.normal[next];
-    sprite.width = sprite.height = SYMBOL_SIZE;
+    fit(sprite, next);
 
     if (this.phase === 'stopping') {
       // un-blur everything that will be visible when landing

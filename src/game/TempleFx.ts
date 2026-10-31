@@ -285,8 +285,8 @@ export class TempleFx extends Container {
     if (this.nextArc <= 0 && red) {
       const i = Math.random() < 0.5 ? 0 : 1;
       this.arc(sc(OBELISK_SHAFTS[i][1]), sc([APEX[0], APEX[1] + 8]), 0.6 + Math.random() * 0.5);
-      this.onCharge?.(0.5);
-      this.nextArc = 1.8 + Math.random() * 2.5;
+      this.onCharge?.(0.35);
+      this.nextArc = 8 + Math.random() * 7;
     }
 
     // night: sheet lightning glowing inside distant clouds

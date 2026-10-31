@@ -8,9 +8,13 @@ export interface ParticleTextures {
   spore: Texture;
   /** gold coin (128 px), optional */
   coin?: Texture;
+  /** a crisp grain of gold sand */
+  grain?: Texture;
+  /** flakes of gold leaf and small gold charms (64 px) */
+  flakes?: Texture[];
 }
 
-type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark' | 'tex' | 'coin' | 'sand';
+type Kind = 'drop' | 'cyan' | 'star' | 'puff' | 'spark' | 'tex' | 'coin' | 'sand' | 'flake';
 
 interface P {
   s: Sprite;
@@ -41,7 +45,8 @@ export class Particles extends Container {
       star: this.tex.star,
       puff: this.tex.puff,
       spark: this.tex.spore,
-      sand: this.tex.spore,
+      sand: this.tex.grain ?? this.tex.spore,
+      flake: this.tex.spore,
       tex: this.tex.spore,
       coin: this.tex.coin ?? this.tex.spore,
     };
@@ -60,8 +65,8 @@ export class Particles extends Container {
     }
     s.position.set(x, y);
     this.addChild(s);
-    const g = kind === 'sand' ? 620 : kind === 'puff' ? -60 : kind === 'star' ? 300 : kind === 'tex' ? 700 : kind === 'coin' ? 1150 : 1300;
-    const spin = kind === 'coin' ? (6 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1) : (Math.random() - 0.5) * 10;
+    const g = kind === 'flake' ? 1050 : kind === 'sand' ? 620 : kind === 'puff' ? -60 : kind === 'star' ? 300 : kind === 'tex' ? 700 : kind === 'coin' ? 1150 : 1300;
+    const spin = kind === 'coin' || kind === 'flake' ? (6 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1) : (Math.random() - 0.5) * 10;
     this.ps.push({ s, kind, vx, vy, life: Math.random() * (kind === 'coin' ? 0.3 : 0), max, spin, g, size });
     this.scaleOf(this.ps[this.ps.length - 1]);
   }
@@ -78,6 +83,14 @@ export class Particles extends Container {
       const c = Math.cos(p.life * p.spin);
       p.s.scale.set((sc / 128) * Math.max(0.1, Math.abs(c)), sc / 128);
       const v = Math.round(150 + 105 * Math.abs(c));
+      p.s.tint = (v << 16) | (v << 8) | v;
+      return;
+    }
+    if (p.kind === 'flake') {
+      // tumbling: it narrows edge-on and flashes when it faces the light
+      const c = Math.abs(Math.cos(p.life * p.spin));
+      p.s.scale.set((sc / 64) * Math.max(0.16, c), sc / 64);
+      const v = Math.round(125 + 130 * Math.pow(c, 3));
       p.s.tint = (v << 16) | (v << 8) | v;
       return;
     }
@@ -152,12 +165,30 @@ export class Particles extends Container {
     }
   }
 
-  /** A clean fan of gold thrown up from the point where a reel stops. */
-  goldFan(x: number, y: number, width: number, n: number, power = 1): void {
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.5;
-      const v = (260 + Math.random() * 520) * power;
-      this.add('sand', x + (Math.random() - 0.5) * width, y, Math.cos(a) * v, Math.sin(a) * v, 0.35 + Math.random() * 0.4, 6 + Math.random() * 11);
+  /**
+   * A reel seats on the rail: desert sand pours over the edge, a fan of gold grains jumps off the
+   * blow, leaves of gold and little charms tumble through the air, and dust rolls along the rail.
+   */
+  seat(x: number, y: number, width: number, heavy: boolean): void {
+    const power = heavy ? 1.2 : 1;
+    for (let i = 0; i < (heavy ? 40 : 26); i++) {
+      this.add('sand', x + (Math.random() - 0.5) * width, y - 4, (Math.random() - 0.5) * 90, 40 + Math.random() * 240, 0.55 + Math.random() * 0.5, 8 + Math.random() * 9);
+    }
+    for (let i = 0; i < (heavy ? 38 : 24); i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.7;
+      const v = (320 + Math.random() * 640) * power;
+      this.add('sand', x + (Math.random() - 0.5) * width, y, Math.cos(a) * v, Math.sin(a) * v, 0.45 + Math.random() * 0.45, 9 + Math.random() * 10);
+    }
+    const flakes = this.tex.flakes;
+    if (flakes) {
+      for (let i = 0; i < (heavy ? 12 : 7); i++) {
+        const t = flakes[Math.floor(Math.random() * flakes.length)];
+        this.add('flake', x + (Math.random() - 0.5) * width * 0.9, y, (Math.random() - 0.5) * 420, -(380 + Math.random() * 560) * power, 0.75 + Math.random() * 0.45, 30 + Math.random() * 20, t);
+      }
+    }
+    for (const dir of [-1, 1]) {
+      this.add('puff', x + (dir * width) / 3, y + 2, dir * (130 + Math.random() * 150), -(10 + Math.random() * 24), 0.55, 90 + Math.random() * 44);
+      this.ps[this.ps.length - 1].s.tint = 0xc89848;
     }
   }
 
@@ -191,6 +222,11 @@ export class Particles extends Container {
 
   startFountain2(x: number, y: number, rate: number): void {
     this.fountain2 = { x, y, rate, acc: 0 };
+  }
+
+  /** Heavier fountains (big-win tiers escalate them). */
+  setFountainRate(rate: number): void {
+    for (const f of [this.fountain, this.fountain2]) if (f) f.rate = rate;
   }
 
   stopFountain(): void {
@@ -238,7 +274,7 @@ export class Particles extends Container {
       p.s.y += p.vy * dt;
       if (p.kind === 'drop' || p.kind === 'cyan') p.s.rotation = Math.atan2(p.vy, p.vx) - Math.PI / 2;
       else if (p.kind === 'coin') p.s.rotation = p.vx * 0.0006;
-      else p.s.rotation += p.spin * dt * (p.kind === 'puff' ? 0.1 : p.kind === 'tex' ? 0.35 : 1);
+      else p.s.rotation += p.spin * dt * (p.kind === 'puff' ? 0.1 : p.kind === 'tex' ? 0.35 : p.kind === 'flake' ? 0.22 : 1);
       this.scaleOf(p);
       const k = p.life / p.max;
       p.s.alpha = p.kind === 'puff' ? Math.max(0, 1 - k) * 0.6 : k > 0.7 ? Math.max(0, (1 - k) / 0.3) : 1;

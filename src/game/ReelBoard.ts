@@ -5,7 +5,7 @@ import type { Expansion, Grid, LineWin, ScatterWin } from '../math/engine';
 import { Digits } from './Digits';
 import { Particles } from './Particles';
 import { Reel } from './Reel';
-import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP, SYMBOL_SIZE, cellCenter, reelX } from './layout';
+import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP, SYMBOL_SIZE, TILE_H, TILE_W, cellCenter, reelX } from './layout';
 import { FRAME_ART, FRAME_BLEED, FRAME_PAD, TEX_SIZE, TEX_UNIT, type SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
@@ -74,6 +74,8 @@ export class ReelBoard extends Container {
   private lineLayer = new Container();
   /** the gold ribbons joining winning symbols, under the symbols */
   private ribbonLayer = new Container();
+  /** reels a strain column stands on, this spin */
+  private columns = new Set<number>();
   private rigLayer = new Container();
   private fx: Particles;
   private labelLayer = new Container();
@@ -300,7 +302,7 @@ export class ReelBoard extends Container {
   }
 
   private get idle(): boolean {
-    return !this.cycleTl && this.rigs.size === 0 && this.reels.every((r) => r.idle);
+    return !this.cycleTl && this.rigs.size === 0 && this.columns.size === 0 && this.reels.every((r) => r.idle);
   }
 
   /** Signs of life while nothing happens: a premium symbol blinks, chomps or wobbles. */
@@ -379,15 +381,14 @@ export class ReelBoard extends Container {
     seat.tint = this.accent;
     gsap.killTweensOf(seat);
     gsap.fromTo(seat, { y: 0, alpha: 0.85 }, { y: BOARD_H, alpha: 0, duration: 0.2, ease: 'power2.in' });
-    // a line of light where the reel stops, and a clean fan of gold
+    // a line of light where the reel stops; desert sand pours over the rail and gold flies off it
     const heavy = reel === REELS - 1;
     const y = BOARD_H + 8;
     const edge = this.edgeLights[reel];
     edge.tint = this.accent;
     gsap.killTweensOf(edge);
     gsap.fromTo(edge, { alpha: 0.85 }, { alpha: 0, duration: 0.28, ease: 'power2.out' });
-    this.fx.goldFan(x, y, CELL_W * 0.9, heavy ? 26 : 16, heavy ? 1.15 : 1);
-    this.fx.sparks(x, y, heavy ? 6 : 3, 0.7);
+    this.fx.seat(x, y, CELL_W * 0.92, heavy);
   }
 
   /** Slam-stop: lands all remaining reels as fast as possible. */
@@ -500,7 +501,11 @@ export class ReelBoard extends Container {
     halo.alpha = 0;
     const body = new Container();
     body.scale.set(SYMBOL_SIZE / TEX_SIZE);
-    root.addChild(halo, body);
+    // the bonus tile fills its cell: body keeps the common scale the animations rely on
+    const seat = new Container();
+    if (sym === Sym.CODEX) seat.scale.set(TILE_W / SYMBOL_SIZE, TILE_H / SYMBOL_SIZE);
+    seat.addChild(body);
+    root.addChild(halo, seat);
     const parts: Record<string, Sprite> = {};
     const r = this.tex.rigs.get(sym);
     const add = (t: import('pixi.js').Texture) => {
@@ -750,6 +755,7 @@ export class ReelBoard extends Container {
     this.cycleTl = null;
     this.dimLayer.clear();
     this.clearRigs();
+    this.columns.clear();
     for (const layer of [this.lineLayer, this.ribbonLayer, this.labelLayer, this.expandLayer]) {
       for (const c of layer.removeChildren()) {
         gsap.killTweensOf(c);
@@ -1029,12 +1035,29 @@ export class ReelBoard extends Container {
     this.fx.coins(cx, BOARD_H * 0.75, 8, 0.8);
   }
 
+  /** Lets the pass over the winning lines finish, briskly: it must not light symbols over a column. */
+  private settleWins(): Promise<void> {
+    const tl = this.cycleTl;
+    if (!tl) return Promise.resolve();
+    tl.timeScale(2.5);
+    return new Promise((resolve) => {
+      tl.eventCallback('onComplete', () => {
+        this.cycleTl = null;
+        resolve();
+      });
+    });
+  }
+
   /** Book-style expansion: infected light rises up the reel, it bursts, then the strain slams in. */
   async expand(exp: Expansion, onReel?: (reel: number) => void): Promise<void> {
+    await this.settleWins();
     this.clearHighlights();
     for (const r of exp.reels) {
       const x = reelX(r);
-      for (let row = 0; row < ROWS; row++) {
+      // a reel a first strain has already taken shows nothing of what lies beneath its column
+      const covered = this.columns.has(r);
+      this.columns.add(r);
+      for (let row = 0; row < ROWS && !covered; row++) {
         if (this.symbolAt(r, row) === exp.symbol) {
           const rig = this.rig(r, row);
           const s = SYMBOL_SIZE / TEX_SIZE;
@@ -1060,7 +1083,30 @@ export class ReelBoard extends Container {
       big.width = CELL_W + 6;
       big.height = BOARD_H + 6;
       big.alpha = 0;
-      this.expandLayer.addChild(vm, veins, big);
+      const light = new Sprite(this.tex.glow);
+      light.anchor.set(0.5);
+      light.position.copyFrom(big.position);
+      light.width = CELL_W * 1.9;
+      light.height = BOARD_H * 1.25;
+      light.blendMode = 'add';
+      light.tint = 0xffb040;
+      light.alpha = 0;
+      const sweepMask = new Sprite(this.tex.expanded.get(exp.symbol)!);
+      sweepMask.anchor.set(0.5);
+      sweepMask.position.copyFrom(big.position);
+      sweepMask.width = big.width;
+      sweepMask.height = big.height;
+      const sweep = new Sprite(this.tex.shine);
+      sweep.anchor.set(0.5);
+      sweep.width = CELL_W * 1.1;
+      sweep.height = 260;
+      sweep.rotation = Math.PI / 2 + 0.35;
+      sweep.blendMode = 'add';
+      sweep.position.set(big.x, -240);
+      sweep.mask = sweepMask;
+      // under every column: the lights of neighbouring reels must not wash each other out
+      this.expandLayer.addChildAt(light, 0);
+      this.expandLayer.addChild(vm, veins, big, sweepMask, sweep);
       onReel?.(r);
       await new Promise<void>((resolve) => {
         const sx = big.scale.x;
@@ -1070,21 +1116,22 @@ export class ReelBoard extends Container {
           .to(vm.scale, { y: 1, duration: 0.4, ease: 'power2.in' })
           .add(() => {
             for (const rig of [...this.rigs.values()].filter((g) => g.reel === r)) this.dropRig(rig);
-            this.fx.impact(x + CELL_W / 2, BOARD_H / 2, 1.2);
             this.onImpact?.(0.8);
             this.slamLight(x + CELL_W / 2);
-            for (let row = 0; row < ROWS; row++) this.fx.burst(x + CELL_W / 2, row * CELL_H + CELL_H / 2, 8, 0.7);
+            for (let row = 0; row < ROWS; row++) this.fx.seat(x + CELL_W / 2, (row + 1) * CELL_H, CELL_W * 0.9, false);
           })
           .to(big, { alpha: 1, duration: 0.05 })
-          .fromTo(big.scale, { x: sx * 1.35, y: sy * 0.8 }, { x: sx, y: sy, duration: 0.55, ease: 'power3.out' }, '<')
-          .to(veins, { alpha: 0, duration: 0.3 }, '<');
+          .fromTo(big.scale, { x: sx * 1.09, y: sy * 1.09 }, { x: sx, y: sy, duration: 0.3, ease: 'power3.in' }, '<')
+          .fromTo(light, { alpha: 0.95 }, { alpha: 0.26, duration: 0.7, ease: 'power2.out' }, '<')
+          .to(veins, { alpha: 0, duration: 0.3 }, '<')
+          .to(sweep, { y: BOARD_H + 240, duration: 0.6, ease: 'power1.inOut' }, '<0.12');
       });
-      gsap.to(big.scale, { x: big.scale.x * 1.02, y: big.scale.y * 1.01, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+      gsap.to(light, { alpha: 0.42, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
     this.clearRigs();
     await wait(250);
     this.addLabel(fmt(exp.win), BOARD_W / 2, BOARD_H / 2, COLORS.yellow, 1.7);
-    this.fx.burst(BOARD_W / 2, BOARD_H / 2, 40, 1);
+    this.fx.coins(BOARD_W / 2, BOARD_H * 0.62, 18, 0.9);
     await wait(1400);
   }
 }

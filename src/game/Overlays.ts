@@ -1,12 +1,11 @@
 import { Container, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
 import { BLOOD_METAL, GOLD, IVORY, metalTitle, textMask } from './art/logoArt';
-import { paintArrowHead, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
+import { paintArrowHead, paintShrineFrame, paintSoftRays, paintStrainBand } from './art/egyptFrame';
 import { Digits } from './Digits';
 import gsap from 'gsap';
 import { SYMBOLS, Sym } from '../math/config';
 import { PREMIUM_EXPANDERS } from '../math/engine';
 import type { Audio } from './Audio';
-import { COLORS } from './layout';
 import { Particles } from './Particles';
 import type { SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
@@ -290,6 +289,8 @@ export class Overlays extends Container {
 
 
   private shrineTex: Texture | null = null;
+  private rimTex: Texture | null = null;
+  private bandArt: Texture | null = null;
   private band: Texture | null = null;
   private bandTex(): Texture {
     if (!this.band) {
@@ -355,7 +356,7 @@ export class Overlays extends Container {
   }
 
   /** A blade of light crossing a title, masked by its letters. */
-  private titleSweep(title: Sprite): void {
+  private titleSweep(title: Sprite, parent: Container = this.content): void {
     const mask = new Sprite(title.texture);
     mask.anchor.set(0.5);
     mask.scale.copyFrom(title.scale);
@@ -368,7 +369,7 @@ export class Overlays extends Container {
     blade.blendMode = 'add';
     blade.position.y = title.y;
     blade.mask = mask;
-    this.content.addChild(mask, blade);
+    parent.addChild(mask, blade);
     gsap.fromTo(blade, { x: -700 }, { x: 700, duration: 0.8, ease: 'power1.inOut', onComplete: () => { blade.destroy(); mask.destroy(); } });
   }
 
@@ -392,16 +393,27 @@ export class Overlays extends Container {
     const low = new Sprite(this.tex.crestLow);
     low.anchor.set(0.5);
     low.scale.set(0.82);
-    low.y = 255;
+    low.y = 292;
+    const mult = new Digits(54);
+    mult.y = 190;
+    const showMult = (v: number) => {
+      mult.text = `×${Math.floor(v / bet)}`;
+    };
+    showMult(0);
+    const pips = this.tierPips();
+    pips.y = -12;
     const sub = new Text({ text: 'TOUCHEZ POUR PASSER', style: body(18, 0xd8b878) });
     sub.anchor.set(0.5);
-    sub.y = 340;
+    sub.y = 378;
     gsap.to(sub, { alpha: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.content.addChild(plate, ribbon, heading, amount, low, sub);
+    this.content.addChild(plate, ribbon, heading, pips, amount, mult, low, sub);
     this.popIn(ribbon, 0.06);
     this.popIn(heading, 0.1);
     this.popIn(amount, 0.2);
+    this.popIn(mult, 0.24);
+    this.popIn(pips, 0.26);
     this.popIn(low, 0.26);
+    this.lightPip(pips, 0);
     this.audio.bigWinStart();
     gsap.delayedCall(0.42, () => {
       if (!this.visible || heading.destroyed) return;
@@ -422,13 +434,22 @@ export class Overlays extends Container {
     const counter = { v: 0 };
     let tier = 0;
     let lastTick = 0;
+    let punching = false;
+    const fitted = () => Math.min(1, AMOUNT_W / Math.max(1, amount.inkWidth));
+    /** the amount jumps with each new tier, then settles back into its plate */
+    const punch = () => {
+      punching = true;
+      const k = fitted();
+      gsap.fromTo(amount.scale, { x: k * 1.22, y: k * 1.22 }, { x: k, y: k, duration: 0.3, ease: 'power2.out', onComplete: () => void (punching = false) });
+    };
     const tween = gsap.to(counter, {
       v: win,
       duration,
       ease: 'power1.inOut',
       onUpdate: () => {
         amount.value = counter.v;
-        amount.scale.set(Math.min(1, AMOUNT_W / Math.max(1, amount.inkWidth)));
+        if (!punching) amount.scale.set(fitted());
+        showMult(counter.v);
         onTick?.(counter.v);
         const now = performance.now();
         if (now - lastTick > 70) {
@@ -439,6 +460,8 @@ export class Overlays extends Container {
         if (t > tier) {
           tier = t;
           this.upgrade(heading, tier);
+          this.lightPip(pips, tier);
+          punch();
         }
       },
     });
@@ -447,8 +470,10 @@ export class Overlays extends Container {
     if (tween.isActive()) {
       tween.progress(1);
       if (tier < top) this.upgrade(heading, top);
+      for (let i = tier + 1; i <= top; i++) this.lightPip(pips, i);
+      showMult(win);
     }
-    const k = amount.scale.x;
+    const k = fitted();
     gsap.fromTo(amount.scale, { x: k * 1.3, y: k * 1.3 }, { x: k, y: k, duration: 0.3, ease: 'power3.in' });
     gsap.delayedCall(0.3, () => {
       if (!this.visible || heading.destroyed) return;
@@ -456,10 +481,42 @@ export class Overlays extends Container {
       this.fx.shake(14);
       this.fx.thump(0.5);
       this.titleSweep(heading);
+      this.titleHit(100, 760);
+      this.particles.coins(this.w / 2, this.h * 0.62, 26 + top * 12, 1.25);
     });
     this.audio.bigWinEnd(top);
     await this.waitOrSkip(2400);
     await this.close();
+  }
+
+  /** One gem per win tier, in a row under the title: they light up as the count climbs. */
+  private tierPips(): Container {
+    const row = new Container();
+    const gap = 54;
+    WIN_TIERS.forEach((_, i) => {
+      const pip = new Container();
+      pip.x = (i - (WIN_TIERS.length - 1) / 2) * gap;
+      const off = new Graphics().poly([0, -13, 13, 0, 0, 13, -13, 0]).fill(0x1a1006).stroke({ width: 2.5, color: 0xc08a30 });
+      const on = new Graphics().poly([0, -13, 13, 0, 0, 13, -13, 0]).fill(0xffe7a0).stroke({ width: 2.5, color: 0xfff6d8 });
+      on.alpha = 0;
+      const halo = new Sprite(this.tex.glow);
+      halo.anchor.set(0.5);
+      halo.width = halo.height = 92;
+      halo.blendMode = 'add';
+      halo.tint = 0xffc860;
+      halo.alpha = 0;
+      pip.addChild(halo, off, on);
+      row.addChild(pip);
+    });
+    return row;
+  }
+
+  private lightPip(row: Container, tier: number): void {
+    const pip = row.children[tier] as Container;
+    const [halo, , on] = pip.children;
+    on.alpha = 1;
+    gsap.fromTo(pip.scale, { x: 2, y: 2 }, { x: 1, y: 1, duration: 0.35, ease: 'power3.in' });
+    gsap.fromTo(halo, { alpha: 1 }, { alpha: 0.5, duration: 0.5 });
   }
 
   private upgrade(heading: Sprite, tier: number): void {
@@ -482,42 +539,73 @@ export class Overlays extends Container {
       this.titleSweep(heading);
     });
     this.particles.setRainRate(12 + tier * 10);
+    this.particles.setFountainRate(16 + tier * 9);
   }
 
-  /** Cartoon slot-window roulette that lands on the chosen strain. */
   /**
-   * The strain draw as a carousel: the premium symbols race sideways through a gold reliquary,
-   * scaled and dimmed with their distance from it, decelerate, and lock onto the strain with a
-   * flash and a shockwave.
+   * The strain reel: the premium symbols race sideways along a lapis band, through a gold window
+   * crowned with the winged ruby of the frame, slow down and lock onto the strain with a blaze of
+   * gold.
    */
   private async roulette(y: number, final: Sym, exclude: Sym[] = []): Promise<void> {
     const pool = PREMIUM_EXPANDERS.filter((s) => s === final || !exclude.includes(s));
     const box = new Container();
-    box.y = y;
+    const WINDOW = 300;
     const aura = new Sprite(this.tex.glow);
     aura.anchor.set(0.5);
-    aura.width = aura.height = 620;
-    aura.tint = COLORS.infection;
+    aura.width = 1050;
+    aura.height = 640;
+    aura.tint = 0xffa030;
     aura.blendMode = 'add';
-    aura.alpha = 0.45;
-    gsap.to(aura.scale, { x: aura.scale.x * 1.1, y: aura.scale.y * 1.1, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    // a dark band the carousel runs along
-    const band = new Sprite(this.bandTex());
+    aura.alpha = 0.3;
+    gsap.to(aura, { alpha: 0.42, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    const rays = new Sprite(this.raysTex());
+    rays.anchor.set(0.5);
+    rays.width = rays.height = 1250;
+    rays.tint = 0xffc060;
+    rays.blendMode = 'add';
+    rays.alpha = 0;
+    gsap.to(rays, { rotation: Math.PI * 2, duration: 40, repeat: -1, ease: 'none' });
+    this.bandArt ??= Texture.from(paintStrainBand(1500, 270));
+    const band = new Sprite(this.bandArt);
     band.anchor.set(0.5);
-    band.width = 1600;
-    band.height = 300;
-    this.shrineTex ??= Texture.from(paintShrineFrame(300, 290));
+    band.scale.set(0.5);
+    if (!this.shrineTex || !this.rimTex) {
+      const art = paintShrineFrame(WINDOW, WINDOW);
+      this.shrineTex = Texture.from(art);
+      // the same frame with its window cut out: laid over the symbols, so they pass behind the gold
+      const cut = document.createElement('canvas');
+      cut.width = art.width;
+      cut.height = art.height;
+      const x = cut.getContext('2d')!;
+      x.drawImage(art, 0, 0);
+      x.globalCompositeOperation = 'destination-out';
+      x.beginPath();
+      x.roundRect(100, 100, art.width - 200, art.height - 200, 24);
+      x.fill();
+      this.rimTex = Texture.from(cut);
+    }
     const frame = new Sprite(this.shrineTex);
-    frame.anchor.set(0.5);
-    frame.scale.set(0.5);
-    frame.y = -5;
+    const rim = new Sprite(this.rimTex);
+    for (const f of [frame, rim]) {
+      f.anchor.set(0.5);
+      f.scale.set(0.5);
+    }
+    const crown = new Sprite(this.tex.crest);
+    crown.anchor.set(0.5, 1);
+    crown.scale.set(0.5);
+    crown.y = -WINDOW / 2 + 16;
+    const foot = new Sprite(this.tex.crestLow);
+    foot.anchor.set(0.5, 0);
+    foot.scale.set(0.5);
+    foot.y = WINDOW / 2 - 18;
     this.arrowTex ??= Texture.from(paintArrowHead());
     const arrowL = new Sprite(this.arrowTex);
     const arrowR = new Sprite(this.arrowTex);
     for (const [a, d] of [[arrowL, -1], [arrowR, 1]] as const) {
       a.anchor.set(0.5);
-      a.scale.set(-0.5 * d, 0.5);
-      a.position.set(d * 186, -6);
+      a.scale.set(-0.62 * d, 0.62);
+      a.position.set(d * (WINDOW / 2 + 28), 0);
     }
     const strip = new Container();
     const spacing = 250;
@@ -537,11 +625,15 @@ export class Overlays extends Container {
     flash.anchor.set(0.5);
     flash.blendMode = 'add';
     flash.alpha = 0;
-    box.addChild(aura, band, frame, strip, arrowL, arrowR, flash);
-    box.y = y - 6;
+    box.addChild(aura, rays, band, frame, strip, rim, crown, foot, arrowL, arrowR, flash);
+    box.y = y;
     this.content.addChild(box);
     gsap.fromTo(box, { alpha: 0 }, { alpha: 1, duration: 0.3 });
+    gsap.fromTo(band.scale, { x: 0.03 }, { x: 0.5, duration: 0.5, ease: 'power3.out' });
+    gsap.fromTo(crown, { y: crown.y - 90, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.1 });
+    gsap.fromTo(foot, { y: foot.y + 90, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.1 });
     this.popIn(frame, 0, 0.4);
+    this.popIn(rim, 0, 0.4);
 
     const state = { off: 0 };
     let lastIdx = -1;
@@ -553,7 +645,7 @@ export class Overlays extends Container {
         const near = Math.max(0, 1 - ad / 760);
         sp.visible = ad < 900;
         sp.x = d * (0.85 + near * 0.15);
-        const size = 120 + 110 * Math.pow(near, 2);
+        const size = 118 + 122 * Math.pow(near, 2.4);
         sp.width = sp.height = size;
         sp.alpha = Math.min(1, near * 1.6);
         const v = Math.round(90 + 165 * Math.pow(near, 3));
@@ -563,8 +655,9 @@ export class Overlays extends Container {
       if (idx !== lastIdx) {
         lastIdx = idx;
         this.audio.tick(Math.min(1, state.off / (target * spacing)));
-        gsap.fromTo(frame.scale, { x: 0.505, y: 0.505 }, { x: 0.5, y: 0.5, duration: 0.12 });
-        for (const ar of [arrowL, arrowR]) gsap.fromTo(ar, { alpha: 1 }, { alpha: 0.55, duration: 0.15 });
+        gsap.fromTo([frame.scale, rim.scale], { x: 0.512, y: 0.512 }, { x: 0.5, y: 0.5, duration: 0.12 });
+        gsap.fromTo(arrowL, { x: -(WINDOW / 2 + 16), alpha: 1 }, { x: -(WINDOW / 2 + 28), alpha: 0.7, duration: 0.16 });
+        gsap.fromTo(arrowR, { x: WINDOW / 2 + 16, alpha: 1 }, { x: WINDOW / 2 + 28, alpha: 0.7, duration: 0.16 });
       }
     };
     layout();
@@ -582,22 +675,28 @@ export class Overlays extends Container {
       };
       requestAnimationFrame(skipWatch);
     });
-    // lock: everything else falls away, the strain blazes
+    // lock: everything else falls away, the strain blazes in its window
     const chosen = items[target];
-    for (const sp of items) if (sp !== chosen) gsap.to(sp, { alpha: 0, duration: 0.35 });
+    for (const sp of items) if (sp !== chosen) gsap.to(sp, { alpha: 0, duration: 0.3 });
     this.audio.impact(1.2);
     this.audio.codex(4);
     this.fx.shockwave();
     this.fx.thump(0.45);
-    this.fx.shake(14);
-    gsap.fromTo(flash, { alpha: 1, width: 200, height: 200 }, { alpha: 0, width: 900, height: 900, duration: 0.6, ease: 'power2.out' });
-    gsap.fromTo(chosen, { width: 330, height: 330 }, { width: 240, height: 240, duration: 0.7, ease: 'power3.out' });
-    gsap.fromTo(frame.scale, { x: 0.54, y: 0.54 }, { x: 0.5, y: 0.5, duration: 0.4, ease: 'power3.out' });
-    gsap.to(aura, { alpha: 0.85, duration: 0.2 });
-    gsap.to(band, { alpha: 0, duration: 0.4 });
+    this.fx.shake(12);
+    this.fx.punch(1.2);
+    gsap.fromTo(flash, { alpha: 1, width: 240, height: 240 }, { alpha: 0, width: 1100, height: 1100, duration: 0.65, ease: 'power2.out' });
+    const size = chosen.width;
+    gsap.fromTo(chosen, { width: size * 1.45, height: size * 1.45 }, { width: 262, height: 262, duration: 0.32, ease: 'power3.in' });
+    gsap.fromTo([frame.scale, rim.scale], { x: 0.6, y: 0.6 }, { x: 0.5, y: 0.5, duration: 0.32, ease: 'power3.in' });
+    gsap.to(rays, { alpha: 0.55, duration: 0.3 });
+    gsap.killTweensOf(aura, 'alpha');
+    gsap.to(aura, { alpha: 0.75, duration: 0.2 });
+    gsap.delayedCall(0.34, () => !chosen.destroyed && this.titleSweep(chosen, box));
+    gsap.to(chosen, { y: -6, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.4 });
     const sc = this.content.scale.y;
-    this.particles.impact(this.w / 2, this.h / 2 + y * sc, 1.4);
-    this.particles.burst(this.w / 2, this.h / 2 + y * sc, 40, 0.9);
+    const sy = this.content.y + y * sc;
+    this.particles.sand(this.w / 2, sy, 900 * sc, 90, 2.2);
+    this.particles.sparks(this.w / 2, sy, 24, 1.3);
   }
 
   private doorTex: Texture | null = null;
@@ -784,94 +883,55 @@ export class Overlays extends Container {
     this.fx.shake(16);
     this.fx.glitch(3);
     this.sunburst(0x46060c);
-    // the pyramid rises out of a pillar of light
-    const pillar = new Sprite(this.tex.glow);
-    pillar.anchor.set(0.5);
-    pillar.blendMode = 'add';
-    pillar.tint = 0xff4a30;
-    pillar.width = 260;
-    pillar.height = 1400;
-    pillar.alpha = 0;
-    const ring = new Sprite(this.tex.glow);
-    ring.anchor.set(0.5);
-    ring.blendMode = 'add';
-    ring.tint = 0xffc870;
-    const pyr = new Sprite(this.tex.normal[Sym.CODEX]);
-    pyr.anchor.set(0.5);
-    pyr.width = pyr.height = 420;
-    pyr.y = 30;
     const head = this.head3d(`${spins} TOURS GRATUITS`, 88, 'gold', 1000);
-    head.y = -330;
-    this.content.addChild(pillar, ring, pyr, head);
-    gsap.fromTo(pillar, { alpha: 0, width: 40 }, { alpha: 0.9, width: 300, duration: 0.35, ease: 'power2.out' });
-    gsap.to(pillar, { alpha: 0, duration: 0.8, delay: 0.6 });
-    gsap.fromTo(pyr, { y: 500, alpha: 0 }, { y: 30, alpha: 1, duration: 0.55, ease: 'power3.out', delay: 0.15 });
-    const ps = pyr.scale.x;
-    gsap.fromTo(pyr.scale, { x: ps * 0.4, y: ps * 0.4 }, { x: ps, y: ps, duration: 0.55, ease: 'back.out(1.6)', delay: 0.15 });
+    head.y = -312;
+    this.content.addChild(head);
     // a player may skip this screen at any moment: nothing delayed may touch what is gone
-    gsap.delayedCall(0.7, () => {
-      if (ring.destroyed) return;
-      this.fx.shake(20);
-      this.fx.shockwave();
-      this.particles.impact(this.w / 2, this.h / 2, 1.8);
-      gsap.fromTo(ring, { alpha: 1, width: 100, height: 100 }, { alpha: 0, width: 1100, height: 1100, duration: 0.8, ease: 'power2.out' });
-    });
-    // the title slams in
     head.alpha = 0;
-    gsap.delayedCall(0.75, () => {
+    gsap.delayedCall(0.3, () => {
       if (head.destroyed) return;
       head.alpha = 1;
       const k = head.scale.x;
       gsap.fromTo(head.scale, { x: k * 2.6, y: k * 2.6 }, {
         x: k,
         y: k,
-        duration: 0.35,
+        duration: 0.32,
         ease: 'power3.in',
         onComplete: () => {
           if (head.destroyed) return;
           this.fx.shake(18);
+          this.fx.shockwave();
           this.fx.punch(1.4);
           this.titleHit(head.y, 1000);
           this.titleSweep(head);
         },
       });
     });
-    gsap.to(pyr, { rotation: 0.04, duration: 1.2, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.7 });
-    await this.waitOrSkip(1900);
-
-    // the pyramid rises above the reliquary and pours its light into it
-    gsap.to(pyr, { y: -175, duration: 0.5, ease: 'power2.inOut' });
-    gsap.to(pyr.scale, { x: ps * 0.42, y: ps * 0.42, duration: 0.5, ease: 'power2.inOut' });
-    const beam = new Sprite(this.tex.glow);
-    beam.anchor.set(0.5, 0);
-    beam.blendMode = 'add';
-    beam.tint = 0xff3a24;
-    beam.position.set(0, -150);
-    beam.width = 90;
-    beam.height = 0;
-    this.content.addChildAt(beam, this.content.getChildIndex(pyr));
-    gsap.to(beam, { height: 220, alpha: 0.8, duration: 0.5, delay: 0.3 });
-    await this.waitOrSkip(450);
-    const caption = new Text({ text: 'LA PYRAMIDE CHOISIT UNE SOUCHE…', style: body(30, 0xffb0a0) });
+    await this.waitOrSkip(1050);
+    const caption = new Text({ text: 'LE ROULEAU CHOISIT VOTRE SOUCHE…', style: body(26, 0xffd9a0) });
     caption.anchor.set(0.5);
-    caption.y = 210;
+    caption.y = 232;
     this.content.addChild(caption);
     gsap.fromTo(caption, { alpha: 0 }, { alpha: 1, duration: 0.4 });
-    gsap.to(caption, { alpha: 0.5, duration: 0.6, yoyo: true, repeat: -1, delay: 0.4 });
-    await this.roulette(40, special);
+    gsap.to(caption, { alpha: 0.55, duration: 0.6, yoyo: true, repeat: -1, delay: 0.4 });
+    await this.roulette(-30, special);
     gsap.killTweensOf(caption);
     caption.destroy();
-    gsap.to(beam, { alpha: 0, duration: 0.4 });
-    const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 54, 'blood', 1000);
+    const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 56, 'gold', 1000);
     strain.y = 236;
     this.content.addChild(strain);
     this.popIn(strain);
+    gsap.delayedCall(0.3, () => {
+      if (strain.destroyed) return;
+      this.titleHit(strain.y, 640);
+      this.titleSweep(strain);
+    });
     const rule = new Text({ text: 'ELLE ENVAHIT TOUT LE ROULEAU ET PAIE SUR LES 10 LIGNES', style: body(22, 0xe8d8c0) });
     rule.anchor.set(0.5);
-    rule.y = 298;
-    const go = new Text({ text: 'TOUCHEZ POUR COMMENCER', style: body(26, 0xffd27a) });
+    rule.y = 300;
+    const go = new Text({ text: 'TOUCHEZ POUR COMMENCER', style: body(24, 0xffd27a) });
     go.anchor.set(0.5);
-    go.y = 352;
+    go.y = 350;
     gsap.to(go, { alpha: 0.4, duration: 0.7, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.content.addChild(rule, go);
     gsap.fromTo([rule, go], { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.3 });
@@ -886,9 +946,10 @@ export class Overlays extends Container {
     this.fx.glitch(2);
     this.sunburst(0x3e1806);
     const ribbon = this.ribbon(1120, 150, 0x8a0f26);
-    ribbon.y = mutation !== null ? -248 : -20;
+    ribbon.y = -20;
+    ribbon.visible = mutation === null;
     const head = this.head3d(`+${spins} TOURS GRATUITS`, 84, 'gold', 940);
-    head.y = ribbon.y - 10;
+    head.y = mutation !== null ? -320 : ribbon.y - 10;
     this.content.addChild(ribbon, head);
     this.popIn(ribbon);
     this.popIn(head, 0.05);
@@ -896,12 +957,13 @@ export class Overlays extends Container {
     if (mutation !== null) {
       const sub = new Text({ text: 'MUTATION ! UNE NOUVELLE SOUCHE', style: body(30, 0xff8a70) });
       sub.anchor.set(0.5);
-      sub.y = -150;
+      sub.y = 232;
       this.content.addChild(sub);
       this.popIn(sub, 0.2);
-      await this.roulette(50, mutation, active);
-      const name = this.head3d(SYMBOLS[mutation].name.toUpperCase(), 56, 'blood');
-      name.y = 240;
+      await this.roulette(-30, mutation, active);
+      sub.destroy();
+      const name = this.head3d(SYMBOLS[mutation].name.toUpperCase(), 56, 'gold');
+      name.y = 262;
       this.content.addChild(name);
       this.popIn(name);
     }

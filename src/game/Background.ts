@@ -397,9 +397,7 @@ export class Background extends Container {
     if (on) {
       this.strike(1, APEX);
       this.templeFx?.surge(1);
-      gsap.delayedCall(0.35, () => this.strike(0.8));
-      gsap.delayedCall(0.8, () => this.strike(0.9));
-      this.nextStrike = 3;
+      this.nextStrike = 6;
     }
   }
 
@@ -539,7 +537,7 @@ export class Background extends Container {
         const size = 80 + this.spread.r * 5200;
         this.reveal.width = this.reveal.height = size;
       }
-      this.infectedPulse.alpha = f * (beat * 0.22 + this.boltLight * 0.5 + this.flareV * 0.25);
+      this.infectedPulse.alpha = f * (beat * 0.1 + this.boltLight * 0.3 + this.flareV * 0.2);
     }
     this.flareV *= Math.pow(0.25, dt);
     this.lampGlows.forEach((g, i) => {
@@ -610,9 +608,8 @@ export class Background extends Container {
     this.nextStrike -= dt;
     if (this.nextStrike <= 0 && this.infected) {
       if (f > 0.5) {
-        this.strike(0.6 + Math.random() * 0.4);
-        if (Math.random() < 0.3) gsap.delayedCall(0.18, () => this.strike(0.5));
-        this.nextStrike = 2.5 + Math.random() * 4;
+        this.strike(0.6 + Math.random() * 0.3);
+        this.nextStrike = 8 + Math.random() * 6;
       } else {
         const x = Math.random() < 0.5 ? 200 + Math.random() * 300 : 1420 + Math.random() * 300;
         this.strike(0.3, [x, HORIZON - 60]);

@@ -282,7 +282,7 @@ function glyphColumn(seed: number): { mask: THREE.Texture; normal: THREE.Texture
   return { mask, normal };
 }
 
-/** Branching molten cracks spreading down a face from the apex (white on transparent). */
+/** A few long molten veins fanning down a face from the apex (white on transparent). */
 function crackTexture(seed: number, amount: number): THREE.Texture {
   const S = 1024;
   const [c, ctx] = canvas(S, S);
@@ -291,18 +291,18 @@ function crackTexture(seed: number, amount: number): THREE.Texture {
   const grow = (x: number, y: number, a: number, len: number, depth: number) => {
     const pts: [number, number][] = [[x, y]];
     for (let i = 0; i < 12; i++) {
-      a += (r() - 0.5) * 0.7;
+      a += (r() - 0.5) * 0.3;
       x += Math.cos(a) * (len / 12);
       y += Math.sin(a) * (len / 12);
       pts.push([x, y]);
     }
     lines.push(pts);
-    if (depth > 0) for (let k = 0; k < 2; k++) {
-      const p = pts[3 + Math.floor(r() * 8)];
-      grow(p[0], p[1], a + (r() < 0.5 ? 0.8 : -0.8), len * 0.5, depth - 1);
+    if (depth > 0) {
+      const p = pts[5 + Math.floor(r() * 5)];
+      grow(p[0], p[1], a + (r() < 0.5 ? 0.55 : -0.55), len * 0.42, depth - 1);
     }
   };
-  for (let i = 0; i < amount; i++) grow(S / 2 + (r() - 0.5) * 30, 30, Math.PI / 2 + (r() - 0.5) * 1.6, 420 + r() * 420, 3);
+  for (let i = 0; i < amount; i++) grow(S / 2 + (r() - 0.5) * 16, 30, Math.PI / 2 + ((i + 0.5) / amount - 0.5) * 1.15 + (r() - 0.5) * 0.12, 620 + r() * 260, 1);
   const pass = (w: number, col: string, blur: number) => {
     ctx.save();
     ctx.filter = blur ? `blur(${blur}px)` : 'none';
@@ -320,8 +320,8 @@ function crackTexture(seed: number, amount: number): THREE.Texture {
     }
     ctx.restore();
   };
-  pass(14, 'rgba(255,255,255,0.22)', 4);
-  pass(5, 'rgba(255,255,255,0.95)', 0);
+  pass(16, 'rgba(255,255,255,0.16)', 6);
+  pass(3.5, 'rgba(255,255,255,0.9)', 0);
   const t = tex(c, true);
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
@@ -651,13 +651,13 @@ export async function renderTemple3D(state: State, scale = 4 / 3): Promise<{ can
     faceGeo.setAttribute('position', new THREE.Float32BufferAttribute([-B + n.x, n.y, B + n.z, B + n.x, n.y, B + n.z, n.x, PH + n.y, n.z], 3));
     faceGeo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2));
     for (let side = 0; side < 4; side++) {
-      const ct = crackTexture(300 + side * 17, 9);
+      const ct = crackTexture(300 + side * 17, 3);
       const mat = new THREE.MeshBasicMaterial({
         map: ct,
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
-        color: new THREE.Color(1.9, 0.22, 0.12),
+        color: new THREE.Color(1.5, 0.24, 0.12),
         fog: false,
       });
       const face = new THREE.Mesh(faceGeo, mat);

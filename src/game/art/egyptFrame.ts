@@ -619,6 +619,149 @@ export function paintShrineFrame(w: number, h: number): HTMLCanvasElement {
 }
 
 /** Gold arrowhead pointing right (mirror it for the left one). */
+/** A grain of gold sand: small and crisp, not a soft dot. */
+export function paintGrain(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(64, 64);
+  ctx.translate(32, 32);
+  const g = ctx.createRadialGradient(-7, -8, 1, 0, 0, 26);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.35, '#ffe9a8');
+  g.addColorStop(1, '#c98a24');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const r = 18 + ((i * 5) % 3) * 4;
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.fill();
+  return c;
+}
+
+/** What flies off the rail: torn leaves of gold, and a few tiny gold charms (ankh, lotus, eye). */
+export function paintGoldFlakes(): HTMLCanvasElement[] {
+  const gold = (ctx: CanvasRenderingContext2D) => {
+    const g = ctx.createLinearGradient(-20, -24, 20, 24);
+    g.addColorStop(0, '#fff6c8');
+    g.addColorStop(0.42, '#f2c25a');
+    g.addColorStop(0.72, '#b87a1c');
+    g.addColorStop(1, '#ffe08a');
+    return g;
+  };
+  const make = (draw: (ctx: CanvasRenderingContext2D) => void) => {
+    const [c, ctx] = makeCanvas(64, 64);
+    ctx.translate(32, 32);
+    ctx.fillStyle = ctx.strokeStyle = gold(ctx);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(40,18,0,0.8)';
+    ctx.shadowBlur = 3;
+    draw(ctx);
+    return c;
+  };
+  const leaf = (pts: [number, number][]) => (ctx: CanvasRenderingContext2D) => {
+    ctx.beginPath();
+    for (const [x, y] of pts) ctx.lineTo(x, y);
+    ctx.closePath();
+    ctx.fill();
+  };
+  return [
+    make(leaf([[-4, -24], [15, -11], [20, 8], [3, 24], [-15, 13], [-20, -7]])),
+    make(leaf([[0, -26], [11, -3], [6, 21], [-9, 24], [-14, -2]])),
+    make(leaf([[-20, -13], [5, -22], [22, -2], [11, 17], [-13, 12]])),
+    // ankh
+    make((ctx) => {
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.ellipse(0, -14, 7.5, 10, 0, 0, Math.PI * 2);
+      ctx.moveTo(0, -4);
+      ctx.lineTo(0, 26);
+      ctx.moveTo(-15, 4);
+      ctx.lineTo(15, 4);
+      ctx.stroke();
+    }),
+    // lotus
+    make((ctx) => {
+      for (const a of [-0.95, -0.48, 0, 0.48, 0.95]) {
+        ctx.save();
+        ctx.translate(0, 19);
+        ctx.rotate(a);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(10, -18, 0, -38);
+        ctx.quadraticCurveTo(-10, -18, 0, 0);
+        ctx.fill();
+        ctx.restore();
+      }
+    }),
+    // eye
+    make((ctx) => {
+      ctx.lineWidth = 4.5;
+      ctx.beginPath();
+      ctx.moveTo(-24, -1);
+      ctx.quadraticCurveTo(0, -20, 24, -1);
+      ctx.quadraticCurveTo(0, 14, -24, -1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -2, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-5, 9);
+      ctx.quadraticCurveTo(-4, 24, -14, 22);
+      ctx.moveTo(8, 8);
+      ctx.lineTo(18, 21);
+      ctx.stroke();
+    }),
+  ];
+}
+
+/** The band the strain reel runs along: lapis between two gold rails, fading out at both ends. */
+export function paintStrainBand(w: number, h: number): HTMLCanvasElement {
+  const S = 2;
+  const [c, ctx] = makeCanvas(w * S, h * S);
+  ctx.scale(S, S);
+  const bg = ctx.createLinearGradient(0, 0, 0, h);
+  bg.addColorStop(0, '#050a1e');
+  bg.addColorStop(0.5, '#142a64');
+  bg.addColorStop(1, '#050a1e');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+  // the speckle of gold in real lapis
+  const r = seeded(41);
+  for (let i = 0; i < 520; i++) {
+    ctx.fillStyle = `rgba(255,214,130,${0.08 + r() * 0.34})`;
+    ctx.fillRect(r() * w, r() * h, 1 + r() * 1.6, 1 + r() * 1.6);
+  }
+  for (const y of [0, h - 15]) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, y === 0 ? 15 : y - 5, w, 5);
+    ctx.fillStyle = goldGrad(ctx, 0, y, 0, y + 15);
+    ctx.fillRect(0, y, w, 15);
+    ctx.fillStyle = 'rgba(255,245,210,0.65)';
+    ctx.fillRect(0, y + 2, w, 1.5);
+    ctx.fillStyle = 'rgba(70,36,4,0.85)';
+    for (let x = 12; x < w; x += 42) {
+      ctx.beginPath();
+      ctx.moveTo(x, y + 3);
+      ctx.lineTo(x + 8, y + 7.5);
+      ctx.lineTo(x, y + 12);
+      ctx.lineTo(x - 8, y + 7.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.globalCompositeOperation = 'destination-in';
+  const fade = ctx.createLinearGradient(0, 0, w, 0);
+  fade.addColorStop(0, 'rgba(0,0,0,0)');
+  fade.addColorStop(0.16, 'rgba(0,0,0,1)');
+  fade.addColorStop(0.84, 'rgba(0,0,0,1)');
+  fade.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, w, h);
+  return c;
+}
+
 export function paintArrowHead(): HTMLCanvasElement {
   const S = 2;
   const [c, ctx] = makeCanvas(48 * S, 56 * S);

@@ -4,6 +4,9 @@ export const REEL_GAP = 10;
 export const BOARD_W = 5 * CELL_W + 4 * REEL_GAP;
 export const BOARD_H = 3 * CELL_H;
 export const SYMBOL_SIZE = 178;
+/** the bonus tile is a framed painting: it takes the whole cell, not the symbol's square */
+export const TILE_W = CELL_W - 2;
+export const TILE_H = CELL_H - 2;
 /** room between the reels and the frame's opening: the cobras and pendants live there, clear of the symbols */
 export const FRAME_MARGIN_X = 50;
 export const FRAME_MARGIN_Y = 30;

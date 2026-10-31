@@ -12,6 +12,8 @@ type Pan = number;
 
 const A4 = 440;
 const midi = (n: number) => A4 * Math.pow(2, (n - 69) / 12);
+/** semitones of the hijaz scale, for coin counts */
+const TICK_SCALE = [0, 1, 4, 5, 7, 8, 11, 12, 13, 16];
 /* Everything sits on E Hijaz (phrygian dominant): the augmented second F → G# is the Egyptian colour. */
 /** E – F – E – Dm (Hijaz cadence) as MIDI chords, root first */
 const PROGRESSION = [
@@ -738,6 +740,8 @@ export class Audio {
     this.hiss({ at, dur: 0.012, type: 'bandpass', f0: 1500, q: 1.4, vol: 0.13, a: 0.0005, pan });
     this.sagat(at, midi(note), 0.045, pan);
     this.voice({ at, f: midi(note - 12), type: 'triangle', vol: 0.05, r: 0.2, a: 0.002, pan });
+    this.hiss({ at: at + 0.012, dur: 0.2, type: 'bandpass', f0: 6400, f1: 3600, q: 1.1, vol: 0.022 + (i >= 4 ? 0.01 : 0), a: 0.012, pan });
+    this.coin(at + 0.02, 0.012 + (i >= 4 ? 0.008 : 0), pan, 1 + i * 0.06, this.sfx, true);
     if (i >= 4) this.spinLoop?.stop(at);
     else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
   }
@@ -760,32 +764,50 @@ export class Audio {
     }
   }
 
-  /** A single gold coin: inharmonic ring, tiny strike transient and a quieter second bounce. */
-  private coin(at: number, vol: number, pan: Pan, pitch = 1, dest: AudioNode = this.sfx): void {
-    const f = 2350 * pitch;
-    const partials: [number, number, number][] = [
-      [1, 1, 0.26],
-      [1.505, 0.55, 0.16],
-      [2.13, 0.36, 0.1],
-      [2.71, 0.2, 0.07],
+  /**
+   * A gold coin: the strike is a tick of bright metal; its bell modes are inharmonic and one of them
+   * is doubled a few hertz apart, which gives struck gold its shimmer. Long ones settle in two
+   * small bounces; a short one is a single clean ting for fast counting.
+   */
+  private coin(at: number, vol: number, pan: Pan, pitch = 1, dest: AudioNode = this.sfx, short = false): void {
+    const f = 2900 * pitch;
+    const modes: [number, number, number][] = [
+      [1, 0.62, 0.15],
+      [1.34, 1, 0.3],
+      [1.87, 0.6, 0.2],
+      [2.41, 0.36, 0.13],
+      [3.03, 0.22, 0.08],
     ];
-    for (const bounce of [0, 1]) {
-      const t = at + bounce * (0.05 + Math.random() * 0.05);
-      const v = vol * (bounce ? 0.35 : 1);
-      for (const [r, g, d] of partials) this.voice({ at: t, f: f * r * (1 + (Math.random() - 0.5) * 0.01), vol: v * g, r: d * (bounce ? 0.6 : 1), a: 0.0008, pan, dest });
-      this.hiss({ at: t, dur: 0.008, type: 'highpass', f0: 6000, vol: v * 0.45, a: 0.0005, pan, dest });
+    const ring = (t: number, v: number, decay: number, count: number) => {
+      for (const [r, g, d] of modes.slice(0, count)) {
+        this.voice({ at: t, f: f * r * (1 + (Math.random() - 0.5) * 0.008), vol: v * g, r: d * decay, a: 0.0006, pan, dest });
+      }
+      this.hiss({ at: t, dur: 0.006, type: 'bandpass', f0: 7400, q: 1.2, vol: v * 0.8, a: 0.0004, pan, dest });
+    };
+    this.voice({ at, f: f * 1.34 + 5, vol: vol * 0.5, r: 0.3, a: 0.0006, pan, dest, echo: short ? 0 : 0.08 });
+    if (short) {
+      ring(at, vol, 0.55, 3);
+      return;
     }
+    ring(at, vol, 1, 5);
+    const gap = 0.055 + Math.random() * 0.03;
+    ring(at + gap, vol * 0.34, 0.5, 3);
+    ring(at + gap * 1.7, vol * 0.14, 0.32, 2);
   }
 
-  /** A shower of coins spilling out; n scales the amount. */
+  /** A pour of coins into a heap, carried on a shake of the sistrum, the rattle of the temples. */
   coins(n: number): void {
     if (!this.ctx) return;
     const at = this.t;
-    const count = Math.min(14, 3 + Math.round(n * 0.5));
+    const count = Math.min(12, 3 + Math.round(n * 0.5));
+    const span = 0.3 + count * 0.04;
     for (let k = 0; k < count; k++) {
-      const dt = Math.pow(Math.random(), 1.4) * (0.35 + count * 0.04);
-      this.coin(at + dt, 0.04 + Math.random() * 0.035, (Math.random() - 0.5) * 1.4, 0.85 + Math.random() * 0.4);
+      const dt = Math.pow(Math.random(), 1.4) * span;
+      this.coin(at + dt, 0.035 + Math.random() * 0.03, (Math.random() - 0.5) * 1.4, 0.88 + Math.random() * 0.34);
     }
+    this.sistrum(at, 0.022, -0.3, 3);
+    if (count > 6) this.sistrum(at + span * 0.55, 0.018, 0.3, 3);
+    this.hiss({ at, dur: span + 0.12, type: 'bandpass', f0: 5200, f1: 3400, q: 0.9, vol: 0.012, a: 0.03, pan: -0.25, pan1: 0.25 });
   }
 
   /** A pyramid lands: a temple gong, pitch climbing with each one, and voices rising with it. */
@@ -979,8 +1001,11 @@ export class Audio {
   tick(progress = -1): void {
     if (!this.ctx) return;
     const at = this.t;
-    if (progress >= 0) this.coin(at, 0.05, (Math.random() - 0.5) * 0.5, 0.8 + Math.min(1, progress) * 0.55, this.ui);
-    else this.coin(at, 0.06, (Math.random() - 0.5) * 0.4, 0.95 + Math.random() * 0.15, this.ui);
+    if (progress >= 0) {
+      // the count climbs the game's own scale, so a long count-up sings instead of just rattling
+      const step = Math.floor(Math.min(1, progress) * (TICK_SCALE.length - 1));
+      this.coin(at, 0.042, (Math.random() - 0.5) * 0.5, Math.pow(2, TICK_SCALE[step] / 12), this.ui, true);
+    } else this.coin(at, 0.05, (Math.random() - 0.5) * 0.4, 0.97 + Math.random() * 0.08, this.ui, true);
   }
 
   /** A strain floods a reel: rushing sand, a rising voice, a slab slamming home. */
