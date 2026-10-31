@@ -678,8 +678,9 @@ export class Game {
     for (let i = startAt; i < f.spins.length; i++) {
       const s: FreeSpinOutcome = f.spins[i];
       const before = f.spins[i - 1]?.specials ?? firstSpecials;
-      this.banner.set(s.index, i === 0 ? 10 : f.spins[i - 1].total, before);
       await this.waitForPress();
+      // the count moves on the press, not at the end of the spin before
+      this.banner.set(s.index, i === 0 ? 10 : f.spins[i - 1].total, before);
       this.banner.bump();
       this.audio.spinStart();
       this.hud.pulseSpin();
