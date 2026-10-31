@@ -270,12 +270,12 @@ export function goo(ctx: CanvasRenderingContext2D, x: number, y: number, len: nu
 export function paintDepthShade(h: number): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(4, h);
   const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, 'rgba(10,4,12,0.42)');
-  g.addColorStop(0.08, 'rgba(10,4,12,0.1)');
-  g.addColorStop(0.14, 'rgba(10,4,12,0)');
-  g.addColorStop(0.86, 'rgba(10,4,12,0)');
-  g.addColorStop(0.92, 'rgba(10,4,12,0.1)');
-  g.addColorStop(1, 'rgba(10,4,12,0.42)');
+  g.addColorStop(0, 'rgba(10,4,12,0.9)');
+  g.addColorStop(0.1, 'rgba(10,4,12,0.2)');
+  g.addColorStop(0.16, 'rgba(10,4,12,0)');
+  g.addColorStop(0.84, 'rgba(10,4,12,0)');
+  g.addColorStop(0.9, 'rgba(10,4,12,0.2)');
+  g.addColorStop(1, 'rgba(10,4,12,0.9)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 4, h);
   return c;

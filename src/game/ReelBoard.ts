@@ -98,10 +98,15 @@ export class ReelBoard extends Container {
     super();
     this.fx = new Particles(tex);
 
-    // the pyramid's own stone, running on under the frame
-    const wall = new Sprite(tex.wall);
-    wall.position.set(-FRAME_MARGIN_X - 16, -FRAME_MARGIN_Y - 16);
-    this.panels.addChild(wall);
+    // lapis and gold around the reels, running on under the frame
+    const surround = new Sprite(tex.surround);
+    surround.position.set(-FRAME_MARGIN_X - 16, -FRAME_MARGIN_Y - 16);
+    this.addChildAt(surround, 0);
+    for (let r = 0; r < REELS; r++) {
+      const p = new Sprite(tex.reelPanels[r]);
+      p.position.set(reelX(r) - REEL_GAP / 2, 0);
+      this.panels.addChild(p);
+    }
 
     const mask = new Graphics().rect(-6, 0, BOARD_W + 12, BOARD_H).fill(0xffffff);
     this.reelLayer.mask = mask;
@@ -295,7 +300,7 @@ export class ReelBoard extends Container {
       this.infectionGlow.alpha = 0.12;
       gsap.to(this.infectionGlow, { alpha: 0.3, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     } else gsap.to(this.infectionGlow, { alpha: 0, duration: 0.6 });
-    for (const p of this.panels.children as Sprite[]) gsap.to(p, { tint: on ? 0xff9a90 : 0xffffff, duration: 0.8 });
+    for (const p of this.panels.children as Sprite[]) gsap.to(p, { tint: on ? 0xffb8c4 : 0xffffff, duration: 0.8 });
   }
 
   /** Spins all reels and lands them on `plan.grid`. */
@@ -669,20 +674,20 @@ export class ReelBoard extends Container {
     const up = s * (1 + 0.14 * amp);
     const tl = gsap.timeline({ delay });
     // ignition
-    tl.fromTo(rig.halo, { alpha: 0 }, { alpha: strong ? 1 : 0.7, duration: 0.14, ease: 'power2.out' }, 0)
-      .to(rig.halo, { alpha: strong ? 0.5 : 0.34, duration: 0.6, ease: 'sine.out' }, 0.14)
+    tl.fromTo(rig.halo, { alpha: 0 }, { alpha: strong ? 0.7 : 0.5, duration: 0.14, ease: 'power2.out' }, 0)
+      .to(rig.halo, { alpha: strong ? 0.34 : 0.24, duration: 0.6, ease: 'sine.out' }, 0.14)
       .fromTo(rig.halo.scale, { x: hs * 0.5, y: hs * 0.5 }, { x: hs, y: hs, duration: 0.4, ease: 'power3.out' }, 0)
-      .fromTo(rig.ring, { alpha: 0 }, { alpha: strong ? 0.95 : 0.7, duration: 0.3, ease: 'sine.out' }, 0.06)
+      .fromTo(rig.ring, { alpha: 0 }, { alpha: strong ? 0.6 : 0.45, duration: 0.3, ease: 'sine.out' }, 0.06)
       .fromTo(rig.ring.scale, { x: rs * 1.4, y: rs * 1.4 }, { x: rs, y: rs, duration: 0.5, ease: 'power3.out' }, 0.06)
-      .to(rig.burst, { alpha: strong ? 0.42 : 0.22, duration: 0.3 }, 0.06)
+      .to(rig.burst, { alpha: strong ? 0.22 : 0.12, duration: 0.3 }, 0.06)
       .to(b.scale, { x: up, y: up, duration: 0.36, ease: 'power3.out' }, 0)
-      .fromTo(rig.glow, { alpha: 0.34 }, { alpha: 0.1, duration: 0.7, ease: 'sine.out' }, 0);
+      .fromTo(rig.glow, { alpha: 0.2 }, { alpha: 0.05, duration: 0.7, ease: 'sine.out' }, 0);
     // alive
     rig.tweens.push(
       gsap.to(rig.ring, { rotation: Math.PI * 2, duration: 16, repeat: -1, ease: 'none', delay }),
       gsap.to(rig.burst, { rotation: -Math.PI * 2, duration: 22, repeat: -1, ease: 'none', delay }),
       gsap.to(b.scale, { x: up * 0.965, y: up * 0.965, duration: 1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.45 }),
-      gsap.to(rig.halo, { alpha: strong ? 0.72 : 0.5, duration: 1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.8 }),
+      gsap.to(rig.halo, { alpha: strong ? 0.46 : 0.32, duration: 1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.8 }),
       gsap.fromTo(rig.shine, { x: -TEX_SIZE }, { x: TEX_SIZE, duration: 0.7, ease: 'power1.inOut', repeat: -1, repeatDelay: 1.3, delay: delay + 0.1 }),
     );
     // one-shot particle effects, so a looping win cycle doesn't flood the screen

@@ -19,8 +19,8 @@ import { ReelBoard } from './ReelBoard';
 import type { SymbolTextures } from './textures';
 
 const BOARD_Y = 186;
-const WORLD_TOP = -178;
-const WORLD_BOTTOM = BOARD_Y + BOARD_H + 212;
+const WORLD_TOP = -172;
+const WORLD_BOTTOM = BOARD_Y + BOARD_H + 204;
 /** Cleopatra stands left of the reels, her cobra staff right beside the frame */
 const MASCOT_X = -505;
 const MASCOT_SCALE = 0.82;
@@ -290,8 +290,8 @@ export class Game {
     const worldW = portrait ? BOARD_W + 340 : WORLD_W;
     const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
     this.teaser.visible = portrait && !this.inFeature;
-    this.logo.scale.set(portrait ? 1.12 : 1);
-    this.logo.y = portrait ? -70 : -66;
+    this.logo.scale.set(portrait ? 1.04 : 0.8);
+    this.logo.y = portrait ? -100 : -68;
     this.baseScale = scale;
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);

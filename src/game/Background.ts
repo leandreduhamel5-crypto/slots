@@ -478,7 +478,7 @@ export class Background extends Container {
       g.tint = f > 0.5 ? 0xff3030 : 0xffc870;
     });
     if (this.heart) {
-      this.heart.alpha = Math.min(1, 0.4 + beat * 0.3 * f + f * 0.3 + this.flareV + this.boltLight);
+      this.heart.alpha = Math.min(1, 0.14 + beat * 0.3 * f + f * 0.3 + this.flareV + this.boltLight);
       this.heart.tint = f > 0.5 ? COLORS.infection : 0xffd890;
       this.heart.scale.set(((300 + f * 260) / this.heart.texture.width) * (1 + this.flareV * 0.6 + beat * 0.15 * f));
     }

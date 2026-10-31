@@ -188,8 +188,8 @@ export class Logo extends Container {
     this.halo = new Sprite(Texture.from(softGlow(art, 18 / k)));
     this.halo.anchor.set(0.5, 0.45);
     this.halo.blendMode = 'add';
-    this.halo.tint = 0xff2a44;
-    this.halo.alpha = 0.35;
+    this.halo.tint = 0xff7a30;
+    this.halo.alpha = 0.1;
     this.sprite = new Sprite(tex);
     this.sprite.anchor.set(0.5, 0.45);
     // light sweep, masked by the logo itself
@@ -209,7 +209,7 @@ export class Logo extends Container {
     this.addGems();
     this.scheduleShine();
     gsap.to(this.inner.scale, { x: this.base * 1.012, y: this.base * 1.012, duration: 2.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    gsap.to(this.halo, { alpha: 0.6, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    gsap.to(this.halo, { alpha: 0.2, duration: 2.4, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     gsap.ticker.add(this.tick);
   }
 
@@ -225,8 +225,8 @@ export class Logo extends Container {
       glow.blendMode = 'add';
       glow.tint = 0xff2a14;
       glow.position.set(gx, gy);
-      glow.scale.set(size * 5);
-      gsap.fromTo(glow, { alpha: 0.2 }, { alpha: 0.75, duration: 1.3 + i * 0.21, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
+      glow.scale.set(size * 3.6);
+      gsap.fromTo(glow, { alpha: 0.08 }, { alpha: 0.32, duration: 1.8 + i * 0.21, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
       const star = new Sprite(this.dropTex);
       star.anchor.set(0.5);
       star.blendMode = 'add';
@@ -257,7 +257,7 @@ export class Logo extends Container {
     if (this.destroyed) return;
     const dt = Math.min(0.05, gsap.ticker.deltaRatio() / 60);
     // embers rise off the molten INFECTION letters
-    if (Math.random() < dt * 9) {
+    if (Math.random() < dt * 2.5) {
       const s = new Sprite(this.dropTex);
       s.anchor.set(0.5);
       s.blendMode = 'add';

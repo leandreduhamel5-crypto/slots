@@ -11,12 +11,12 @@ import {
   paintStar,
   softGlow,
 } from './art/painters';
-import { BOARD_H, BOARD_W, CELL_W, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP, reelX } from './layout';
+import { BOARD_H, BOARD_W, CELL_W, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP } from './layout';
 import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintCoin, paintEgyptFrame, paintGlyphRing, paintPyramidWall, paintRisingColumn, redCrack } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintGlyphRing, paintReelSurround, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
 
 /** the painted symbols are 512 px: keep all of it, the screens that show it are getting bigger */
 export const TEX_SIZE = 512;
@@ -48,8 +48,9 @@ export interface SymbolTextures {
   /** additive glow layers that make each symbol light up */
   glowMaps: Texture[];
   frame: Texture;
-  /** the stone wall behind the reels, running on under the frame */
-  wall: Texture;
+  /** the lapis band around the reels, running on under the frame */
+  surround: Texture;
+  reelPanels: Texture[];
   shade: Texture;
   /** ring of hieroglyphs turning behind a winning symbol */
   glyphRing: Texture;
@@ -344,7 +345,8 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     glowMaps: glowCanvases.map((c) => Texture.from(c)),
     // the 3D-rendered frame (art/frame3d.ts) is 2x; the painted one is the fallback
     frame: frameArt ? Texture.from(frameArt) : Texture.from(framed()),
-    wall: Texture.from(paintPyramidWall(BOARD_W + (FRAME_MARGIN_X + 16) * 2, BOARD_H + (FRAME_MARGIN_Y + 16) * 2, [1, 2, 3, 4].map((r) => reelX(r) - REEL_GAP / 2 + FRAME_MARGIN_X + 16))),
+    surround: Texture.from(paintReelSurround(BOARD_W + (FRAME_MARGIN_X + 16) * 2, BOARD_H + (FRAME_MARGIN_Y + 16) * 2, FRAME_MARGIN_X + 16, FRAME_MARGIN_Y + 16, BOARD_W, BOARD_H)),
+    reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
     glyphRing: Texture.from(paintGlyphRing()),
     veins: Texture.from(paintRisingColumn(CELL_W, BOARD_H)),
