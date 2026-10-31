@@ -1,7 +1,7 @@
 import { coverCanvas } from './assets';
 import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import gsap from 'gsap';
-import { paintSoftRays } from './art/egyptFrame';
+import { paintDunes, paintSoftRays } from './art/egyptFrame';
 import { makeCanvas, seeded } from './art/painters';
 import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, OBELISK_TIP_Y, PYRAMID_HALF, RS, TH as H, TW as W } from './art/templeHD';
 import { Fire, paintFlameBlob } from './Fire';
@@ -118,6 +118,11 @@ function openSky(x: number, y: number): boolean {
 type Pt = [number, number];
 
 /** Jagged lightning path by midpoint displacement. */
+function lerpTint(a: number, b: number, k: number): number {
+  const ch = (sh: number) => Math.round(((a >> sh) & 255) + (((b >> sh) & 255) - ((a >> sh) & 255)) * k) << sh;
+  return ch(16) | ch(8) | ch(0);
+}
+
 function boltPath(a: Pt, b: Pt, rough: number): Pt[] {
   let pts: Pt[] = [a, b];
   let disp = Math.hypot(b[0] - a[0], b[1] - a[1]) * rough;
@@ -158,6 +163,12 @@ export class Background extends Container {
   private strikeGlow: Sprite;
   private boltLight = 0;
   private rayLayer: Sprite;
+  private dunes: Sprite;
+  /** sand blown low along the ground */
+  private blown: TilingSprite;
+  private view = { x: 0, y: 0 };
+  /** height of the console over the bottom of the screen */
+  private ground = 0;
   private redWash: Sprite;
   private fog: TilingSprite;
   private spores: Spore[] = [];
@@ -308,7 +319,12 @@ export class Background extends Container {
     this.rayLayer = new Sprite(Texture.from(paintSoftRays()));
     this.rayLayer.anchor.set(0.5);
     this.rayLayer.blendMode = 'add';
-    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.sporeLayer, this.pulse);
+    this.dunes = new Sprite(Texture.from(paintDunes(2560, 560)));
+    this.dunes.anchor.set(0.5, 1);
+    this.blown = new TilingSprite({ texture: Texture.from(paintFog()), width: 400, height: 200 });
+    this.blown.tileScale.set(1.7, 0.42);
+    this.blown.blendMode = 'add';
+    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.dunes, this.blown, this.sporeLayer, this.pulse);
     for (let i = 0; i < 50; i++) this.spores.push(this.spawn(true));
   }
 
@@ -324,17 +340,35 @@ export class Background extends Container {
     return { s, vx: (Math.random() - 0.5) * 10, vy: -(6 + Math.random() * 20), phase: Math.random() * 10 };
   }
 
-  resize(w: number, h: number): void {
+  resize(w: number, h: number, ground = 0): void {
     this.w = w;
     this.h = h;
+    this.ground = ground;
     this.applyCamera();
     this.redWash.position.set(w / 2, h * 0.45);
     this.redWash.width = w * 1.2;
     this.redWash.height = h * 1.2;
+    this.dunes.scale.set(Math.max(w / 2300, 0.62));
+    this.blown.width = w * 1.2;
+    this.blown.height = h * 0.3;
+    this.blown.position.set(-w * 0.1, h * 0.72);
+    this.placeDunes();
     this.rayLayer.position.set(w / 2, h * 0.06);
     this.rayLayer.width = this.rayLayer.height = Math.max(w, h) * 2.4;
     this.fog.width = w;
     this.fog.height = h;
+  }
+
+  private placeDunes(): void {
+    this.dunes.position.set(this.w / 2 - this.view.x * 20, this.h - this.ground + 150 * this.dunes.scale.y - this.view.y * 7);
+  }
+
+  /** Where the viewer's eye is (-1..1): the far temple moves a little, the near dunes more. */
+  setView(x: number, y: number): void {
+    this.view.x = x;
+    this.view.y = y;
+    this.applyCamera();
+    this.placeDunes();
   }
 
   /** camera dolly: k = zoom factor, focus = the art point that stays put while zooming in */
@@ -346,7 +380,7 @@ export class Background extends Container {
     const s = base * this.camera.k;
     const f = [this.camera.fx - W / 2, this.camera.fy - H / 2];
     this.sceneC.scale.set(s);
-    this.sceneC.position.set(this.w / 2 - f[0] * (s - base), this.h / 2 - f[1] * (s - base));
+    this.sceneC.position.set(this.w / 2 - f[0] * (s - base) - this.view.x * 11, this.h / 2 - f[1] * (s - base) - this.view.y * 5);
   }
 
   /** Dolly the camera into (k > 1) or back out of the pyramid. */
@@ -488,6 +522,11 @@ export class Background extends Container {
     this.rayLayer.rotation += dt * 0.012;
     this.rayLayer.alpha = Math.min(0.2, 0.09 + f * 0.04 + this.flareV * 0.08 + this.boltLight * 0.08);
     this.rayLayer.tint = f > 0.5 ? 0xff5040 : 0xffd8a0;
+    this.dunes.tint = lerpTint(0xffffff, 0xff7a6a, f);
+    this.blown.tilePosition.x += dt * (150 + f * 170);
+    this.blown.tilePosition.y += dt * 8;
+    this.blown.tint = f > 0.5 ? 0xff5a40 : 0xd8a868;
+    this.blown.alpha = 0.1 + f * 0.1;
     this.fog.tilePosition.x += dt * 12;
     this.fog.tilePosition.y += dt * 3;
     this.fog.tint = f > 0.5 ? 0xa02030 : 0x6a5070;

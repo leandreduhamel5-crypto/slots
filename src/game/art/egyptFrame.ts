@@ -831,3 +831,125 @@ export function paintRockChip(seed: number): HTMLCanvasElement {
   ctx.restore();
   return c;
 }
+
+/** The bonus panel: lapis in gold, two compartments and a ruby between them. Painted at 2×. */
+export function paintBonusPanel(w: number, h: number): HTMLCanvasElement {
+  const S = 2;
+  const [c, ctx] = makeCanvas((w + 24) * S, (h + 24) * S);
+  ctx.scale(S, S);
+  ctx.translate(12, 12);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.75)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 5;
+  ctx.fillStyle = goldGrad(ctx, 0, 0, 0, h);
+  rr(ctx, 0, 0, w, h, 12);
+  ctx.fill();
+  ctx.restore();
+  const face = ctx.createLinearGradient(0, 0, 0, h);
+  face.addColorStop(0, '#1c3172');
+  face.addColorStop(1, '#0a1230');
+  ctx.fillStyle = face;
+  rr(ctx, 4, 4, w - 8, h - 8, 9);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(232,200,120,0.55)';
+  ctx.lineWidth = 1;
+  rr(ctx, 8, 8, w - 16, h - 16, 6);
+  ctx.stroke();
+  // the divider
+  ctx.fillStyle = goldGrad(ctx, 0, 0, 0, h);
+  ctx.fillRect(w / 2 - 1.5, 8, 3, h - 16);
+  const g = ctx.createRadialGradient(w / 2 - 3, h / 2 - 4, 1, w / 2, h / 2, 12);
+  g.addColorStop(0, '#ffd8c8');
+  g.addColorStop(0.45, '#ff3a2a');
+  g.addColorStop(1, '#6a0008');
+  ctx.fillStyle = goldGrad(ctx, 0, h / 2 - 15, 0, h / 2 + 15);
+  ctx.beginPath();
+  ctx.arc(w / 2, h / 2, 15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(w / 2, h / 2, 11, 0, Math.PI * 2);
+  ctx.fill();
+  return c;
+}
+
+/**
+ * The sand in front of the temple, in three banks: moonlit crests, ripples drawn by the wind,
+ * dark palms at the two ends. This is the ground the queen and the slot stand on.
+ */
+export function paintDunes(w: number, h: number): HTMLCanvasElement {
+  const rnd = seeded(41);
+  const [c, ctx] = makeCanvas(w, h);
+  const bank = (base: number, amp: number, phase: number, top: string, low: string, crest: string) => {
+    const y = (x: number) => base + Math.sin(x * 0.0021 + phase) * amp + Math.sin(x * 0.0057 + phase * 2) * amp * 0.34;
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    for (let x = 0; x <= w; x += 8) ctx.lineTo(x, y(x));
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, base - amp, 0, h);
+    g.addColorStop(0, top);
+    g.addColorStop(1, low);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    // ripples follow the shape of the bank
+    for (let k = 0; k < 16; k++) {
+      const dy = 12 + k * 15 + rnd() * 6;
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 12) {
+        const yy = y(x) + dy + Math.sin(x * 0.019 + k * 1.3) * 3.2;
+        if (x) ctx.lineTo(x, yy);
+        else ctx.moveTo(x, yy);
+      }
+      ctx.strokeStyle = k % 2 ? 'rgba(0,0,0,0.13)' : 'rgba(255,220,180,0.05)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.restore();
+    // moonlight on the crest
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 8) {
+      if (x) ctx.lineTo(x, y(x));
+      else ctx.moveTo(x, y(x));
+    }
+    ctx.strokeStyle = crest;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  };
+  const palm = (x: number, y: number, k: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(k, k);
+    ctx.fillStyle = '#07040a';
+    ctx.strokeStyle = '#07040a';
+    ctx.lineWidth = 9;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(16, -110, -6, -230);
+    ctx.stroke();
+    for (let i = 0; i < 9; i++) {
+      const a = -Math.PI + (i / 8) * Math.PI;
+      const L = 112 + rnd() * 34;
+      const ex = Math.cos(a) * L;
+      const ey = Math.sin(a) * L * 0.5 + 30;
+      ctx.beginPath();
+      ctx.moveTo(-6, -232);
+      ctx.quadraticCurveTo(ex * 0.5, -232 + Math.sin(a) * 66 - 22, ex - 6, -232 + ey);
+      ctx.quadraticCurveTo(ex * 0.45, -232 + Math.sin(a) * 40 - 6, -6, -226);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+  palm(w * 0.045, h * 0.52, 1.25);
+  palm(w * 0.1, h * 0.6, 0.86);
+  palm(w * 0.965, h * 0.5, 1.3);
+  palm(w * 0.905, h * 0.62, 0.8);
+  bank(h * 0.42, 40, 0.6, '#8a6a68', '#46304a', 'rgba(230,214,240,0.55)');
+  bank(h * 0.6, 34, 2.1, '#6e5058', '#30203a', 'rgba(230,214,240,0.42)');
+  bank(h * 0.8, 22, 4.4, '#4a3440', '#180f1e', 'rgba(230,214,240,0.3)');
+  return c;
+}

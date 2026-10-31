@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite } from 'pixi.js';
 import gsap from 'gsap';
 import { LINES, REELS, ROWS, Sym } from '../math/config';
 import type { Expansion, Grid, LineWin, ScatterWin } from '../math/engine';
@@ -8,7 +8,6 @@ import { Reel } from './Reel';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y, LINE_COLORS, REEL_GAP, SYMBOL_SIZE, cellCenter, reelX } from './layout';
 import { FRAME_ART, FRAME_BLEED, FRAME_PAD, TEX_SIZE, TEX_UNIT, type SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
-import { paintCartouche } from './art/egyptFrame';
 
 export interface SpinPlan {
   grid: Grid;
@@ -61,7 +60,6 @@ const SYMBOL_GLOW: Record<number, number> = {
 
 
 export class ReelBoard extends Container {
-  private static plaqueTex: Texture | null = null;
   readonly reels: Reel[] = [];
   private panels = new Container();
   private reelLayer = new Container();
@@ -88,7 +86,6 @@ export class ReelBoard extends Container {
   onAnticipate: ((on: boolean) => void) | null = null;
   onImpact: ((power: number) => void) | null = null;
   private ambientIn = 2.5;
-  private plaque: Container | null = null;
 
   constructor(
     private tex: SymbolTextures,
@@ -101,6 +98,14 @@ export class ReelBoard extends Container {
     const surround = new Sprite(tex.surround);
     surround.position.set(-FRAME_MARGIN_X - 16, -FRAME_MARGIN_Y - 16);
     this.addChildAt(surround, 0);
+    const cast = new Sprite(tex.glow);
+    cast.anchor.set(0.5);
+    cast.position.set(BOARD_W / 2, BOARD_H / 2 + 34);
+    cast.width = BOARD_W * 1.95;
+    cast.height = BOARD_H * 2;
+    cast.tint = 0x000000;
+    cast.alpha = 0.9;
+    this.addChildAt(cast, 0);
     for (let r = 0; r < REELS; r++) {
       const p = new Sprite(tex.reelPanels[r]);
       p.position.set(reelX(r) - REEL_GAP / 2, 0);
@@ -399,9 +404,9 @@ export class ReelBoard extends Container {
     this.onAnticipate?.(on);
     if (on) {
       glow.alpha = 0;
-      gsap.to(glow, { alpha: 0.75, duration: 0.25 });
+      gsap.to(glow, { alpha: 0.38, duration: 0.25 });
       gsap.to(glow.scale, { x: glow.scale.x * 1.1, duration: 0.22, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-      veins.alpha = 0.95;
+      veins.alpha = 0.42;
       const sy = BOARD_H / veins.texture.height;
       veins.scale.y = 0;
       gsap.to(veins.scale, { y: sy, duration: dur, ease: 'power1.in' });
@@ -736,7 +741,6 @@ export class ReelBoard extends Container {
   }
 
   clearWins(): void {
-    this.hidePlaque();
     this.cycleTl?.kill();
     this.cycleTl = null;
     this.dimLayer.clear();
@@ -1024,55 +1028,10 @@ export class ReelBoard extends Container {
 
   /** Gold coins spraying out of the win plaque. */
   coinBurst(n: number): void {
-    if (n > 0) this.fx.coins(BOARD_W / 2, BOARD_H + 140, n, 0.85);
+    if (n > 0) this.fx.coins(BOARD_W / 2, BOARD_H + 40, n, 0.85);
   }
 
-  /** Total-win plaque hanging under the reels. */
-  showPlaque(amount: number, label: string): void {
-    this.hidePlaque();
-    const c = new Container();
-    const w = 380;
-    const h = 92;
-    // gold cartouche, label engraved in the top of the lacquer face
-    ReelBoard.plaqueTex ??= Texture.from(paintCartouche(w, h));
-    const plate = new Sprite(ReelBoard.plaqueTex);
-    plate.anchor.set(0.5, (16 + h / 2) / (h + 40));
-    plate.scale.set(0.5);
-    const lab = new Text({
-      text: label,
-      style: {
-        fontFamily: 'Cinzel, serif',
-        fontWeight: '900',
-        fontSize: 15,
-        letterSpacing: 5,
-        fill: 0xe8b850,
-        dropShadow: { color: 0x000000, blur: 3, distance: 1, angle: Math.PI / 2, alpha: 1 },
-      },
-    });
-    lab.anchor.set(0.5);
-    lab.y = -h / 2 + 20;
-    const val = new Digits(50);
-    val.value = 0;
-    val.y = 14;
-    c.addChild(plate, lab, val);
-    c.position.set(BOARD_W / 2, BOARD_H + 172);
-    this.labelLayer.parent!.addChild(c);
-    this.plaque = c;
-    gsap.fromTo(c.scale, { x: 0.82, y: 0.82 }, { x: 1, y: 1, duration: 0.4, ease: 'power3.out' });
-    gsap.from(c, { alpha: 0, duration: 0.25 });
-    const o = { v: 0 };
-    gsap.to(o, { v: amount, duration: 0.9, ease: 'power2.out', onUpdate: () => (val.value = o.v) });
-  }
-
-  hidePlaque(): void {
-    const p = this.plaque;
-    if (!p) return;
-    this.plaque = null;
-    gsap.killTweensOf(p);
-    gsap.to(p.scale, { x: 0, y: 0, duration: 0.2, ease: 'back.in(2)', onComplete: () => p.destroy({ children: true }) });
-  }
-
-  /** Light pillar + gold shock ring where a strain slams into a reel. */
+  /** A pillar of light where a strain slams into a reel. */
   private slamLight(cx: number): void {
     const layer = this.labelLayer;
     const beam = new Sprite(this.tex.glow);
@@ -1089,16 +1048,11 @@ export class ReelBoard extends Container {
     core.height = BOARD_H * 2.2;
     core.tint = 0xffffff;
     core.blendMode = 'add';
-    const ring = new Graphics().circle(0, 0, 60).stroke({ width: 10, color: 0xf2c25a }).circle(0, 0, 60).stroke({ width: 3, color: 0xffffff });
-    ring.position.set(cx, BOARD_H / 2);
-    ring.blendMode = 'add';
-    layer.addChild(beam, core, ring);
-    const done = () => [beam, core, ring].forEach((o) => !o.destroyed && o.destroy());
-    gsap.fromTo(beam, { alpha: 1 }, { alpha: 0, duration: 0.7, ease: 'power2.out' });
+    layer.addChild(beam, core);
+    const done = () => [beam, core].forEach((o) => !o.destroyed && o.destroy());
+    gsap.fromTo(beam, { alpha: 0.6 }, { alpha: 0, duration: 0.7, ease: 'power2.out', onComplete: done });
     gsap.fromTo(beam.scale, { x: beam.scale.x * 1.4 }, { x: beam.scale.x * 0.4, duration: 0.7, ease: 'power2.out' });
-    gsap.fromTo(core, { alpha: 1 }, { alpha: 0, duration: 0.45, ease: 'power3.out' });
-    gsap.fromTo(ring.scale, { x: 0.3, y: 0.3 }, { x: 4.2, y: 4.2, duration: 0.6, ease: 'power2.out' });
-    gsap.fromTo(ring, { alpha: 1 }, { alpha: 0, duration: 0.6, ease: 'power1.in', onComplete: done });
+    gsap.fromTo(core, { alpha: 0.5 }, { alpha: 0, duration: 0.45, ease: 'power3.out' });
     this.fx.coins(cx, BOARD_H * 0.75, 8, 0.8);
   }
 

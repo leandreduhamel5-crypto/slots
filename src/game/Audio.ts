@@ -626,10 +626,12 @@ export class Audio {
       if (!this.ctx) return;
       const at = this.t;
       const p = (Math.random() - 0.5) * 1.6;
-      if (Math.random() < 0.5) this.gong(at, 62, 0.02, p, 4);
-      else this.sistrum(at, 0.02, p, 5);
+      const roll = Math.random();
+      if (roll < 0.34) this.gong(at, 62, 0.02, p, 4);
+      else if (roll < 0.6) this.sistrum(at, 0.02, p, 5);
+      else this.hiss({ at, dur: 3.6, type: 'bandpass', f0: 420, f1: 1100, q: 0.8, vol: 0.05, a: 1.6, dest: this.music, pan: -p, pan1: p }); // a gust over the dunes
       this.scheduleAmbience();
-    }, 16000 + Math.random() * 16000);
+    }, 9000 + Math.random() * 11000);
   }
 
   /* ================================================================ sfx */
@@ -649,6 +651,7 @@ export class Audio {
     this.voice({ at, f: 120, to: 52, glide: 0.09, vol: 0.26, r: 0.15, a: 0.002 });
     this.hiss({ at, dur: 0.03, type: 'bandpass', f0: 720, q: 2.4, vol: 0.2, a: 0.001 });
     this.hiss({ at: at + 0.03, dur: 0.42, type: 'bandpass', f0: 500, f1: 1900, q: 0.8, vol: 0.075, a: 0.1, pan: -0.45, pan1: 0.45 });
+    this.hiss({ at, dur: 0.34, type: 'lowpass', f0: 190, f1: 90, vol: 0.2, a: 0.03 }); // the wheels take up the weight
     this.startSpinLoop(at + 0.06);
   }
 
@@ -739,6 +742,15 @@ export class Audio {
     this.hiss({ at: at + 0.03, dur: 0.4, type: 'bandpass', f0: 900, f1: 3000, q: 0.7, vol: 0.03, a: 0.04, pan: pan * 1.4 });
     if (last) this.spinLoop?.stop(at);
     else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
+  }
+
+  /** A door of stone dragged open: a long low grind with grit falling from the lintel. */
+  stoneDoor(dur: number): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    this.hiss({ at, dur, type: 'bandpass', f0: 130, f1: 260, q: 1.2, vol: 0.46, a: dur * 0.2 });
+    this.voice({ at, f: 46, to: 38, glide: dur, vol: 0.26, r: dur * 0.6, a: dur * 0.3, hold: dur * 0.2 });
+    for (let k = 0; k < 4; k++) this.rubble(at + k * (dur / 4) + Math.random() * 0.1, 7, (Math.random() - 0.5) * 1.2);
   }
 
   /** Small stones: dry ticks in a falling scatter. */

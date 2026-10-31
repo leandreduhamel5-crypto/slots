@@ -61,6 +61,7 @@ async function run(): Promise<void> {
       ['stinger 3', (a) => a.stinger(3), 3.5],
       ['featureStart', (a) => a.featureStart(), 4.5],
       ['bigWinEnd', (a) => a.bigWinEnd(3), 5],
+      ['stoneDoor', (a) => a.stoneDoor(1.6), 3],
     ];
     const report: Record<string, { peak: number; rms: number; nan: boolean }> = {};
     for (const [name, fn, secs] of tests) {

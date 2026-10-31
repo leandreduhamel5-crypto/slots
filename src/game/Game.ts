@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { Application, Container, Sprite, Text, Texture } from 'pixi.js';
 import { AdvancedBloomFilter, ShockwaveFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { BASE_STRIPS, BET_LEVELS, FREE_STRIPS, REELS, ROWS, Sym, minCount } from '../math/config';
@@ -6,6 +6,7 @@ import type { FreeSpinOutcome, Grid, Round, SpinOutcome } from '../math/engine';
 import { GameServer } from '../server/GameServer';
 import { Hud } from '../ui/Hud';
 import { Paytable } from '../ui/Paytable';
+import { paintBonusPanel } from './art/egyptFrame';
 import { Audio } from './Audio';
 import { Background } from './Background';
 import { BOARD_H, BOARD_W, COLORS } from './layout';
@@ -20,53 +21,45 @@ import type { SymbolTextures } from './textures';
 
 const BOARD_Y = 186;
 const WORLD_TOP = -172;
-const WORLD_BOTTOM = BOARD_Y + BOARD_H + 204;
+/** just under the frame: everything on screen stays clear of the console */
+const WORLD_BOTTOM = BOARD_Y + BOARD_H + 142;
 /** Cleopatra stands left of the reels, her cobra staff right beside the frame */
 const MASCOT_X = -505;
 const MASCOT_SCALE = 0.82;
 const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 360;
 
+/** Bonus panel in the place of the title: spins left on one side, the active strains on the other. */
 class FeatureBanner extends Container {
   private count: Text;
   private icons = new Container();
 
   constructor(private tex: SymbolTextures) {
     super();
-    const ink = COLORS.ink;
-    const cartoon = (size: number, fill: number) => ({
-      fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
+    const plate = new Sprite(Texture.from(paintBonusPanel(620, 118)));
+    plate.anchor.set(0.5);
+    plate.scale.set(0.5);
+    const caps = (size: number, fill: number) => ({
+      fontFamily: 'Cinzel, serif',
+      fontWeight: '900' as const,
       fontSize: size,
       fill,
-      stroke: { color: ink, width: size * 0.2, join: 'round' as const },
-      dropShadow: { color: ink, blur: 0, distance: size * 0.08, angle: Math.PI / 2, alpha: 1 },
-      letterSpacing: 2,
+      letterSpacing: size * 0.1,
+      dropShadow: { color: 0x000000, blur: 3, distance: 2, angle: Math.PI / 2, alpha: 0.9 },
     });
-    const plate = new Graphics()
-      .roundRect(-340, -66, 680, 150, 30)
-      .fill(ink)
-      .roundRect(-340, -76, 680, 150, 30)
-      .fill(0x1a0a08)
-      .stroke({ width: 9, color: ink })
-      .roundRect(-334, -70, 668, 138, 25)
-      .stroke({ width: 3, color: 0xc48a2a })
-      .roundRect(-326, -66, 652, 10, 5)
-      .fill({ color: 0xffe2a0, alpha: 0.1 })
-      .roundRect(-320, -60, 300, 118, 20)
-      .fill(0x0c0404)
-      .stroke({ width: 6, color: ink })
-      .roundRect(-316, -56, 292, 110, 17)
-      .stroke({ width: 2, color: 0x8a5612 });
-    const label = new Text({ text: 'TOURS GRATUITS', style: cartoon(21, COLORS.infection) });
+    const label = new Text({ text: 'TOURS GRATUITS', style: caps(17, 0xe8c878) });
     label.anchor.set(0.5);
-    label.position.set(-170, -36);
-    this.count = new Text({ text: '0 / 10', style: cartoon(64, COLORS.yellow) });
+    label.position.set(-150, -32);
+    this.count = new Text({
+      text: '0 / 10',
+      style: { ...caps(52, 0xfff0c8), letterSpacing: 2, stroke: { color: 0x3a2008, width: 5, join: 'round' as const } },
+    });
     this.count.anchor.set(0.5);
-    this.count.position.set(-170, 18);
-    const strains = new Text({ text: 'SOUCHES', style: cartoon(24, 0xf2c25a) });
+    this.count.position.set(-150, 13);
+    const strains = new Text({ text: 'SOUCHE', style: caps(17, 0xe8c878) });
     strains.anchor.set(0.5);
-    strains.position.set(150, -48);
-    this.icons.position.set(150, 14);
+    strains.position.set(150, -38);
+    this.icons.position.set(150, 12);
     this.addChild(plate, label, this.count, strains, this.icons);
     this.visible = false;
   }
@@ -78,16 +71,16 @@ class FeatureBanner extends Container {
       specials.forEach((s, i) => {
         const sp = new Sprite(this.tex.normal[s]);
         sp.anchor.set(0.5);
-        sp.width = sp.height = 100;
-        sp.x = (i - (specials.length - 1) / 2) * 104;
+        sp.width = sp.height = 76;
+        sp.x = (i - (specials.length - 1) / 2) * 78;
         this.icons.addChild(sp);
-        gsap.from(sp.scale, { x: 0, y: 0, duration: 0.7, ease: 'power3.out' });
+        gsap.from(sp, { alpha: 0, duration: 0.4 });
       });
     }
   }
 
   bump(): void {
-    gsap.fromTo(this.count.scale, { x: 1.4, y: 0.7 }, { x: 1, y: 1, duration: 0.5, ease: 'power3.out' });
+    gsap.fromTo(this.count.scale, { x: 1.2, y: 1.2 }, { x: 1, y: 1, duration: 0.35, ease: 'power3.out' });
   }
 }
 
@@ -209,6 +202,10 @@ export class Game {
         else if (!this.hud.buyOpen) this.onSpinPressed();
       }
     });
+    window.addEventListener('pointermove', (e) => {
+      this.view.tx = (e.clientX / window.innerWidth) * 2 - 1;
+      this.view.ty = (e.clientY / window.innerHeight) * 2 - 1;
+    });
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
@@ -288,27 +285,31 @@ export class Game {
     const h = window.innerHeight;
     this.viewW = w;
     this.viewH = h;
-    const hudH = this.hud.root.getBoundingClientRect().height || 120;
+    // the console's gold rail stands 24 px above it
+    const hudH = (this.hud.root.getBoundingClientRect().height || 120) + 24;
     const availH = h - hudH;
     const portrait = w < h;
     const bottom = portrait ? WORLD_BOTTOM + 270 : WORLD_BOTTOM;
     const worldH = bottom - WORLD_TOP;
     const worldW = portrait ? BOARD_W + 340 : WORLD_W;
-    const scale = Math.min((w * 0.98) / worldW, (availH * 0.96) / worldH);
+    const scale = Math.min((w * 0.98) / worldW, (availH * 0.985) / worldH);
     this.teaser.visible = portrait && !this.inFeature;
     this.logo.scale.set(portrait ? 1.04 : 0.8);
     this.logo.y = portrait ? -100 : -68;
+    this.banner.y = portrait ? -92 : -62;
+    this.banner.scale.set(portrait ? 1.1 : 1);
     this.baseScale = scale;
     this.world.scale.set(scale * this.zoom);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     // on wide screens the reels slide right a little to give Cleopatra the stage on the left
     const wide = !portrait && w / h > 1.45;
-    const shift = wide ? Math.min(w * 0.085, 200) : 0;
-    this.world.position.set(w / 2 + shift, availH / 2);
+    const shift = wide ? Math.min(w * 0.095, 210) : 0;
+    this.worldX = w / 2 + shift;
+    this.world.position.set(this.worldX, availH / 2);
     // shown when her face is on screen (the veil and arm may run off the left edge)
     const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2 + shift;
     this.mascot.visible = SHOW_MASCOT && !portrait && faceX > 40;
-    this.bg.resize(w, h);
+    this.bg.resize(w, h, hudH);
     this.overlays.resize(w, h, hudH);
   }
 
@@ -354,7 +355,18 @@ export class Game {
     else this.scene.filters = [];
   }
 
+  private worldX = 0;
+  /** where the eye is: the scene shifts a little with the pointer, near things more than far */
+  private view = { x: 0, y: 0, tx: 0, ty: 0 };
+
   private update(dt: number): void {
+    const v = this.view;
+    const ease = Math.min(1, dt * 0.004);
+    v.x += (v.tx - v.x) * ease;
+    v.y += (v.ty - v.y) * ease;
+    this.bg.setView(v.x, v.y);
+    this.world.x = this.worldX - v.x * 7;
+    this.mascot.x = MASCOT_X - v.x * 12;
     this.watchFrameRate(dt);
     dt *= this.warp;
     this.board.update(dt);
@@ -564,7 +576,6 @@ export class Game {
       shown += lineSum;
       this.hud.rollWin(shown, celebrate ? 900 : 300, label);
       if (size >= 2) this.shake(4);
-      if (celebrate && !inFeature) this.board.showPlaque(lineSum, 'GAIN');
       if (celebrate) this.board.showWinBurst(lineSum, size);
       if (celebrate) this.mascot.react('win');
       await this.board.presentWins(o.lineWins, o.scatter, celebrate, () => this.audio.tick());
@@ -591,12 +602,13 @@ export class Game {
       this.bg.setFeature(true);
       await this.sleep(this.mascot.visible ? 1500 : 900);
       // …and the camera dives into the pyramid
+      this.audio.stoneDoor(1.6);
       gsap.to(this.world, { alpha: 0, duration: 0.5, ease: 'power2.in' });
       gsap.to(this.hud.root, { opacity: 0, duration: 0.4 });
       await this.bg.zoomTo(4.2, 1.1);
       await this.overlays.corridor(this.turbo ? 1.2 : 2.2);
       this.bg.camera.k = 1;
-      this.bg.resize(this.viewW, this.viewH);
+      this.layout();
       gsap.to(this.world, { alpha: 1, duration: 0.6 });
       gsap.to(this.hud.root, { opacity: 1, duration: 0.6 });
       await this.overlays.featureIntro(f.special, 10, true);
@@ -654,6 +666,7 @@ export class Game {
   private async resume(round: Round): Promise<void> {
     this.busy = true;
     this.hud.setSpinning(true);
+    this.refreshHud();
     round.base.grid.forEach((col, r) => col.forEach((s, row) => this.board.reels[r].setSymbol(row + 1, s)));
     await this.overlays.message('REPRISE DE LA PARTIE', 1800);
     if (round.feature && this.server.state.shownFreeSpins < round.feature.spins.length) {

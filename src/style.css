@@ -2331,3 +2331,10 @@ button {
   min-width: 96px;
   padding: 5px 8px;
 }
+#hud.console .c-meter label {
+  white-space: nowrap;
+}
+#hud.console.mobile .c-meter label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
