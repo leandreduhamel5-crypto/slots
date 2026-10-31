@@ -722,18 +722,32 @@ export class Audio {
     };
   }
 
-  /** Reel seats: a slab of stone dropping home, sand settling, a faint cymbal up the Hijaz scale. */
+  /**
+   * Reel seats: a block of rock dropped on stone. A deep body, the crack of the impact, then the
+   * rubble: small stones skittering away, more and heavier as the reels pile up.
+   */
   reelStop(i: number): void {
     if (!this.ctx) return;
     const at = this.t;
     const pan = (i - 2) * 0.3;
-    this.voice({ at, f: 104 - i * 4, to: 44, glide: 0.07, vol: 0.42, r: 0.17, a: 0.0015, pan });
-    this.hiss({ at, dur: 0.04, type: 'bandpass', f0: 520, q: 1.6, vol: 0.28, a: 0.001, pan });
-    this.hiss({ at, dur: 0.012, type: 'bandpass', f0: 2100, q: 2, vol: 0.12, a: 0.0005, pan });
-    this.hiss({ at: at + 0.02, dur: 0.26, type: 'highpass', f0: 3800, vol: 0.022, a: 0.02, pan: pan * 1.4 });
-    this.sagat(at, midi([76, 77, 80, 81, 83][Math.min(4, i)]), 0.018, pan);
-    if (i >= 4) this.spinLoop?.stop(at);
+    const last = i >= 4;
+    this.voice({ at, f: 92 - i * 3, to: 36, glide: 0.1, vol: last ? 0.62 : 0.5, r: 0.26, a: 0.0015, pan });
+    this.voice({ at, f: 190, to: 74, glide: 0.05, type: 'triangle', vol: 0.2, r: 0.09, a: 0.001, pan });
+    this.hiss({ at, dur: 0.05, type: 'bandpass', f0: 420, q: 1.1, vol: 0.34, a: 0.001, pan });
+    this.hiss({ at, dur: 0.018, type: 'highpass', f0: 1900, vol: 0.2, a: 0.0005, pan });
+    this.rubble(at + 0.015, last ? 12 : 8, pan);
+    this.hiss({ at: at + 0.03, dur: 0.4, type: 'bandpass', f0: 900, f1: 3000, q: 0.7, vol: 0.03, a: 0.04, pan: pan * 1.4 });
+    if (last) this.spinLoop?.stop(at);
     else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
+  }
+
+  /** Small stones: dry ticks in a falling scatter. */
+  private rubble(at: number, n: number, pan: Pan): void {
+    for (let k = 0; k < n; k++) {
+      const t = at + Math.pow(k / n, 1.5) * 0.36 + Math.random() * 0.012;
+      const big = Math.random() < 0.35;
+      this.hiss({ at: t, dur: big ? 0.03 : 0.014, type: 'bandpass', f0: big ? 620 + Math.random() * 500 : 1500 + Math.random() * 2200, q: 2.6, vol: (big ? 0.16 : 0.09) * (1 - (k / n) * 0.7), a: 0.0007, pan: pan + (Math.random() - 0.5) * 0.7 });
+    }
   }
 
   /** A single gold coin: inharmonic ring, tiny strike transient and a quieter second bounce. */

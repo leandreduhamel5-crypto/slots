@@ -523,6 +523,7 @@ export class Game {
       anticipate,
       onReelStop: (r) => {
         this.audio.reelStop(r);
+        this.shake(r === REELS - 1 ? 8 : 4.5);
         for (let row = 0; row < ROWS; row++) {
           const s = grid[r][row];
           if (s === Sym.CODEX) {
@@ -564,6 +565,7 @@ export class Game {
       this.hud.rollWin(shown, celebrate ? 900 : 300, label);
       if (size >= 2) this.shake(4);
       if (celebrate && !inFeature) this.board.showPlaque(lineSum, 'GAIN');
+      if (celebrate) this.board.showWinBurst(lineSum, size);
       if (celebrate) this.mascot.react('win');
       await this.board.presentWins(o.lineWins, o.scatter, celebrate, () => this.audio.tick());
     }

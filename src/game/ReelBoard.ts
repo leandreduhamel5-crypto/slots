@@ -78,6 +78,7 @@ export class ReelBoard extends Container {
   private spinLights: Sprite[] = [];
   private rubyFlares: Sprite[] = [];
   private seatLights: Sprite[] = [];
+  private edgeLights: Sprite[] = [];
   private accent = 0xffc860;
   private anticipationFx: { glow: Sprite; veins: Sprite; border: Graphics; comets: Sprite[] }[] = [];
   private throbbing: Rig[] = [];
@@ -169,6 +170,15 @@ export class ReelBoard extends Container {
       seat.blendMode = 'add';
       seat.alpha = 0;
       this.seatLights.push(seat);
+      // where the reel strikes the frame
+      const edge = new Sprite(tex.glow);
+      edge.anchor.set(0.5);
+      edge.position.set(reelX(r) + CELL_W / 2, BOARD_H + 6);
+      edge.width = CELL_W * 2;
+      edge.height = 130;
+      edge.blendMode = 'add';
+      edge.alpha = 0;
+      this.edgeLights.push(edge);
       this.anticipationLayer.addChild(run, seat);
     }
 
@@ -260,6 +270,7 @@ export class ReelBoard extends Container {
       this.anticipationLayer,
       this.lineLayer,
       this.frameLayer,
+      ...this.edgeLights,
       this.fx,
       this.labelLayer,
     );
@@ -355,9 +366,18 @@ export class ReelBoard extends Container {
     seat.tint = this.accent;
     gsap.killTweensOf(seat);
     gsap.fromTo(seat, { y: 0, alpha: 0.85 }, { y: BOARD_H, alpha: 0, duration: 0.2, ease: 'power2.in' });
-    this.fx.sand(x, BOARD_H - 6, CELL_W * 0.9, 16);
-    this.fx.sand(x, 6, CELL_W * 0.8, 6, 0.5);
-    this.fx.dust(x, BOARD_H - 2, CELL_W * 0.7, 3);
+    // the blow on the bottom edge of the frame: a line of light, then the stone gives way
+    const heavy = reel === REELS - 1;
+    const y = BOARD_H + 8;
+    const edge = this.edgeLights[reel];
+    edge.tint = this.accent;
+    gsap.killTweensOf(edge);
+    gsap.fromTo(edge, { alpha: 1 }, { alpha: 0, duration: 0.42, ease: 'power2.out' });
+    this.fx.rubble(x, y, CELL_W * 1.05, heavy ? 42 : 26, heavy ? 1.25 : 1);
+    this.fx.sand(x, y, CELL_W * 1.1, heavy ? 110 : 70, heavy ? 2.4 : 1.9);
+    this.fx.dust(x, y, CELL_W * 1.05, heavy ? 12 : 7);
+    this.fx.sparks(x, y, heavy ? 24 : 14, 1);
+    this.fx.sand(x, 6, CELL_W * 0.8, 8, 0.5);
   }
 
   /** Slam-stop: lands all remaining reels as fast as possible. */
@@ -772,15 +792,9 @@ export class ReelBoard extends Container {
     return out;
   }
 
-  /**
-   * Payline: a thread of light drawn from left to right by a comet, then sparks of energy keep
-   * running along it. All in additive light, with no hard outline.
-   */
+  /** A comet of gold runs the winning path once, shedding sparks, and is gone. No line stays. */
   private traceLine(line: number, duration = 0.4): Container {
-    const root = new Container() as Container & { pulse: number };
-    const color = LINE_COLORS[line];
-    const g = new Graphics();
-    g.blendMode = 'add';
+    const root = new Container();
     const dot = (size: number, tint: number) => {
       const s = new Sprite(this.tex.glow);
       s.anchor.set(0.5);
@@ -789,62 +803,29 @@ export class ReelBoard extends Container {
       s.blendMode = 'add';
       return s;
     };
-    const comet = [dot(120, color), dot(40, 0xffffff)];
-    const sparks = [0, 1, 2].map(() => dot(44, 0xfff0c8));
-    sparks.forEach((p) => (p.alpha = 0));
-    root.addChild(g, ...comet, ...sparks);
+    const comet = [dot(130, LINE_COLORS[line]), dot(46, 0xffffff)];
+    root.addChild(...comet);
     const pts = this.linePath(line);
     const seg: number[] = [0];
     for (let i = 1; i < pts.length; i++) seg.push(seg[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
     const total = seg[seg.length - 1];
-    const at = (d: number) => {
-      let i = 1;
-      while (i < seg.length - 1 && seg[i] < d) i++;
-      const k = (d - seg[i - 1]) / Math.max(0.001, seg[i] - seg[i - 1]);
-      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k };
-    };
-    const draw = (t: number) => {
-      if (root.destroyed) return;
-      const len = total * t;
-      const path: { x: number; y: number }[] = [];
-      for (let i = 0; i < pts.length && seg[i] < len; i++) path.push(pts[i]);
-      const tip = at(len);
-      path.push(tip);
-      g.clear();
-      for (const [width, c, a] of [[20, color, 0.12], [9, color, 0.3], [3.4, color, 0.95], [1.3, 0xffffff, 0.95]] as const) {
-        g.moveTo(path[0].x, path[0].y);
-        for (const p of path) g.lineTo(p.x, p.y);
-        g.stroke({ width, color: c, alpha: a, join: 'round', cap: 'round' });
-      }
-      for (const c of comet) {
-        c.position.set(tip.x, tip.y);
-        c.alpha = t < 1 ? 1 : 0;
-      }
-    };
-    const o = { t: 0 };
-    draw(0);
+    const o = { d: 0 };
+    let i = 1;
     gsap.to(o, {
-      t: 1,
-      duration: duration * 1.3,
+      d: total,
+      duration: duration * 1.5,
       ease: 'sine.inOut',
-      onUpdate: () => draw(o.t),
-      onComplete: () => {
+      onUpdate: () => {
         if (root.destroyed) return;
-        root.pulse = 0;
-        gsap.to(root, {
-          pulse: 1,
-          duration: 2.2,
-          repeat: -1,
-          ease: 'none',
-          onUpdate: () => {
-            sparks.forEach((p, i) => {
-              const k = (root.pulse + i / sparks.length) % 1;
-              const q = at(total * k);
-              p.position.set(q.x, q.y);
-              p.alpha = Math.sin(k * Math.PI);
-            });
-          },
-        });
+        while (i < seg.length - 1 && seg[i] < o.d) i++;
+        const k = (o.d - seg[i - 1]) / Math.max(0.001, seg[i] - seg[i - 1]);
+        const x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k;
+        const y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k;
+        for (const c of comet) c.position.set(x, y);
+        this.fx.sand(x, y, 16, 2, 0.5);
+      },
+      onComplete: () => {
+        if (!root.destroyed) gsap.to(root, { alpha: 0, duration: 0.2, onComplete: () => !root.destroyed && root.destroy({ children: true }) });
       },
     });
     return root;
@@ -874,6 +855,7 @@ export class ReelBoard extends Container {
       gsap.fromTo(f, { alpha: 0 }, { alpha: strong ? 0.9 : 0.55, duration: 0.2, delay: i * 0.025, yoyo: true, repeat: 1, repeatDelay: 0.2, ease: 'sine.inOut' });
     });
     if (!strong) return;
+    this.raceFrame();
     for (const r of new Set(reels)) {
       const p = new Sprite(this.tex.veins);
       p.anchor.set(0, 1);
@@ -932,26 +914,112 @@ export class ReelBoard extends Container {
     }
     await wait(celebrate ? 1500 : 1000);
 
+    // each win is shown once, then the board goes quiet until the next spin
     const items: { cells: Cell[]; line?: number; win: number }[] = [
       ...lineWins.map((w) => ({ cells: w.cells, line: w.line, win: w.win })),
       ...(scatter ? [{ cells: scatter.cells, win: scatter.win }] : []),
     ];
-    if (items.length < 2) return;
-    const tl = gsap.timeline({ repeat: -1 });
-    items.forEach((it, i) => {
-      tl.add(() => {
+    const tl = gsap.timeline({
+      onComplete: () => {
+        this.cycleTl = null;
         this.clearHighlights();
-        this.dimExcept(it.cells);
-        if (it.line !== undefined) this.lineLayer.addChild(this.traceLine(it.line, 0.3));
-        const last = it.cells[it.cells.length - 1];
-        const c = cellCenter(last[0], last[1]);
-        this.addLabel(fmt(it.win), c.x, c.y + CELL_H * 0.36, it.line !== undefined ? LINE_COLORS[it.line] : COLORS.yellow);
-        this.highlightCells(it.cells, false, 0.04);
-        onLine?.(i);
-      });
-      tl.to({}, { duration: 1.6 });
+      },
     });
+    if (items.length > 1) {
+      items.forEach((it, i) => {
+        tl.add(() => {
+          this.clearHighlights();
+          this.dimExcept(it.cells);
+          if (it.line !== undefined) this.lineLayer.addChild(this.traceLine(it.line, 0.3));
+          const last = it.cells[it.cells.length - 1];
+          const c = cellCenter(last[0], last[1]);
+          this.addLabel(fmt(it.win), c.x, c.y + CELL_H * 0.36, COLORS.yellow);
+          this.highlightCells(it.cells, false, 0.04);
+          onLine?.(i);
+        });
+        tl.to({}, { duration: 1.25 });
+      });
+    } else tl.to({}, { duration: 1.2 });
     this.cycleTl = tl;
+  }
+
+  /**
+   * The amount lands in the middle of the reels like a seal: it falls out of the light, hits, and
+   * the gold flies. size 0..2.
+   */
+  showWinBurst(amount: number, size: number): void {
+    const c = new Container();
+    c.position.set(BOARD_W / 2, BOARD_H / 2);
+    const shade = new Sprite(this.tex.glow);
+    shade.anchor.set(0.5);
+    shade.width = 760;
+    shade.height = 320;
+    shade.tint = 0x000000;
+    shade.alpha = 0.72;
+    const flash = new Sprite(this.tex.glow);
+    flash.anchor.set(0.5);
+    flash.width = 900;
+    flash.height = 420;
+    flash.blendMode = 'add';
+    flash.tint = 0xffc860;
+    flash.alpha = 0;
+    const val = new Digits(118);
+    val.value = amount;
+    const k = (size >= 2 ? 1 : 0.8) * Math.min(1, (BOARD_W * 0.7) / Math.max(1, val.inkWidth));
+    c.addChild(shade, flash, val);
+    this.labelLayer.addChild(c);
+    gsap.fromTo(c, { alpha: 0 }, { alpha: 1, duration: 0.12 });
+    gsap.fromTo(val.scale, { x: k * 1.9, y: k * 1.9 }, {
+      x: k,
+      y: k,
+      duration: 0.3,
+      ease: 'power3.in',
+      onComplete: () => {
+        if (c.destroyed) return;
+        this.onImpact?.(0.5 + size * 0.3);
+        gsap.fromTo(flash, { alpha: 1 }, { alpha: 0, duration: 0.6, ease: 'power2.out' });
+        this.fx.coins(BOARD_W / 2, BOARD_H / 2, 8 + size * 8, 0.8);
+        this.fx.sand(BOARD_W / 2, BOARD_H / 2, BOARD_W * 0.5, 50 + size * 30, 1.8);
+      },
+    });
+    gsap.to(c, { alpha: 0, duration: 0.3, delay: 1.25, onComplete: () => !c.destroyed && c.destroy({ children: true }) });
+  }
+
+  /** Two sparks of gold race round the opening of the frame. */
+  private raceFrame(): void {
+    const x0 = -FRAME_MARGIN_X + 6;
+    const y0 = -FRAME_MARGIN_Y + 6;
+    const w = BOARD_W + (FRAME_MARGIN_X - 6) * 2;
+    const h = BOARD_H + (FRAME_MARGIN_Y - 6) * 2;
+    const L = 2 * (w + h);
+    const at = (d: number): [number, number] => {
+      d = ((d % L) + L) % L;
+      if (d < w) return [x0 + d, y0];
+      if (d < w + h) return [x0 + w, y0 + d - w];
+      if (d < 2 * w + h) return [x0 + w - (d - w - h), y0 + h];
+      return [x0, y0 + h - (d - 2 * w - h)];
+    };
+    for (const start of [0, L / 2]) {
+      const s = new Sprite(this.tex.glow);
+      s.anchor.set(0.5);
+      s.width = s.height = 90;
+      s.blendMode = 'add';
+      s.tint = 0xffe0a0;
+      this.labelLayer.addChild(s);
+      const o = { d: start };
+      gsap.to(o, {
+        d: start + L,
+        duration: 1.1,
+        ease: 'sine.inOut',
+        onUpdate: () => {
+          if (s.destroyed) return;
+          const [x, y] = at(o.d);
+          s.position.set(x, y);
+          this.fx.sand(x, y, 12, 1, 0.4);
+        },
+        onComplete: () => !s.destroyed && s.destroy(),
+      });
+    }
   }
 
   /** Gold coins spraying out of the win plaque. */

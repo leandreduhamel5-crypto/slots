@@ -345,6 +345,15 @@ export class Overlays extends Container {
     gsap.fromTo(r, { width: size * 0.3, height: size * 0.3, alpha: 0.9 }, { width: size, height: size, alpha: 0, duration: 0.9, ease: 'power2.out', onComplete: () => r.destroy() });
   }
 
+  /** A title strikes: gold flies off it along its whole width. */
+  private titleHit(y: number, width = 900): void {
+    const k = this.content.scale.y;
+    const sy = this.content.y + y * k;
+    this.particles.sand(this.w / 2, sy, width * k, 110, 2.4);
+    this.particles.sparks(this.w / 2, sy, 26, 1.4);
+    this.bloom(y, 0xffc860, 1500);
+  }
+
   /** A blade of light crossing a title, masked by its letters. */
   private titleSweep(title: Sprite): void {
     const mask = new Sprite(title.texture);
@@ -401,7 +410,7 @@ export class Overlays extends Container {
       this.fx.shake(10);
       this.fx.thump(0.35);
       this.fx.punch(1);
-      this.bloom(-120, 0xffc860);
+      this.titleHit(-100);
       this.titleSweep(heading);
     });
     this.particles.startFountain(this.w * 0.14, this.h * 0.86, 16);
@@ -469,7 +478,7 @@ export class Overlays extends Container {
       this.fx.glitch(1 + tier);
       this.fx.thump(0.3 + tier * 0.1);
       this.fx.punch(1 + tier * 0.3);
-      this.bloom(-120, 0xffc860, 1500 + tier * 200);
+      this.titleHit(-100, 900 + tier * 60);
       this.titleSweep(heading);
     });
     this.particles.setRainRate(12 + tier * 10);
@@ -758,6 +767,8 @@ export class Overlays extends Container {
     this.fx.shake(14);
     this.fx.thump(0.8);
     this.audio.impact(1.3);
+    // the wall of sand that follows us out of the corridor
+    this.particles.storm(this.w, this.h, 46);
     layer.destroy({ children: true });
   }
 
@@ -810,7 +821,20 @@ export class Overlays extends Container {
     gsap.delayedCall(0.75, () => {
       if (head.destroyed) return;
       head.alpha = 1;
-      gsap.fromTo(head.scale, { x: 1.3, y: 1.3 }, { x: 0.5, y: 0.5, duration: 0.35, ease: 'power3.in', onComplete: () => this.fx.shake(10) });
+      const k = head.scale.x;
+      gsap.fromTo(head.scale, { x: k * 2.6, y: k * 2.6 }, {
+        x: k,
+        y: k,
+        duration: 0.35,
+        ease: 'power3.in',
+        onComplete: () => {
+          if (head.destroyed) return;
+          this.fx.shake(18);
+          this.fx.punch(1.4);
+          this.titleHit(head.y, 1000);
+          this.titleSweep(head);
+        },
+      });
     });
     gsap.to(pyr, { rotation: 0.04, duration: 1.2, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.7 });
     await this.waitOrSkip(1900);

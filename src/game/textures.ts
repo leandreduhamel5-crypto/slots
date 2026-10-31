@@ -16,7 +16,7 @@ import { containCanvas } from './assets';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintCoin, paintEgyptFrame, paintReelSurround, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintReelSurround, paintRockChip, paintRisingColumn, paintStonePanel, redCrack } from './art/egyptFrame';
 
 /** the painted symbols are 512 px: keep all of it, the screens that show it are getting bigger */
 export const TEX_SIZE = 512;
@@ -55,6 +55,8 @@ export interface SymbolTextures {
   /** the winged rubies of the frame, cut out to crown the big screens */
   crest: Texture;
   crestLow: Texture;
+  /** shards of stone thrown when a reel lands */
+  rocks: Texture[];
   veins: Texture;
   glow: Texture;
   spore: Texture;
@@ -355,6 +357,7 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     surround: Texture.from(paintReelSurround(BOARD_W + (FRAME_MARGIN_X + 16) * 2, BOARD_H + (FRAME_MARGIN_Y + 16) * 2, FRAME_MARGIN_X + 16, FRAME_MARGIN_Y + 16, BOARD_W, BOARD_H)),
     reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
+    rocks: [3, 11, 19, 27].map((n) => Texture.from(paintRockChip(n))),
     crest: Texture.from(cropFrame(frameArt, 515, 0, 645, 172)),
     crestLow: Texture.from(cropFrame(frameArt, 535, 778, 605, 163)),
     veins: Texture.from(paintRisingColumn(CELL_W, BOARD_H)),

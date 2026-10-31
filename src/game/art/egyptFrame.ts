@@ -793,3 +793,41 @@ export function paintReelSurround(w: number, h: number, mx: number, my: number, 
   bezel(5, '#f0cc70', 1.2);
   return c;
 }
+
+/** A chip of limestone broken off a block: an irregular shard, lit from above. */
+export function paintRockChip(seed: number): HTMLCanvasElement {
+  const S = 64;
+  const rnd = seeded(seed);
+  const [c, ctx] = makeCanvas(S, S);
+  const n = 6 + Math.floor(rnd() * 3);
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const r = S * (0.28 + rnd() * 0.2);
+    const x = S / 2 + Math.cos(a) * r;
+    const y = S / 2 + Math.sin(a) * r * 0.85;
+    if (i) ctx.lineTo(x, y);
+    else ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, S * 0.1, S * 0.3, S * 0.9);
+  g.addColorStop(0, '#e8cc9a');
+  g.addColorStop(0.45, '#a87e50');
+  g.addColorStop(1, '#46301e');
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = 'rgba(30,18,10,0.85)';
+  ctx.stroke();
+  ctx.save();
+  ctx.clip();
+  // a fracture across the face
+  ctx.strokeStyle = 'rgba(30,18,10,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(S * (0.2 + rnd() * 0.2), S * 0.2);
+  ctx.lineTo(S * (0.4 + rnd() * 0.3), S * 0.55);
+  ctx.lineTo(S * (0.5 + rnd() * 0.3), S * 0.85);
+  ctx.stroke();
+  ctx.restore();
+  return c;
+}
