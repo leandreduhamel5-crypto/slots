@@ -26,6 +26,15 @@ async function run(): Promise<void> {
     document.body.dataset.ready = '1';
     return;
   }
+  if (only === 'frame3d') {
+    const { renderFrame3D } = await import('./game/art/frame3d');
+    const { BOARD_W, BOARD_H } = await import('./game/layout');
+    const { FRAME_PAD, FRAME_BLEED } = await import('./game/textures');
+    const c = await renderFrame3D({ boardW: BOARD_W, boardH: BOARD_H, pad: FRAME_PAD, bleed: FRAME_BLEED });
+    (window as unknown as Record<string, unknown>).framePng = c.toDataURL('image/png');
+    document.body.dataset.ready = '1';
+    return;
+  }
   if (only === 'audio') {
     // render every sound offline, report levels and draw a spectrogram for each
     const tests: [string, (a: Audio) => void, number][] = [

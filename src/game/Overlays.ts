@@ -153,6 +153,7 @@ export class Overlays extends Container {
     this.skipRequested = false;
     this.visible = true;
     this.content.alpha = 1;
+    this.dim.tint = 0xffffff;
     this.drawDim(0);
     gsap.to(this.dim, { alpha: 0.93, duration: 0.25 });
   }
@@ -543,8 +544,184 @@ export class Overlays extends Container {
     this.particles.burst(this.w / 2, this.h / 2 + y * sc, 40, 0.9);
   }
 
-  async featureIntro(special: Sym, spins: number): Promise<void> {
+  private doorTex: Texture | null = null;
+
+  /** One doorway of the pyramid's inner corridor: carved stone frame, glyph bands, gold lintel. */
+  private door(): Texture {
+    if (this.doorTex) return this.doorTex;
+    const S = 512;
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const x = c.getContext('2d')!;
+    const outer = new Path2D();
+    outer.rect(0, 0, S, S);
+    const hole = new Path2D();
+    hole.moveTo(S * 0.3, S * 0.86);
+    hole.lineTo(S * 0.34, S * 0.2);
+    hole.lineTo(S * 0.66, S * 0.2);
+    hole.lineTo(S * 0.7, S * 0.86);
+    hole.closePath();
+    outer.addPath(hole);
+    // stone wall around the opening
+    const g = x.createRadialGradient(S / 2, S / 2, S * 0.1, S / 2, S / 2, S * 0.75);
+    g.addColorStop(0, '#5a3a24');
+    g.addColorStop(1, '#120806');
+    x.fillStyle = g;
+    x.fill(outer, 'evenodd');
+    x.save();
+    x.clip(outer, 'evenodd');
+    // stone courses
+    x.strokeStyle = 'rgba(0,0,0,0.45)';
+    x.lineWidth = 3;
+    for (let y = 0; y < S; y += 38) {
+      x.beginPath();
+      x.moveTo(0, y);
+      x.lineTo(S, y);
+      x.stroke();
+      for (let k = (y / 38) % 2 ? 0 : 40; k < S; k += 80) {
+        x.beginPath();
+        x.moveTo(k, y);
+        x.lineTo(k, y + 38);
+        x.stroke();
+      }
+    }
+    // glyph columns either side of the door, lit gold
+    x.strokeStyle = '#f2c25a';
+    x.fillStyle = '#f2c25a';
+    x.lineWidth = 4;
+    x.lineCap = 'round';
+    for (const cx of [S * 0.24, S * 0.76]) {
+      for (let y = S * 0.26; y < S * 0.82; y += 46) {
+        const k = Math.floor(((cx + y) * 7) % 4);
+        x.beginPath();
+        if (k === 0) {
+          x.ellipse(cx, y - 8, 7, 9, 0, 0, Math.PI * 2);
+          x.moveTo(cx - 11, y + 2);
+          x.lineTo(cx + 11, y + 2);
+          x.moveTo(cx, y);
+          x.lineTo(cx, y + 18);
+        } else if (k === 1) {
+          x.moveTo(cx - 14, y);
+          x.quadraticCurveTo(cx, y - 12, cx + 14, y);
+          x.quadraticCurveTo(cx, y + 9, cx - 14, y);
+          x.moveTo(cx + 3, y);
+          x.arc(cx, y, 3, 0, Math.PI * 2);
+        } else if (k === 2) {
+          x.arc(cx, y, 9, 0, Math.PI * 2);
+        } else {
+          x.moveTo(cx, y + 14);
+          x.quadraticCurveTo(cx - 9, y - 2, cx + 2, y - 14);
+          x.quadraticCurveTo(cx + 7, y, cx, y + 14);
+        }
+        x.stroke();
+      }
+    }
+    // gold lintel over the door
+    const lg = x.createLinearGradient(0, S * 0.12, 0, S * 0.2);
+    lg.addColorStop(0, '#fff1b8');
+    lg.addColorStop(0.5, '#c98a24');
+    lg.addColorStop(1, '#5a3006');
+    x.fillStyle = lg;
+    x.fillRect(S * 0.28, S * 0.13, S * 0.44, S * 0.07);
+    x.restore();
+    // edge glow of the opening
+    x.strokeStyle = 'rgba(255,120,60,0.6)';
+    x.lineWidth = 3;
+    x.stroke(hole);
+    // the wall fades into darkness toward the edges: nested doors read as one endless corridor
+    x.globalCompositeOperation = 'destination-in';
+    const fade = x.createRadialGradient(S / 2, S * 0.52, S * 0.22, S / 2, S * 0.52, S * 0.5);
+    fade.addColorStop(0, 'rgba(0,0,0,1)');
+    fade.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = fade;
+    x.fillRect(0, 0, S, S);
+    this.doorTex = Texture.from(c);
+    return this.doorTex;
+  }
+
+  /**
+   * Inside the pyramid: doorways rush toward the camera down a torch-lit corridor toward a red
+   * glow that grows until it swallows the screen.
+   */
+  async corridor(duration = 2.2): Promise<void> {
     this.open();
+    gsap.killTweensOf(this.dim);
+    this.drawDim(1);
+    this.dim.tint = 0x050102;
+    const layer = new Container();
+    this.back.addChild(layer);
+    const core = new Sprite(this.tex.glow);
+    core.anchor.set(0.5);
+    core.blendMode = 'add';
+    core.tint = 0xff3a1a;
+    layer.addChild(core);
+    const doors: { s: Sprite; z: number }[] = [];
+    const N = 9;
+    for (let i = 0; i < N; i++) {
+      const s = new Sprite(this.door());
+      s.anchor.set(0.5);
+      layer.addChildAt(s, 0);
+      doors.push({ s, z: 1 + (i / N) * 8 });
+    }
+    const torches: { s: Sprite; z: number; side: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const s = new Sprite(this.tex.glow);
+      s.anchor.set(0.5);
+      s.blendMode = 'add';
+      s.tint = i % 3 ? 0xff8a30 : 0xffc060;
+      layer.addChild(s);
+      torches.push({ s, z: 1 + (i / 12) * 8, side: i % 2 ? 1 : -1 });
+    }
+    this.audio.riser(duration, 1);
+    const st = { t: 0 };
+    await new Promise<void>((resolve) => {
+      gsap.to(st, {
+        t: 1,
+        duration,
+        ease: 'none',
+        onUpdate: () => {
+          const speed = 2.5 + st.t * 9;
+          const dt = 1 / 60;
+          for (const d of doors) {
+            d.z -= dt * speed;
+            if (d.z < 0.25) d.z += 8;
+            const k = 1 / d.z;
+            d.s.scale.set(k * 4.2);
+            const v = Math.round(Math.min(255, 60 + 195 * Math.min(1, k * 1.2)));
+            d.s.tint = (v << 16) | (Math.round(v * 0.75) << 8) | Math.round(v * 0.55);
+            d.s.alpha = Math.min(1, (8 - d.z) * 0.6);
+          }
+          doors.sort((a, b) => b.z - a.z).forEach((d, i) => layer.setChildIndex(d.s, i));
+          for (const tch of torches) {
+            tch.z -= dt * speed;
+            if (tch.z < 0.25) tch.z += 8;
+            const k = 1 / tch.z;
+            tch.s.position.set(tch.side * 470 * k, 150 * k);
+            tch.s.width = tch.s.height = 140 * k;
+            tch.s.alpha = Math.min(1, (8 - tch.z) * 0.4) * (0.8 + Math.random() * 0.2);
+          }
+          core.width = core.height = 160 + Math.pow(st.t, 3) * 3000;
+          core.alpha = 0.45 + st.t * 0.55;
+          core.tint = st.t > 0.85 ? 0xffd0b0 : 0xff3a1a;
+          layer.y = Math.sin(st.t * 40) * 3 * st.t;
+        },
+        onComplete: resolve,
+      });
+    });
+    this.fx.shake(14);
+    this.fx.thump(0.8);
+    this.audio.impact(1.3);
+    layer.destroy({ children: true });
+  }
+
+  async featureIntro(special: Sym, spins: number, fromCorridor = false): Promise<void> {
+    if (!fromCorridor) this.open();
+    else {
+      // we arrive inside: the white-red flash fades to the chamber
+      this.content.alpha = 1;
+      this.dim.tint = 0xffffff;
+      gsap.fromTo(this.dim, { alpha: 1 }, { alpha: 0.93, duration: 0.6 });
+    }
     this.audio.featureStart();
     this.fx.shake(16);
     this.fx.glitch(3);

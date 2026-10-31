@@ -183,8 +183,8 @@ export class ReelBoard extends Container {
       [BOARD_W / 2, -FRAME_PAD / 2 - 4 - 380 * 0.11 * 0.35],
       [BOARD_W / 2, BOARD_H + FRAME_PAD / 2 + 3],
     ].forEach(([x, y], i) => {
-      const eye = light(x, y, i === 4 ? 150 : 80, COLORS.infection);
-      gsap.fromTo(eye, { alpha: 0.25 }, { alpha: 0.8, duration: 1.1 + i * 0.17, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
+      const eye = light(x, y, i === 4 ? 90 : 46, COLORS.infection);
+      gsap.fromTo(eye, { alpha: 0.15 }, { alpha: 0.5, duration: 1.1 + i * 0.17, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: i * 0.3 });
     });
     // a glint of light sweeping along the gold rails now and then
     for (const y of [-FRAME_PAD / 2 - 3, BOARD_H + FRAME_PAD / 2 + 3]) {

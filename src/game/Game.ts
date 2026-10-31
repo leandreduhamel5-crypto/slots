@@ -557,9 +557,20 @@ export class Game {
     const firstSpecials = f.spins[0]?.specials.slice(0, 1) ?? [f.special];
     if (startAt === 0) {
       await this.sleep(this.turbo ? 300 : 700);
+      // Cleopatra is taken by the infection, the infection spreads over the temple…
       this.mascot.react('feature');
-      if (this.mascot.visible) await this.sleep(1300);
-      await this.overlays.featureIntro(f.special, 10);
+      this.bg.setFeature(true);
+      await this.sleep(this.mascot.visible ? 1500 : 900);
+      // …and the camera dives into the pyramid
+      gsap.to(this.world, { alpha: 0, duration: 0.5, ease: 'power2.in' });
+      gsap.to(this.hud.root, { opacity: 0, duration: 0.4 });
+      await this.bg.zoomTo(4.2, 1.1);
+      await this.overlays.corridor(this.turbo ? 1.2 : 2.2);
+      this.bg.camera.k = 1;
+      this.bg.resize(this.viewW, this.viewH);
+      gsap.to(this.world, { alpha: 1, duration: 0.6 });
+      gsap.to(this.hud.root, { opacity: 1, duration: 0.6 });
+      await this.overlays.featureIntro(f.special, 10, true);
     }
     this.enterFeature(true);
     this.board.clearWins();

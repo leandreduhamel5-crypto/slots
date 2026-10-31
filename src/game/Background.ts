@@ -319,14 +319,28 @@ export class Background extends Container {
   resize(w: number, h: number): void {
     this.w = w;
     this.h = h;
-    const scale = Math.max(w / W, h / H);
-    this.sceneC.scale.set(scale);
-    this.sceneC.position.set(w / 2, h / 2);
+    this.applyCamera();
     this.redWash.position.set(w / 2, h * 0.45);
     this.redWash.width = w * 1.2;
     this.redWash.height = h * 1.2;
     this.fog.width = w;
     this.fog.height = h;
+  }
+
+  /** camera dolly: k = zoom factor, focus = the art point that stays put while zooming in */
+  readonly camera = { k: 1, fx: APEX[0], fy: 430 };
+
+  private applyCamera(): void {
+    const base = Math.max(this.w / W, this.h / H);
+    const s = base * this.camera.k;
+    const f = [this.camera.fx - W / 2, this.camera.fy - H / 2];
+    this.sceneC.scale.set(s);
+    this.sceneC.position.set(this.w / 2 - f[0] * (s - base), this.h / 2 - f[1] * (s - base));
+  }
+
+  /** Dolly the camera into (k > 1) or back out of the pyramid. */
+  zoomTo(k: number, duration: number, ease = 'power3.in'): Promise<void> {
+    return new Promise((r) => gsap.to(this.camera, { k, duration, ease, onUpdate: () => this.applyCamera(), onComplete: r }));
   }
 
   /** Free spins: the pyramid turns red under a barrage of lightning. */

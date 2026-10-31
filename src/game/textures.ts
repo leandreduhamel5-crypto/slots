@@ -250,7 +250,7 @@ export function bookCanvas(): HTMLCanvasElement {
   return full;
 }
 
-export async function buildSymbolTextures(overrides: Map<string, HTMLImageElement> = new Map()): Promise<SymbolTextures> {
+export async function buildSymbolTextures(overrides: Map<string, HTMLImageElement> = new Map(), frameArt: HTMLImageElement | null = null): Promise<SymbolTextures> {
   const canvases: HTMLCanvasElement[] = [];
   const glowCanvases: HTMLCanvasElement[] = [];
   const rigs = new Map<Sym, SymbolRig>();
@@ -317,7 +317,8 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     rigs,
     expanded,
     glowMaps: glowCanvases.map((c) => Texture.from(c)),
-    frame: Texture.from(framed()),
+    // the 3D-rendered frame (art/frame3d.ts) is 2x; the painted one is the fallback
+    frame: frameArt ? Texture.from({ resource: frameArt, resolution: 2 }) : Texture.from(framed()),
     reelPanels: [0, 1, 2, 3, 4].map((r) => Texture.from(paintStonePanel(CELL_W + REEL_GAP, BOARD_H, 100 + r * 17))),
     shade: Texture.from(paintDepthShade(BOARD_H)),
     winFrame: Texture.from(paintGoldWinFrame(CELL_W, CELL_H)),
