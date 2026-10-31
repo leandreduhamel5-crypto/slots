@@ -5,7 +5,7 @@ so no light fringe shows on the dark reels. Run from the repo root: python scrip
 """
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy import ndimage as ni
 
 SHEET = np.asarray(Image.open('scripts/symbols_sheet.webp').convert('RGBA')).copy()
@@ -33,3 +33,14 @@ for name, (sl, _, idx) in zip(NAMES, boxes):
     c.paste(im, ((SIZE - im.width) // 2, (SIZE - im.height) // 2))
     c.save(f'src/game/art/egypt/{name}.webp', 'WEBP', quality=95, alpha_quality=100, method=6)
     print(name, im.size)
+
+# the bonus symbol is its own painting: a framed tile, cut out of the checkerboard it came on
+tile = Image.open('scripts/bonus_source.webp').convert('RGBA').crop((101, 114, 1153, 1142))
+disc = Image.new('L', (tile.width, tile.height), 0)
+ImageDraw.Draw(disc).rounded_rectangle((0, 0, tile.width - 1, tile.height - 1), 14, fill=255)
+tile.putalpha(disc)
+k = 496 / max(tile.size)
+tile = tile.resize((round(tile.width * k), round(tile.height * k)), Image.LANCZOS)
+c = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
+c.paste(tile, ((SIZE - tile.width) // 2, (SIZE - tile.height) // 2))
+c.save('src/game/art/egypt/pyramid.webp', 'WEBP', quality=95, alpha_quality=100, method=6)

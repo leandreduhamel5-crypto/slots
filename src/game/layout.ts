@@ -20,12 +20,6 @@ export const COLORS = {
   void: 0x07080b,
 };
 
-/** One colour per payline so overlapping wins stay readable. */
-export const LINE_COLORS = [
-  // the metals and embers of the temple: golds, ambers and coppers, distinct enough to tell apart
-  0xffd24a, 0xff8a3a, 0xffb040, 0xffeeb0, 0xff7040, 0xe8c060, 0xffa050, 0xffd890, 0xf0a030, 0xff9a70,
-];
-
 export function reelX(reel: number): number {
   return reel * (CELL_W + REEL_GAP);
 }

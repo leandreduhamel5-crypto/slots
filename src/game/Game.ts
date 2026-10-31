@@ -96,7 +96,7 @@ export class Game {
   private overlays: Overlays;
   private hud: Hud;
   private paytable: Paytable;
-  private shock = new ShockwaveFilter({ center: { x: 0, y: 0 }, amplitude: 40, wavelength: 220, speed: 900, brightness: 1.15, radius: -1 });
+  private shock = new ShockwaveFilter({ center: { x: 0, y: 0 }, amplitude: 16, wavelength: 180, speed: 1100, brightness: 1.04, radius: -1 });
   private shakePower = 0;
   private busy = false;
   private turbo = false;
@@ -121,6 +121,7 @@ export class Game {
     this.board.position.set(0, BOARD_Y);
     this.board.onAnticipate = (on) => this.pushIn(on);
     this.board.onImpact = (p) => this.punch(p);
+    this.board.onIgnite = (r) => this.audio.ignite(r);
     const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo ?? logoImage);
     this.logo = new Logo(logoArt);
     this.logo.position.set(BOARD_W / 2, -18);

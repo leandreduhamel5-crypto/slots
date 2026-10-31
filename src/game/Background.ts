@@ -507,7 +507,7 @@ export class Background extends Container {
     this.flare(strength * 2);
     this.pulse.clear().rect(0, 0, this.w, this.h).fill({ color: COLORS.infection });
     this.pulse.blendMode = 'add';
-    gsap.fromTo(this.pulse, { alpha: strength }, { alpha: 0, duration: 0.6, ease: 'power2.out' });
+    gsap.fromTo(this.pulse, { alpha: strength * 0.35 }, { alpha: 0, duration: 0.5, ease: 'power2.out' });
   }
 
   setRays(on: boolean): void {

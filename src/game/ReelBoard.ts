@@ -1,11 +1,11 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
 import gsap from 'gsap';
-import { LINES, REELS, ROWS, Sym } from '../math/config';
+import { REELS, ROWS, Sym } from '../math/config';
 import type { Expansion, Grid, LineWin, ScatterWin } from '../math/engine';
 import { Digits } from './Digits';
 import { Particles } from './Particles';
 import { Reel } from './Reel';
-import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y, LINE_COLORS, REEL_GAP, SYMBOL_SIZE, cellCenter, reelX } from './layout';
+import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP, SYMBOL_SIZE, cellCenter, reelX } from './layout';
 import { FRAME_ART, FRAME_BLEED, FRAME_PAD, TEX_SIZE, TEX_UNIT, type SymbolTextures } from './textures';
 import { fmt } from '../ui/format';
 
@@ -38,12 +38,15 @@ interface Rig {
 /** Tint of the star-burst behind each winning symbol. */
 /** Glowing eyes / gems on the painted symbols: [x, y, radius, tint] in texture px from the centre. */
 const EYES: Partial<Record<Sym, [number, number, number, number][]>> = {
-  [Sym.CODEX]: [[0, -106, 12, 0xff4a2a]],
+  [Sym.CODEX]: [[1, -80, 15, 0xffb040]],
   [Sym.ZERO]: [[-27, -23, 8, 0xff3a2a], [27, -23, 8, 0xff3a2a]],
   [Sym.MASK]: [[24, -23, 9, 0xff2a2a]],
   [Sym.ANTIDOTE]: [[0, -100, 16, 0xff3040]],
   [Sym.BLOOD]: [[5, -32, 20, 0xff4a2a]],
 };
+
+/** seconds between one winning symbol lighting up and the next */
+const IGNITE_STAGGER = 0.13;
 
 const SYMBOL_GLOW: Record<number, number> = {
   [Sym.CODEX]: 0xff3347,
@@ -69,6 +72,8 @@ export class ReelBoard extends Container {
   private infectionGlow: Sprite;
   private anticipationLayer = new Container();
   private lineLayer = new Container();
+  /** the gold ribbons joining winning symbols, under the symbols */
+  private ribbonLayer = new Container();
   private rigLayer = new Container();
   private fx: Particles;
   private labelLayer = new Container();
@@ -85,6 +90,8 @@ export class ReelBoard extends Container {
   /** camera hooks */
   onAnticipate: ((on: boolean) => void) | null = null;
   onImpact: ((power: number) => void) | null = null;
+  /** a winning symbol of this reel has just lit up */
+  onIgnite: ((reel: number) => void) | null = null;
   private ambientIn = 2.5;
 
   constructor(
@@ -271,6 +278,7 @@ export class ReelBoard extends Container {
       this.dimLayer,
       this.expandLayer,
       shade,
+      this.ribbonLayer,
       this.rigLayer,
       this.anticipationLayer,
       this.lineLayer,
@@ -701,7 +709,7 @@ export class ReelBoard extends Container {
       .to(rig.halo, { alpha: strong ? 0.3 : 0.2, duration: 0.7, ease: 'sine.out' }, 0.2)
       .fromTo(rig.halo.scale, { x: hs * 0.7, y: hs * 0.7 }, { x: hs, y: hs, duration: 0.45, ease: 'power2.out' }, 0)
       .to(b.scale, { x: up, y: up, duration: 0.38, ease: 'power3.out' }, 0)
-      .fromTo(rig.glow, { alpha: 0.18 }, { alpha: 0.04, duration: 0.7, ease: 'sine.out' }, 0);
+      .fromTo(rig.glow, { alpha: 0.08 }, { alpha: 0, duration: 0.6, ease: 'sine.out' }, 0);
     rig.tweens.push(
       gsap.to(b.scale, { x: up * 0.97, y: up * 0.97, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.45 }),
       gsap.to(rig.halo, { alpha: strong ? 0.4 : 0.28, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: delay + 0.9 }),
@@ -725,14 +733,14 @@ export class ReelBoard extends Container {
     flash.position.set(c.x, c.y);
     flash.width = flash.height = CELL_W * 2;
     this.labelLayer.addChild(flash);
-    gsap.fromTo(flash, { alpha: 0.42 }, { alpha: 0, duration: 0.55, onComplete: () => flash.destroy() });
+    gsap.fromTo(flash, { alpha: 0.22 }, { alpha: 0, duration: 0.5, onComplete: () => flash.destroy() });
     this.fx.impact(c.x, c.y, 0.8, 1);
     const rig = this.rig(reel, row);
     const s = SYMBOL_SIZE / TEX_SIZE;
     const tl = gsap
       .timeline({ onComplete: () => this.dropRig(rig) })
       .fromTo(rig.body.scale, { x: s * 1.3, y: s * 1.3 }, { x: s, y: s, duration: 0.2, ease: 'power3.in' })
-      .fromTo(rig.glow, { alpha: 0.28 }, { alpha: 0, duration: 0.6 }, 0);
+      .fromTo(rig.glow, { alpha: 0.08 }, { alpha: 0, duration: 0.5 }, 0);
     if (rig.parts.lid) tl.add(this.blink(rig), 0.35);
     rig.tweens.push(tl);
   }
@@ -742,7 +750,7 @@ export class ReelBoard extends Container {
     this.cycleTl = null;
     this.dimLayer.clear();
     this.clearRigs();
-    for (const layer of [this.lineLayer, this.labelLayer, this.expandLayer]) {
+    for (const layer of [this.lineLayer, this.ribbonLayer, this.labelLayer, this.expandLayer]) {
       for (const c of layer.removeChildren()) {
         gsap.killTweensOf(c);
         c.destroy({ children: true });
@@ -764,7 +772,7 @@ export class ReelBoard extends Container {
   private clearHighlights(): void {
     this.dimLayer.clear();
     this.clearRigs();
-    for (const layer of [this.lineLayer, this.labelLayer]) {
+    for (const layer of [this.lineLayer, this.ribbonLayer, this.labelLayer]) {
       for (const c of layer.removeChildren()) {
         gsap.killTweensOf(c);
         c.destroy({ children: true });
@@ -772,69 +780,32 @@ export class ReelBoard extends Container {
     }
   }
 
-  /** The line through a payline, its corners rounded, as a fine polyline. */
-  private linePath(line: number): { x: number; y: number }[] {
-    const pts = LINES[line].map((row, r) => cellCenter(r, row));
-    const all = [{ x: -FRAME_MARGIN_X, y: pts[0].y }, ...pts, { x: BOARD_W + FRAME_MARGIN_X, y: pts[pts.length - 1].y }];
-    const out = [all[0]];
-    const R = 46;
-    for (let i = 1; i < all.length - 1; i++) {
-      const [p, q, n] = [all[i - 1], all[i], all[i + 1]];
-      const d0 = Math.hypot(q.x - p.x, q.y - p.y);
-      const d1 = Math.hypot(n.x - q.x, n.y - q.y);
-      const a = { x: q.x + ((p.x - q.x) / d0) * R, y: q.y + ((p.y - q.y) / d0) * R };
-      const b = { x: q.x + ((n.x - q.x) / d1) * R, y: q.y + ((n.y - q.y) / d1) * R };
-      for (let k = 0; k <= 8; k++) {
-        const t = k / 8;
-        out.push({ x: (1 - t) ** 2 * a.x + 2 * t * (1 - t) * q.x + t * t * b.x, y: (1 - t) ** 2 * a.y + 2 * t * (1 - t) * q.y + t * t * b.y });
+  /**
+   * The reading of a win: a ribbon of gold grows from symbol to symbol, in step with their lighting
+   * up. It joins only the symbols that won, so what paid can be seen at a glance.
+   */
+  private linkCells(cells: Cell[], stagger: number): void {
+    const pts = [...cells].sort((a, b) => a[0] - b[0]).map(([r, row]) => cellCenter(r, row));
+    if (pts.length < 2) return;
+    const g = new Graphics();
+    g.blendMode = 'add';
+    this.ribbonLayer.addChild(g);
+    const draw = (t: number) => {
+      if (g.destroyed) return;
+      const end = t * (pts.length - 1);
+      const n = Math.floor(end);
+      const tip = n >= pts.length - 1 ? pts[pts.length - 1] : { x: pts[n].x + (pts[n + 1].x - pts[n].x) * (end - n), y: pts[n].y + (pts[n + 1].y - pts[n].y) * (end - n) };
+      const path = [...pts.slice(0, n + 1), tip];
+      g.clear();
+      for (const [width, color, alpha] of [[34, 0xffa030, 0.14], [14, 0xffc860, 0.42], [4.5, 0xfff0c8, 0.95]] as const) {
+        g.moveTo(path[0].x, path[0].y);
+        for (const p of path) g.lineTo(p.x, p.y);
+        g.stroke({ width, color, alpha, join: 'round', cap: 'round' });
       }
-    }
-    out.push(all[all.length - 1]);
-    return out;
-  }
-
-  /** A comet of gold runs the winning path once, shedding sparks, and is gone. No line stays. */
-  private traceLine(line: number, duration = 0.4): Container {
-    const root = new Container();
-    const dot = (size: number, tint: number) => {
-      const s = new Sprite(this.tex.glow);
-      s.anchor.set(0.5);
-      s.width = s.height = size;
-      s.tint = tint;
-      s.blendMode = 'add';
-      return s;
     };
-    const comet = [dot(130, LINE_COLORS[line]), dot(46, 0xffffff)];
-    root.addChild(...comet);
-    const pts = this.linePath(line);
-    const seg: number[] = [0];
-    for (let i = 1; i < pts.length; i++) seg.push(seg[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
-    const total = seg[seg.length - 1];
-    const o = { d: 0 };
-    let i = 1;
-    gsap.to(o, {
-      d: total,
-      duration: duration * 1.5,
-      ease: 'sine.inOut',
-      onUpdate: () => {
-        if (root.destroyed) return;
-        while (i < seg.length - 1 && seg[i] < o.d) i++;
-        const k = (o.d - seg[i - 1]) / Math.max(0.001, seg[i] - seg[i - 1]);
-        const x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k;
-        const y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k;
-        for (const c of comet) c.position.set(x, y);
-        this.fx.sand(x, y, 16, 2, 0.5);
-      },
-      onComplete: () => {
-        if (!root.destroyed) gsap.to(root, { alpha: 0, duration: 0.2, onComplete: () => !root.destroyed && root.destroy({ children: true }) });
-      },
-    });
-    return root;
-  }
-
-  /** Runs fn only while the win that asked for it is still on screen. */
-  private cycleOk(fn: () => void): void {
-    if (this.dimLayer.alpha > 0 || this.rigs.size) fn();
+    const o = { t: 0 };
+    draw(0);
+    gsap.to(o, { t: 1, duration: stagger * (pts.length - 1), ease: 'none', onUpdate: () => draw(o.t) });
   }
 
   private dimExcept(cells: Cell[]): void {
@@ -842,7 +813,7 @@ export class ReelBoard extends Container {
     this.dimLayer.clear();
     for (let r = 0; r < REELS; r++) {
       for (let row = 0; row < ROWS; row++) {
-        if (!keep.has(`${r}:${row}`)) this.dimLayer.rect(reelX(r), row * CELL_H, CELL_W + REEL_GAP, CELL_H).fill({ color: 0x07030a, alpha: 0.74 });
+        if (!keep.has(`${r}:${row}`)) this.dimLayer.rect(reelX(r), row * CELL_H, CELL_W + REEL_GAP, CELL_H).fill({ color: 0x07030a, alpha: 0.8 });
       }
     }
     gsap.killTweensOf(this.dimLayer);
@@ -882,12 +853,19 @@ export class ReelBoard extends Container {
     });
     uniq.forEach(([r, row]) => {
       this.performWin(this.rig(r, row), strong, r * stagger);
+      gsap.delayedCall(r * stagger, () => this.onIgnite?.(r));
     });
   }
 
   private addLabel(text: string, x: number, y: number, _color = 0xffffff, scale = 1): Digits {
     const t = new Digits(54);
     t.text = text;
+    const pool = new Sprite(this.tex.glow);
+    pool.anchor.set(0.5);
+    pool.width = 34 + t.inkWidth * 1.5;
+    pool.height = 104;
+    pool.tint = 0x000000;
+    t.addChildAt(pool, 0);
     t.position.set(x, y);
     this.labelLayer.addChild(t);
     gsap.fromTo(t.scale, { x: 0.2 * scale, y: 0.2 * scale }, { x: scale, y: scale, duration: 0.5, ease: 'power3.out' });
@@ -903,10 +881,8 @@ export class ReelBoard extends Container {
     if (!lineWins.length && !scatter) return;
     const all: Cell[] = [...lineWins.flatMap((w) => w.cells), ...(scatter?.cells ?? [])];
     this.dimExcept(all);
-    lineWins.forEach((w, i) => {
-      gsap.delayedCall(i * 0.12, () => !this.lineLayer.destroyed && this.cycleOk(() => this.lineLayer.addChild(this.traceLine(w.line, 0.45))));
-    });
-    this.highlightCells(all, celebrate, 0.1);
+    if (lineWins.length === 1 && !scatter) this.linkCells(lineWins[0].cells, IGNITE_STAGGER);
+    this.highlightCells(all, celebrate, IGNITE_STAGGER);
     this.celebrateFrame(all.map(([r]) => r), celebrate);
     if (scatter) {
       const mid = scatter.cells[Math.floor(scatter.cells.length / 2)];
@@ -931,14 +907,14 @@ export class ReelBoard extends Container {
         tl.add(() => {
           this.clearHighlights();
           this.dimExcept(it.cells);
-          if (it.line !== undefined) this.lineLayer.addChild(this.traceLine(it.line, 0.3));
+          if (it.line !== undefined) this.linkCells(it.cells, 0.09);
           const last = it.cells[it.cells.length - 1];
           const c = cellCenter(last[0], last[1]);
           this.addLabel(fmt(it.win), c.x, c.y + CELL_H * 0.36, COLORS.yellow);
-          this.highlightCells(it.cells, false, 0.04);
+          this.highlightCells(it.cells, false, 0.09);
           onLine?.(i);
         });
-        tl.to({}, { duration: 0.9 });
+        tl.to({}, { duration: items.length > 4 ? 0.7 : 1 });
       });
     } else tl.to({}, { duration: 0.9 });
     this.cycleTl = tl;
@@ -1107,13 +1083,6 @@ export class ReelBoard extends Container {
     }
     this.clearRigs();
     await wait(250);
-    exp.lines.forEach((line, i) => {
-      const g = this.traceLine(line, 0.3);
-      g.alpha = 0;
-      this.lineLayer.addChild(g);
-      gsap.to(g, { alpha: 0.85, duration: 0.01, delay: i * 0.06 });
-    });
-    await wait(500);
     this.addLabel(fmt(exp.win), BOARD_W / 2, BOARD_H / 2, COLORS.yellow, 1.7);
     this.fx.burst(BOARD_W / 2, BOARD_H / 2, 40, 1);
     await wait(1400);

@@ -965,6 +965,16 @@ export class Audio {
     if (size >= 3) this.choir(end, [midi(45), midi(52), midi(57)], 2.4, 0.08);
   }
 
+  /** A winning symbol lights up: one clear note, higher along the reels. */
+  ignite(reel: number): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    const note = [76, 80, 83, 88, 92][Math.min(4, reel)];
+    const pan = (reel - 2) * 0.3;
+    this.sagat(at, midi(note), 0.05, pan);
+    this.voice({ at, f: midi(note - 12), vol: 0.05, r: 0.34, a: 0.002, pan, echo: 0.3 });
+  }
+
   /** Count-up tick: a small coin; give it progress (0..1) and it climbs in pitch as the total grows. */
   tick(progress = -1): void {
     if (!this.ctx) return;
