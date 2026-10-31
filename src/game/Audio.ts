@@ -54,8 +54,16 @@ const MIZMAR_THEME = score(16, [
 ]);
 /** the walking bass under the bonus: root, fifth, octave */
 const BASS_WALK = [0, 0, 0, 7, 12, 0, 7, 1];
-const SPIN_LEVEL = 0.06;
-const MUSIC_LEVEL = 0.42;
+/** the formants keep only a sliver of the reed's energy: this gives it back */
+const REED_MAKEUP = 3.6;
+/** the phrase the mizmar cries out when the reels are thrown, one of these each spin */
+const SPIN_CRIES = [
+  [64, 65, 68, 69, 71],
+  [71, 69, 68, 65, 68],
+  [64, 68, 69, 71, 72],
+];
+const SPIN_LEVEL = 0.34;
+const MUSIC_LEVEL = 0.85;
 
 function softClip(): Float32Array<ArrayBuffer> {
   const curve = new Float32Array(1024);
@@ -368,7 +376,7 @@ export class Audio {
       bp.frequency.value = ff;
       bp.Q.value = q;
       const bg = ctx.createGain();
-      bg.gain.value = k;
+      bg.gain.value = k * REED_MAKEUP;
       sum.connect(bp).connect(bg).connect(g);
     }
     g.connect(this.pan(pan, dest));
@@ -480,8 +488,8 @@ export class Audio {
 
   /** The dry, ringing "tek" of the fingertips on the rim. */
   private tek(at: number, vol = 1, dest: AudioNode = this.music): void {
-    this.voice({ at, f: 1240, to: 1050, glide: 0.02, vol: 0.13 * vol, r: 0.075, a: 0.0008, dest, pan: 0.15 });
-    this.voice({ at, f: 2380, to: 2150, glide: 0.02, vol: 0.06 * vol, r: 0.05, a: 0.0008, dest, pan: 0.15 });
+    this.voice({ at, f: 1240, to: 1050, glide: 0.02, vol: 0.3 * vol, r: 0.075, a: 0.0008, dest, pan: 0.15 });
+    this.voice({ at, f: 2380, to: 2150, glide: 0.02, vol: 0.14 * vol, r: 0.05, a: 0.0008, dest, pan: 0.15 });
     this.hiss({ at, dur: 0.018, type: 'bandpass', f0: 3400, q: 1.4, vol: 0.34 * vol, a: 0.0006, dest, pan: 0.15 });
   }
 
@@ -633,11 +641,11 @@ export class Audio {
     if (!this.feature) {
       // the night: the ney sings the theme over a baladi kept low, as if heard from the next chamber
       const n = NEY_THEME.notes.get(step % NEY_THEME.steps);
-      if (n) this.ney(at, midi(n[1]), dur * n[2] * 0.95, 0.052, n[2] >= 3);
+      if (n) this.ney(at, midi(n[1]), dur * n[2] * 0.95, 0.2, n[2] >= 3);
       const hit = BALADI[s];
-      if (hit === 'D') this.doum(at, s === 0 ? 0.6 : 0.42);
-      else if (hit === 'T') this.tek(at, 0.3);
-      if (s % 2 === 1) this.riq(at, 0.011, 0.3);
+      if (hit === 'D') this.doum(at, s === 0 ? 0.5 : 0.36);
+      else if (hit === 'T') this.tek(at, 0.7);
+      if (s % 2 === 1) this.riq(at, 0.03, 0.3);
       if (s === 0 && bar % 8 === 7) this.sistrum(at, 0.03, 0.5, 4);
     } else {
       // the infected temple: saidi at full tilt, the mizmar crying over a walking bass, and every
@@ -645,14 +653,14 @@ export class Audio {
       const root = chord[0];
       const hit = SAIDI[s];
       const n = MIZMAR_THEME.notes.get(step % MIZMAR_THEME.steps);
-      if (n) this.reed(at, n[1], dur * n[2] * 0.92, 0.075, 0.08, this.music, 0.16);
-      if (hit === 'D') this.doum(at, s === 0 ? 1.1 : 0.9);
-      else if (hit === 'T') this.tek(at, 0.8);
+      if (n) this.reed(at, n[1], dur * n[2] * 0.92, 0.1, 0.08, this.music, 0.16);
+      if (hit === 'D') this.doum(at, s === 0 ? 0.8 : 0.65);
+      else if (hit === 'T') this.tek(at, 1);
       if (bar % 8 === 7 && s >= 4) {
-        this.tek(at, 0.6);
-        this.tek(at + dur / 2, 0.5);
+        this.tek(at, 0.8);
+        this.tek(at + dur / 2, 0.7);
       }
-      this.riq(at, s % 2 ? 0.02 : 0.012, s % 2 ? 0.35 : -0.35);
+      this.riq(at, s % 2 ? 0.05 : 0.03, s % 2 ? 0.35 : -0.35);
       if (s === 0 && bar % 2 === 0) this.boom(at, 0.2, 48);
       if (s === 0 && bar % 8 === 6) this.choirIn(at, chord, dur * 12);
       this.voice({ at, f: midi(root + BASS_WALK[s]), vol: 0.14, r: dur * 0.85, a: 0.005, type: 'triangle', dest: this.music });
@@ -689,56 +697,47 @@ export class Audio {
     this.hiss({ at, dur: 0.018, type: 'bandpass', f0: 1900, q: 2, vol: 0.12, a: 0.001, dest: this.ui });
   }
 
-  /** The press: a crisp click and a short rush of air as the wheels go. */
+  /** The press: a blow on the drum, the sistrum, and the mizmar crying out a phrase of the scale. */
   spinStart(): void {
     if (!this.ctx) return;
     const at = this.t;
-    this.voice({ at, f: 210, to: 96, glide: 0.05, vol: 0.2, r: 0.08, a: 0.001 });
-    this.hiss({ at, dur: 0.012, type: 'bandpass', f0: 3000, q: 1.5, vol: 0.12, a: 0.0005 });
-    this.hiss({ at: at + 0.01, dur: 0.24, type: 'bandpass', f0: 700, f1: 3200, q: 0.8, vol: 0.08, a: 0.05, pan: -0.4, pan1: 0.4 });
-    this.sagat(at + 0.01, midi(83), 0.016, 0);
-    this.sistrum(at + 0.01, 0.026, 0, 2);
+    this.doum(at, 0.9, this.sfx);
+    this.sistrum(at + 0.01, 0.07, 0, 3);
+    this.sagat(at + 0.01, midi(83), 0.03, 0);
+    this.spinCry = (this.spinCry + 1) % SPIN_CRIES.length;
+    SPIN_CRIES[this.spinCry].forEach((n, i) => this.reed(at + 0.02 + i * 0.065, n + 12, i === 4 ? 0.2 : 0.075, 0.075, (i - 2) * 0.15, this.sfx, 0.25));
     this.startSpinLoop(at + 0.03);
   }
 
-  /** One second of a stone wheel turning: a low rumble pulsed by the passing cells; seamless when looped. */
+  private spinCry = 0;
+
+  /** One second of drum roll, seamless when looped: a darbuka at full speed with a sistrum shaking over it. */
   private spinBuffer: AudioBuffer | null = null;
 
   private makeSpinBuffer(): AudioBuffer {
     const ctx = this.ctx!;
     const sr = ctx.sampleRate;
     const N = sr;
-    const F = Math.floor(sr * 0.05);
     const b = ctx.createBuffer(2, N, sr);
-    const beats = 16;
+    /** d: the doum in the middle of the skin; t: the tek on the rim; ., a light touch */
+    const ROLL = 'd.tt.t.td.tt.ttt';
+    const put = (raw: Float32Array, start: number, seconds: number, sample: (t: number) => number) => {
+      for (let j = 0; j < sr * seconds; j++) raw[(start + j) % N] += sample(j / sr);
+    };
     for (let ch = 0; ch < 2; ch++) {
-      const raw = new Float32Array(N + F);
-      let lp = 0;
-      let lp2 = 0;
-      for (let i = 0; i < raw.length; i++) {
-        const w = Math.random() * 2 - 1;
-        lp = lp * 0.975 + w * 0.025;
-        lp2 = lp2 * 0.8 + w * 0.2;
-        const phase = (i / N) * beats + (ch ? 0.35 : 0);
-        const pulse = 0.55 + 0.45 * Math.pow(0.5 + 0.5 * Math.cos(phase * Math.PI * 2), 3);
-        raw[i] = (lp * 3.4 + lp2 * 0.07) * pulse + Math.sin((i / N) * Math.PI * 2 * 58) * 0.13 * pulse;
-      }
-      for (let k = 0; k < beats; k++) {
-        // the dull knock of a slab passing the gate
-        const t0 = Math.floor(((k + 0.5) / beats) * N) + (ch ? 53 : 0);
-        for (let j = 0; j < sr * 0.03 && t0 + j < raw.length; j++) {
-          const t = j / sr;
-          raw[t0 + j] += 0.36 * Math.exp(-t / 0.008) * Math.sin(2 * Math.PI * 340 * t);
+      const raw = new Float32Array(N);
+      [...ROLL].forEach((hit, k) => {
+        const at = Math.floor((k / ROLL.length) * N) + (ch ? 37 : 0);
+        if (hit === 'd') {
+          put(raw, at, 0.2, (t) => 0.8 * Math.exp(-t / 0.06) * Math.sin(2 * Math.PI * (86 * t + (82 / 30) * (1 - Math.exp(-t * 30)))));
+        } else {
+          const level = hit === 't' ? 0.5 : 0.22;
+          put(raw, at, 0.06, (t) => level * Math.exp(-t / 0.016) * (Math.sin(2 * Math.PI * 1150 * t) + 0.5 * Math.sin(2 * Math.PI * 2270 * t) + 0.6 * (Math.random() - 0.5)));
         }
-        // and with it the shiver of a sistrum, thin metal over the rumble
-        const t1 = Math.floor((k / beats) * N);
-        for (let j = 0; j < sr * 0.025 && t1 + j < raw.length; j++) {
-          const t = j / sr;
-          raw[t1 + j] += 0.1 * Math.exp(-t / 0.007) * (Math.sin(2 * Math.PI * 6300 * t) + Math.sin(2 * Math.PI * 8870 * t) + (Math.random() - 0.5));
-        }
-      }
-      const d = b.getChannelData(ch);
-      for (let i = 0; i < N; i++) d[i] = i < F ? raw[i] * (i / F) + raw[N + i] * (1 - i / F) : raw[i];
+        // the discs of the sistrum on every step
+        put(raw, at + Math.floor(sr * 0.012), 0.04, (t) => 0.2 * Math.exp(-t / 0.012) * (Math.sin(2 * Math.PI * 6300 * t) + Math.sin(2 * Math.PI * 8870 * t) + Math.random() - 0.5));
+      });
+      b.getChannelData(ch).set(raw);
     }
     return b;
   }
@@ -753,11 +752,11 @@ export class Audio {
     const src = ctx.createBufferSource();
     src.buffer = this.spinBuffer;
     src.loop = true;
-    src.playbackRate.setValueAtTime(0.7, at);
-    src.playbackRate.linearRampToValueAtTime(1.05, at + 0.35);
+    src.playbackRate.setValueAtTime(0.8, at);
+    src.playbackRate.linearRampToValueAtTime(1, at + 0.3);
     const tone = ctx.createBiquadFilter();
     tone.type = 'lowpass';
-    tone.frequency.value = 2400;
+    tone.frequency.value = 12000;
     const out = ctx.createGain();
     out.gain.setValueAtTime(0.0001, at);
     out.gain.exponentialRampToValueAtTime(SPIN_LEVEL, at + 0.18);
@@ -778,22 +777,23 @@ export class Audio {
   }
 
   /**
-   * Reel seats: a tight, round knock with a bell note on it. The five notes climb the scale, so a
-   * whole spin plays as one little rising phrase.
+   * A reel stops: a clean blow on the drum, the finger cymbals, and one note of the mizmar. The five
+   * notes are E F G# A B, so every spin plays the Hijaz scale, the sound of Egypt, with its long step.
    */
   reelStop(i: number): void {
     if (!this.ctx) return;
     const at = this.t;
     const pan = (i - 2) * 0.3;
     const note = [76, 77, 80, 81, 83][Math.min(4, i)];
-    this.voice({ at, f: 158 - i * 6, to: 74, glide: 0.045, vol: 0.36, r: 0.13, a: 0.001, pan });
-    this.hiss({ at, dur: 0.012, type: 'bandpass', f0: 1500, q: 1.4, vol: 0.13, a: 0.0005, pan });
-    this.sagat(at, midi(note), 0.045, pan);
-    this.voice({ at, f: midi(note - 12), type: 'triangle', vol: 0.05, r: 0.2, a: 0.002, pan });
-    this.hiss({ at: at + 0.012, dur: 0.2, type: 'bandpass', f0: 6400, f1: 3600, q: 1.1, vol: 0.022 + (i >= 4 ? 0.01 : 0), a: 0.012, pan });
-    this.coin(at + 0.02, 0.012 + (i >= 4 ? 0.008 : 0), pan, 1 + i * 0.06, this.sfx, true);
-    if (i >= 4) this.spinLoop?.stop(at);
-    else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
+    const last = i >= 4;
+    this.doum(at, last ? 1 : 0.8, this.sfx);
+    this.tek(at, last ? 0.9 : 0.6, this.sfx);
+    this.sagat(at, midi(note + 12), 0.05, pan);
+    this.reed(at, note, last ? 0.4 : 0.15, last ? 0.11 : 0.09, pan, this.sfx, 0.3);
+    if (last) {
+      this.sistrum(at, 0.06, 0, 3);
+      this.spinLoop?.stop(at);
+    } else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
   }
 
   /** A door of stone dragged open: a long low grind with grit falling from the lintel. */

@@ -147,8 +147,6 @@ export class Game {
     this.bg.onLightning = (power) => this.audio.lightning(power);
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
-    this.board.onAnticipate = (on) => this.pushIn(on);
-    this.board.onImpact = (p) => this.punch(p);
     this.board.onIgnite = (r) => this.audio.ignite(r);
     const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo ?? logoImage);
     this.logo = new Logo(logoArt);
@@ -180,7 +178,6 @@ export class Game {
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       shake: (p) => this.shake(p),
-      punch: (p) => this.punch(p),
       shockwave: () => this.shockwave(),
       glitch: (p) => this.logo.glitch(p),
       thump: (p) => this.bg.thump(p),
@@ -330,8 +327,7 @@ export class Game {
     this.logoShade.height = portrait ? 440 : 380;
     this.banner.y = portrait ? -92 : -62;
     this.banner.scale.set(portrait ? 1.1 : 1);
-    this.baseScale = scale;
-    this.world.scale.set(scale * this.zoom);
+    this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + bottom) / 2);
     // the reels stand in the very middle of the screen
     this.world.position.set(w / 2, availH / 2);
@@ -358,13 +354,9 @@ export class Game {
   /** Time warp for hit-stops (1 = normal). */
   private warp = 1;
 
-  /** The third book lands: flash, shockwave, camera kick, and (on the last reel) a short freeze-frame. */
+  /** The third pyramid lands: a flash and (on the last reel) a short freeze-frame. */
   private triggerHit(freeze: boolean): void {
     this.bg.thump(0.5);
-    this.shockwave();
-    this.punch(1.8);
-    this.shake(16);
-    this.logo.glitch(2);
     if (!freeze) return;
     this.warp = 0.06;
     gsap.globalTimeline.timeScale(0.06);
@@ -414,32 +406,6 @@ export class Game {
       this.shakePower = 0;
       this.scene.position.set(0, 0);
     }
-  }
-
-  private baseScale = 1;
-  /** camera zoom = slow push (anticipation) × quick kick (impacts) */
-  private cam = { push: 1, kick: 1 };
-  private get zoom(): number {
-    return this.cam.push * this.cam.kick;
-  }
-  private applyZoom = (): void => {
-    this.world.scale.set(this.baseScale * this.zoom);
-  };
-
-  /** Camera: a quick zoom kick that settles back. */
-  private punch(power = 1): void {
-    gsap.killTweensOf(this.cam, 'kick');
-    gsap.fromTo(
-      this.cam,
-      { kick: 1 + 0.03 * power },
-      { kick: 1, duration: 0.45, ease: 'power3.out', onUpdate: this.applyZoom },
-    );
-  }
-
-  /** Camera: slow push-in while the reels build suspense. */
-  private pushIn(on: boolean): void {
-    gsap.killTweensOf(this.cam, 'push');
-    gsap.to(this.cam, { push: on ? 1.03 : 1, duration: on ? 1.2 : 0.4, ease: 'sine.inOut', onUpdate: this.applyZoom });
   }
 
   private shake(power: number): void {
@@ -586,7 +552,6 @@ export class Game {
       anticipate,
       onReelStop: (r) => {
         this.audio.reelStop(r);
-        if (r === REELS - 1 && !this.inFeature) this.shake(2.5);
         navigator.vibrate?.(r === REELS - 1 ? 16 : 7);
         for (let row = 0; row < ROWS; row++) {
           const s = grid[r][row];
@@ -628,7 +593,6 @@ export class Game {
       else this.audio.tick();
       shown += lineSum;
       this.hud.rollWin(shown, celebrate ? 900 : 300, label);
-      if (size >= 2) this.shake(4);
       if (celebrate) this.board.showWinBurst(lineSum, size);
       if (celebrate) this.mascot.react('win');
       await this.board.presentWins(o.lineWins, o.scatter, celebrate, () => this.audio.tick());

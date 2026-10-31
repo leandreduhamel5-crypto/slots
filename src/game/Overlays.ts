@@ -47,7 +47,6 @@ export interface FxHooks {
   shockwave(): void;
   glitch(power: number): void;
   thump(power: number): void;
-  punch(power: number): void;
 }
 
 export class Overlays extends Container {
@@ -512,10 +511,7 @@ export class Overlays extends Container {
     gsap.delayedCall(0.42, () => {
       if (!this.visible || heading.destroyed) return;
       this.audio.tierUp(0);
-      this.fx.shockwave();
-      this.fx.shake(10);
       this.fx.thump(0.35);
-      this.fx.punch(1);
       this.titleHit(-105);
       this.titleSweep(heading);
       this.titleSweep(plaque, this.content, 640);
@@ -578,7 +574,6 @@ export class Overlays extends Container {
     gsap.delayedCall(0.3, () => {
       if (!this.visible || heading.destroyed) return;
       this.bloom(72, 0xfff0c0, 1700);
-      this.fx.shake(14);
       this.fx.thump(0.5);
       this.titleSweep(heading);
       this.titleSweep(plaque, this.content, 640);
@@ -632,11 +627,7 @@ export class Overlays extends Container {
     this.audio.tierUp(tier);
     gsap.delayedCall(0.22, () => {
       if (!this.visible || heading.destroyed) return;
-      this.fx.shockwave();
-      this.fx.shake(10 + tier * 6);
-      this.fx.glitch(1 + tier);
       this.fx.thump(0.3 + tier * 0.1);
-      this.fx.punch(1 + tier * 0.3);
       this.titleHit(-105, 900 + tier * 60);
       this.titleSweep(heading);
     });
@@ -794,7 +785,6 @@ export class Overlays extends Container {
     this.fx.shockwave();
     this.fx.thump(0.45);
     this.fx.shake(12);
-    this.fx.punch(1.2);
     lamps.blaze(1500);
     lamps.chase(0);
     const chaser = this.runLamps(lamps);
@@ -1033,7 +1023,6 @@ export class Overlays extends Container {
           if (head.destroyed) return;
           this.fx.shake(18);
           this.fx.shockwave();
-          this.fx.punch(1.4);
           this.titleHit(head.y, 1000);
           this.titleSweep(head);
         },

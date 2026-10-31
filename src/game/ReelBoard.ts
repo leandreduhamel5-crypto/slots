@@ -92,8 +92,6 @@ export class ReelBoard extends Container {
   private rigs = new Map<string, Rig>();
   private hurried = false;
   /** camera hooks */
-  onAnticipate: ((on: boolean) => void) | null = null;
-  onImpact: ((power: number) => void) | null = null;
   /** a winning symbol of this reel has just lit up */
   onIgnite: ((reel: number) => void) | null = null;
   private ambientIn = 2.5;
@@ -410,7 +408,6 @@ export class ReelBoard extends Container {
   private setAnticipation(reel: number, on: boolean, dur: number): void {
     const { glow, veins, border, comets } = this.anticipationFx[reel];
     gsap.killTweensOf([glow, glow.scale, veins, veins.scale, border, ...comets]);
-    this.onAnticipate?.(on);
     if (on) {
       glow.alpha = 0;
       gsap.to(glow, { alpha: 0.38, duration: 0.25 });
@@ -947,21 +944,11 @@ export class ReelBoard extends Container {
     const seal = makeSeal(this.tex.seal, val.inkWidth * k + 170, 150 * Math.max(0.8, k));
     c.addChild(shade, flash, seal, val);
     this.labelLayer.addChild(c);
-    gsap.fromTo(c, { alpha: 0 }, { alpha: 1, duration: 0.12 });
-    gsap.fromTo(seal.scale, { x: 1.9, y: 1.9 }, { x: 1, y: 1, duration: 0.3, ease: 'power3.in' });
-    gsap.fromTo(val.scale, { x: k * 1.9, y: k * 1.9 }, {
-      x: k,
-      y: k,
-      duration: 0.3,
-      ease: 'power3.in',
-      onComplete: () => {
-        if (c.destroyed) return;
-        this.onImpact?.(0.5 + size * 0.3);
-        gsap.fromTo(flash, { alpha: 1 }, { alpha: 0, duration: 0.6, ease: 'power2.out' });
-        this.fx.coins(BOARD_W / 2, BOARD_H / 2, 8 + size * 8, 0.8);
-        this.fx.sand(BOARD_W / 2, BOARD_H / 2, BOARD_W * 0.5, 50 + size * 30, 1.8);
-      },
-    });
+    val.scale.set(k);
+    gsap.fromTo(c, { alpha: 0 }, { alpha: 1, duration: 0.18 });
+    gsap.fromTo(flash, { alpha: 1 }, { alpha: 0, duration: 0.7, ease: 'power2.out' });
+    this.fx.coins(BOARD_W / 2, BOARD_H / 2, 8 + size * 8, 0.8);
+    this.fx.sand(BOARD_W / 2, BOARD_H / 2, BOARD_W * 0.5, 50 + size * 30, 1.8);
     gsap.to(c, { alpha: 0, duration: 0.3, delay: 1.25, onComplete: () => !c.destroyed && c.destroy({ children: true }) });
   }
 
