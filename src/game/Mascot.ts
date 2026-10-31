@@ -485,8 +485,8 @@ export class Mascot extends Container {
       chest,
       around(NECK, -this.look.x * 0.07 + Math.sin(t * 0.7) * 0.02 - fx.chin * 0.1 + fx.lean * 0.06, this.look.x * 4, this.look.y * 3 - breath * 1.2),
     );
-    const armU = mul(chest, around(SHOULDER, Math.sin(t * 0.9) * 0.025 + fx.raise * 0.1));
-    const armF = mul(armU, around(ELBOW, Math.sin(t * 0.9 + 0.7) * 0.035 + fx.raise * 0.42));
+    const armU = mul(chest, around(SHOULDER, Math.sin(t * 0.9) * 0.025 - fx.raise * 0.04));
+    const armF = mul(armU, around(ELBOW, Math.sin(t * 0.9 + 0.7) * 0.035 + fx.raise * 0.2));
     const cobra = mul(
       chest,
       around(COBRA_NECK, Math.sin(t * 1.3) * 0.07 - fx.rear * 0.22 + fx.strike * 0.16, fx.strike * 30, -fx.rear * 16 + Math.sin(t * 1.3 + 1) * 3, 1 + fx.strike * 0.14),
