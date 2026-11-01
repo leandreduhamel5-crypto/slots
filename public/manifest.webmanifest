@@ -1,0 +1,13 @@
+{
+  "name": "Book of Infection",
+  "short_name": "Book of Infection",
+  "description": "La machine à sous égyptienne. Démo gratuite, crédits fictifs.",
+  "start_url": ".",
+  "display": "fullscreen",
+  "background_color": "#0a1230",
+  "theme_color": "#0a1230",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

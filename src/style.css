@@ -2104,6 +2104,12 @@ button {
 @keyframes ti-queen {
   from { opacity: 0; translate: -60px 0; }
 }
+/* on a screen almost square she steps aside for the title */
+@media (min-aspect-ratio: 1/1) and (max-aspect-ratio: 3/2) {
+  .ti-queen {
+    left: -14vw;
+  }
+}
 .ti-main {
   position: relative;
   z-index: 1;

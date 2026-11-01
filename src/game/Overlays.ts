@@ -47,7 +47,6 @@ const body = (size: number, fill = 0xffffff): TextStyleOptions => ({
 });
 
 export interface FxHooks {
-  shake(power: number): void;
   shockwave(): void;
   glitch(power: number): void;
   thump(power: number): void;
@@ -194,8 +193,7 @@ export class Overlays extends Container {
     await new Promise<void>((r) =>
       gsap
         .timeline({ onComplete: r })
-        .to(this.content.scale, { x: this.content.scale.x * 1.12, y: this.content.scale.y * 1.12, duration: 0.3, ease: 'power2.in' })
-        .to([this.content, this.back, this.dim], { alpha: 0, duration: 0.25 }, '<'),
+        .to([this.content, this.back, this.dim], { alpha: 0, duration: 0.3 }),
     );
     this.clearLayers();
     this.resize(this.w, this.h);
@@ -465,7 +463,7 @@ export class Overlays extends Container {
   }
 
   /** Tiered big-win celebration: each tier is a heavier blow; the amount never leaves its cartouche. */
-  async bigWin(win: number, bet: number, onTick?: (v: number) => void): Promise<void> {
+  async bigWin(win: number, bet: number, onTick?: (v: number) => void, record = false): Promise<void> {
     const top = winTier(win, bet);
     if (top < 0) return;
     this.open();
@@ -589,8 +587,30 @@ export class Overlays extends Container {
       this.particles.coins(this.w / 2, this.h * 0.62, 26 + top * 12, 1.25);
     });
     this.audio.bigWinEnd(top);
+    if (record) this.recordStamp(336, 178);
     await this.waitOrSkip(2400);
     await this.close();
+  }
+
+  /** The biggest win this player has ever had: a seal struck on the plaque. */
+  private recordStamp(x: number, y: number): void {
+    const c = new Container();
+    const t = new Text({ text: 'NOUVEAU RECORD', style: body(22, 0xffe9b0) });
+    t.anchor.set(0.5);
+    c.addChild(makeSeal(this.tex.seal, t.width + 70, 66), t);
+    c.position.set(x, y);
+    c.rotation = -0.07;
+    c.alpha = 0;
+    this.content.addChild(c);
+    gsap.delayedCall(0.55, () => {
+      if (c.destroyed) return;
+      this.popIn(c);
+      gsap.delayedCall(0.3, () => {
+        if (c.destroyed) return;
+        this.audio.record();
+        this.titleHit(y, 340);
+      });
+    });
   }
 
   /** One gem per win tier, in a row under the title: they light up as the count climbs. */
@@ -791,7 +811,6 @@ export class Overlays extends Container {
     this.audio.strainLock();
     this.fx.shockwave();
     this.fx.thump(0.45);
-    this.fx.shake(12);
     lamps.blaze(1500);
     lamps.chase(0);
     const chaser = this.runLamps(lamps);
@@ -992,7 +1011,6 @@ export class Overlays extends Container {
         onComplete: resolve,
       });
     });
-    this.fx.shake(14);
     this.fx.thump(0.8);
     this.audio.impact(1.3);
     // the wall of sand that follows us out of the corridor
@@ -1009,7 +1027,6 @@ export class Overlays extends Container {
       gsap.fromTo(this.dim, { alpha: 1 }, { alpha: 0.86, duration: 0.6 });
     }
     this.audio.featureStart();
-    this.fx.shake(16);
     this.fx.glitch(3);
     this.sunburst(0x46060c);
     const head = this.head3d(`${spins} TOURS GRATUITS`, 88, 'gold', 1000);
@@ -1028,7 +1045,6 @@ export class Overlays extends Container {
         ease: 'power3.in',
         onComplete: () => {
           if (head.destroyed) return;
-          this.fx.shake(18);
           this.fx.shockwave();
           this.titleHit(head.y, 1000);
           this.titleSweep(head);
@@ -1071,7 +1087,6 @@ export class Overlays extends Container {
   async retrigger(spins: number, mutation: Sym | null, active: Sym[]): Promise<void> {
     this.open();
     this.audio.stinger(1);
-    this.fx.shake(14);
     this.fx.glitch(2);
     this.sunburst(0x3e1806);
     const ribbon = this.ribbon(1120, 150, 0x8a0f26);
@@ -1104,7 +1119,7 @@ export class Overlays extends Container {
     await this.close();
   }
 
-  async featureOutro(total: number, spins: number, bet: number, onTick?: (v: number) => void): Promise<void> {
+  async featureOutro(total: number, spins: number, bet: number, bestSpin: number, record: boolean, onTick?: (v: number) => void): Promise<void> {
     this.open();
     this.audio.stinger(1);
     this.sunburst(0x3a2408);
@@ -1119,11 +1134,11 @@ export class Overlays extends Container {
     const amount = new Digits(114);
     amount.value = 0;
     amount.y = 34;
-    const seal = makeSeal(this.tex.seal, 620, 78);
-    seal.y = 142;
-    const sub = new Text({ text: `${spins} tours gratuits · ${fmt(total / bet)}× la mise`, style: body(22, 0xffe2ac) });
+    const sub = new Text({ text: `${spins} tours · ×${Math.floor(total / bet)} la mise${bestSpin > 0 ? ` · meilleur tour ${fmt(bestSpin)}` : ''}`, style: body(22, 0xffe2ac) });
     sub.anchor.set(0.5);
     sub.y = 142;
+    const seal = makeSeal(this.tex.seal, Math.max(620, sub.width + 90), 78);
+    seal.y = 142;
     const foot = new Sprite(this.tex.crest);
     foot.anchor.set(0.5);
     foot.scale.set(0.56);
@@ -1157,6 +1172,7 @@ export class Overlays extends Container {
     this.audio.bigWinEnd(1);
     lamps.blaze(1200);
     this.titleSweep(plaque, this.content, 640);
+    if (record) this.recordStamp(0, 322);
     await this.waitOrSkip(2600);
     await this.close();
   }

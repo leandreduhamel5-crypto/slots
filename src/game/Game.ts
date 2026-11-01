@@ -1,16 +1,17 @@
-import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js';
 import { AdvancedBloomFilter, ShockwaveFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { BASE_STRIPS, BET_LEVELS, FREE_STRIPS, REELS, ROWS, Sym, minCount } from '../math/config';
 import type { FreeSpinOutcome, Grid, Round, SpinOutcome } from '../math/engine';
 import { GameServer } from '../server/GameServer';
-import { LITE } from './device';
+import { LITE, slim } from './device';
 import { Hud } from '../ui/Hud';
 import { Paytable } from '../ui/Paytable';
 import { paintBonusPanel } from './art/egyptFrame';
 import { Audio } from './Audio';
 import { Background } from './Background';
-import { BOARD_H, BOARD_W, COLORS } from './layout';
+import { Digits } from './Digits';
+import { BOARD_H, BOARD_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y } from './layout';
 import { Logo, eyeFromCodex, logoCanvas } from './Logo';
 import type { LoadedAssets } from './assets';
 import { Mascot, type MascotTextures } from './Mascot';
@@ -38,19 +39,31 @@ const MASCOT_SCALE = 0.68;
 const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 360;
 
-/** Bonus panel in the place of the title: spins left on one side, the active strains on the other. */
+const PANEL_W = 820;
+const PANEL_H = 128;
+const PANEL_MID = 276;
+/** centre of the two cells either side of the strain */
+const PANEL_CELL = PANEL_MID / 2 + (PANEL_W - PANEL_MID) / 4;
+
+/** Bonus panel in the place of the title: spins on the left, the strains in their cartouche, the bonus total on the right. */
 class FeatureBanner extends Container {
-  private count: Text;
+  private count = new Digits(54);
+  private amount = new Digits(54);
+  private times: Text;
   private icons = new Container();
   /** the strains the icons show: a new bonus can have another strain, with the same count */
   private shown = '';
   private caption: Text;
   private bar = new Graphics().roundRect(0, 0, 244, 4, 2).fill(0xf2c25a);
   private glow: Sprite;
+  private spinGlow: Sprite;
+  private gainGlow: Sprite;
+  private gain = { v: 0 };
+  private bet = 1;
 
   constructor(private tex: SymbolTextures) {
     super();
-    const plate = new Sprite(Texture.from(paintBonusPanel(620, 118)));
+    const plate = new Sprite(slim(paintBonusPanel(PANEL_W, PANEL_H, PANEL_MID), 0.6));
     plate.anchor.set(0.5);
     plate.scale.set(0.5);
     const caps = (size: number, fill: number) => ({
@@ -61,72 +74,116 @@ class FeatureBanner extends Container {
       letterSpacing: size * 0.1,
       dropShadow: { color: 0x000000, blur: 3, distance: 2, angle: Math.PI / 2, alpha: 0.9 },
     });
-    this.caption = new Text({ text: 'TOURS GRATUITS', style: caps(17, 0xe8c878) });
-    const label = this.caption;
-    label.anchor.set(0.5);
-    label.position.set(-150, -32);
-    this.count = new Text({
-      text: '0 / 10',
-      style: { ...caps(52, 0xfff0c8), letterSpacing: 2, stroke: { color: 0x3a2008, width: 5, join: 'round' as const } },
-    });
-    this.count.anchor.set(0.5);
-    this.count.position.set(-150, 13);
+    const cellGlow = (x: number, w: number, h: number, tint: number) => {
+      const g = new Sprite(tex.glow);
+      g.anchor.set(0.5);
+      g.position.set(x, 0);
+      g.width = w;
+      g.height = h;
+      g.blendMode = 'add';
+      g.tint = tint;
+      g.alpha = 0;
+      return g;
+    };
+    this.spinGlow = cellGlow(-PANEL_CELL, 300, 150, 0xffc860);
+    this.gainGlow = cellGlow(PANEL_CELL, 300, 150, 0xffc860);
+    this.caption = new Text({ text: 'TOURS GRATUITS', style: caps(19, 0xe8c878) });
+    this.caption.anchor.set(0.5);
+    this.caption.position.set(-PANEL_CELL, -40);
+    this.count.position.set(-PANEL_CELL, 2);
+    const total = new Text({ text: 'GAIN BONUS', style: caps(19, 0xe8c878) });
+    total.anchor.set(0.5);
+    total.position.set(PANEL_CELL, -40);
+    this.amount.position.set(PANEL_CELL, 2);
+    this.times = new Text({ text: '', style: caps(17, 0xfff0c8) });
+    this.times.anchor.set(0.5);
+    this.times.position.set(PANEL_CELL, 44);
     const strains = new Text({ text: 'SOUCHE', style: caps(17, 0xe8c878) });
     strains.anchor.set(0.5);
-    strains.position.set(150, -38);
-    this.icons.position.set(150, 12);
+    strains.position.set(0, -68);
+    this.icons.position.set(0, 12);
     // how far through the free spins we are
-    const track = new Graphics().roundRect(-124, 45, 248, 7, 3.5).fill(0x050a1e).stroke({ width: 1, color: 0xc08a30 });
-    this.bar.position.set(-122, 48.5);
+    const track = new Graphics().roundRect(-124, 0, 248, 7, 3.5).fill(0x050a1e).stroke({ width: 1, color: 0xc08a30 });
+    track.position.set(-PANEL_CELL, 41);
+    this.bar.position.set(-PANEL_CELL - 122, 42.5);
     this.bar.scale.x = 0;
-    this.glow = new Sprite(tex.glow);
-    this.glow.anchor.set(0.5);
-    this.glow.position.set(150, 12);
-    this.glow.width = 240;
-    this.glow.height = 130;
-    this.glow.blendMode = 'add';
-    this.glow.tint = 0xffb040;
-    this.glow.alpha = 0.22;
-    gsap.to(this.glow, { alpha: 0.4, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.addChild(plate, label, this.count, track, this.bar, strains, this.glow, this.icons);
+    this.glow = cellGlow(0, 300, 210, 0xffb040);
+    this.glow.position.y = 12;
+    this.glow.alpha = 0.3;
+    gsap.to(this.glow, { alpha: 0.5, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.addChild(plate, this.spinGlow, this.gainGlow, this.caption, this.count, track, this.bar, total, this.amount, this.times, strains, this.glow, this.icons);
     this.visible = false;
   }
 
   set(spin: number, total: number, specials: Sym[]): void {
-    this.count.text = `${spin} / ${total}`;
+    this.count.text = `${spin}/${total}`;
     gsap.to(this.bar.scale, { x: Math.min(1, spin / Math.max(1, total)), duration: 0.35, ease: 'power2.out' });
     const key = specials.join();
     if (key !== this.shown) {
       this.shown = key;
       this.icons.removeChildren().forEach((c) => c.destroy());
+      const size = [118, 104, 86][Math.min(2, specials.length - 1)];
       specials.forEach((s, i) => {
         const sp = new Sprite(this.tex.normal[s]);
         sp.anchor.set(0.5);
-        sp.width = sp.height = 76;
-        sp.x = (i - (specials.length - 1) / 2) * 78;
+        sp.width = sp.height = size;
+        sp.x = (i - (specials.length - 1) / 2) * (size - 2);
         this.icons.addChild(sp);
         gsap.from(sp, { alpha: 0, duration: 0.4 });
       });
     }
   }
 
+  private showGain(v: number): void {
+    this.amount.value = v;
+    this.amount.scale.set(Math.min(1, 236 / Math.max(1, this.amount.inkWidth)));
+  }
+
+  private showTimes(v: number): void {
+    this.times.text = v >= this.bet ? `×${Math.floor(v / this.bet)} LA MISE` : '';
+  }
+
+  /** The bonus total as it stands, without a count. */
+  setGain(v: number, bet: number): void {
+    this.bet = bet;
+    gsap.killTweensOf(this.gain);
+    this.gain.v = v;
+    this.showGain(v);
+    this.showTimes(v);
+  }
+
+  /** The gold arrives from the reels: the total climbs and its cell lights up. */
+  rollGain(to: number): void {
+    gsap.killTweensOf(this.gain);
+    gsap.to(this.gain, { v: to, duration: 0.6, ease: 'power2.out', onUpdate: () => this.showGain(this.gain.v), onComplete: () => this.showTimes(to) });
+    gsap.killTweensOf(this.gainGlow);
+    gsap.fromTo(this.gainGlow, { alpha: 0.9 }, { alpha: 0, duration: 0.8, ease: 'power2.out' });
+  }
+
+  /** Where the gold of a win lands on screen. */
+  get gainPoint(): { x: number; y: number } {
+    return this.amount.toGlobal({ x: 0, y: 0 });
+  }
+
+  /** The press has counted: the cell of the spins answers with a little light. */
   bump(): void {
-    gsap.fromTo(this.count.scale, { x: 1.2, y: 1.2 }, { x: 1, y: 1, duration: 0.35, ease: 'power3.out' });
+    gsap.killTweensOf(this.spinGlow);
+    gsap.fromTo(this.spinGlow, { alpha: 0.6 }, { alpha: 0, duration: 0.5, ease: 'power2.out' });
   }
 
   /** The next free spin is the player's to launch: the banner says so, for anyone new to the game. */
-  setAwaiting(on: boolean): void {
+  setAwaiting(on: boolean, last = false): void {
     gsap.killTweensOf(this.caption);
     this.caption.alpha = 1;
-    this.caption.text = on ? 'À VOUS DE LANCER' : 'TOURS GRATUITS';
-    this.caption.style.fill = on ? 0xfff0c8 : 0xe8c878;
+    this.caption.text = last ? 'DERNIER TOUR' : on ? 'À VOUS DE LANCER' : 'TOURS GRATUITS';
+    this.caption.style.fill = last ? 0xff9a70 : on ? 0xfff0c8 : 0xe8c878;
     if (on) gsap.to(this.caption, { alpha: 0.45, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
   }
 
   /** The strain has just taken a reel. */
   flash(): void {
     gsap.killTweensOf(this.glow);
-    gsap.fromTo(this.glow, { alpha: 1 }, { alpha: 0.22, duration: 0.7, ease: 'power2.out', onComplete: () => void gsap.to(this.glow, { alpha: 0.4, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' }) });
+    gsap.fromTo(this.glow, { alpha: 1 }, { alpha: 0.3, duration: 0.7, ease: 'power2.out', onComplete: () => void gsap.to(this.glow, { alpha: 0.5, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' }) });
   }
 }
 
@@ -145,7 +202,6 @@ export class Game {
   private hud: Hud;
   private paytable: Paytable;
   private shock = new ShockwaveFilter({ center: { x: 0, y: 0 }, amplitude: 16, wavelength: 180, speed: 1100, brightness: 1.04, radius: -1 });
-  private shakePower = 0;
   private busy = false;
   private turbo = false;
   private sound = true;
@@ -188,7 +244,6 @@ export class Game {
       this.mascotFx.burst(x, y, 30, 1.1);
       this.audio.stinger(to === 'inhuman' ? 2 : 0);
       this.bg.thump(to === 'inhuman' ? 0.4 : 0.15);
-      this.shake(to === 'inhuman' ? 16 : 6);
     };
     this.logoShade = new Sprite(tex.glow);
     this.logoShade.anchor.set(0.5);
@@ -197,7 +252,6 @@ export class Game {
     this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.mascot, this.teaser, this.mascotFx);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
-      shake: (p) => this.shake(p),
       shockwave: () => this.shockwave(),
       glitch: (p) => this.logo.glitch(p),
       thump: (p) => this.bg.thump(p),
@@ -227,7 +281,7 @@ export class Game {
       },
       openInfo: () => {
         this.audio.click();
-        this.paytable.open(this.server.bet);
+        this.paytable.open(this.server.bet, this.best);
       },
       auto: (n) => {
         this.audio.click();
@@ -249,9 +303,16 @@ export class Game {
     this.paytable = new Paytable(tex.images);
     document.body.append(this.hud.root, this.paytable.root);
 
+    // the reels themselves answer a touch: they launch the waiting free spin and stop a spin in progress
+    this.board.eventMode = 'static';
+    this.board.hitArea = new Rectangle(-FRAME_MARGIN_X, -FRAME_MARGIN_Y, BOARD_W + FRAME_MARGIN_X * 2, BOARD_H + FRAME_MARGIN_Y * 2);
+    this.board.on('pointertap', () => this.busy && this.onSpinPressed());
+
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
+        // a key held down must not run through the player's free spins or skip a big win
+        if (e.repeat && (this.spinGate || this.overlays.busy)) return;
         if (this.paytable.isOpen) this.paytable.close();
         else if (!this.hud.buyOpen) this.onSpinPressed();
       }
@@ -265,6 +326,8 @@ export class Game {
     const unlock = () => this.audio.unlock();
     // Safari only lets sound start on the end of a touch, not on its beginning
     for (const e of ['pointerdown', 'touchend', 'click', 'keydown']) window.addEventListener(e, unlock);
+    // on a phone the game takes the whole screen where the browser allows it (not on an iPhone)
+    if (LITE) window.addEventListener('pointerup', () => void document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {}), { once: true });
 
     app.ticker.add((t) => this.update(t.deltaMS));
     window.addEventListener('resize', () => this.layout());
@@ -359,8 +422,8 @@ export class Game {
     this.logoShade.position.set(this.logo.x, this.logo.y + 20);
     this.logoShade.width = 1000;
     this.logoShade.height = 380;
-    this.banner.y = -62;
-    this.banner.scale.set(1);
+    this.banner.y = -68;
+    this.banner.scale.set(1.1);
     this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + WORLD_BOTTOM) / 2);
     this.world.position.set(w / 2, availH / 2);
@@ -393,7 +456,7 @@ export class Game {
     this.logoShade.width = 1500;
     this.logoShade.height = 520;
     this.banner.y = logoY;
-    this.banner.scale.set(2.1);
+    this.banner.scale.set(1.75);
     const frameBottom = FRAME_TOP + FRAME_OUTER_H;
     const shown = room > 300;
     const k = Math.max(0.6, Math.min(1.2, room / (QUEEN_H * 0.8)));
@@ -456,17 +519,6 @@ export class Game {
     this.mascotFx.update(dt);
     this.bg.update(dt);
     this.overlays.update(dt);
-    if (this.shakePower > 0.2) {
-      this.scene.position.set((Math.random() - 0.5) * this.shakePower, (Math.random() - 0.5) * this.shakePower);
-      this.shakePower *= Math.pow(0.0025, dt / 1000);
-    } else if (this.shakePower) {
-      this.shakePower = 0;
-      this.scene.position.set(0, 0);
-    }
-  }
-
-  private shake(power: number): void {
-    this.shakePower = Math.max(this.shakePower, power);
   }
 
   private bloom = new AdvancedBloomFilter({ threshold: 0.7, bloomScale: 0.6, brightness: 1, blur: 5, quality: 2 });
@@ -487,12 +539,20 @@ export class Game {
     });
   }
 
-  /** Sound and turbo stay as the player left them. */
+  /** the player's biggest win, in times the bet */
+  private best = 0;
+
+  private isRecord(round: Round): boolean {
+    return round.totalWin / round.bet > this.best;
+  }
+
+  /** Sound, turbo and the record stay as the player left them. */
   private loadPrefs(): void {
     try {
-      const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as { sound?: boolean; turbo?: boolean };
+      const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as { sound?: boolean; turbo?: boolean; best?: number };
       this.sound = p.sound ?? true;
       this.turbo = p.turbo ?? false;
+      this.best = p.best ?? 0;
     } catch {
       /* storage unavailable */
     }
@@ -503,7 +563,7 @@ export class Game {
 
   private savePrefs(): void {
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ sound: this.sound, turbo: this.turbo }));
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ sound: this.sound, turbo: this.turbo, best: this.best }));
     } catch {
       /* storage unavailable */
     }
@@ -528,9 +588,10 @@ export class Game {
   private spinGate: (() => void) | null = null;
 
   /** A free spin never starts by itself, autoplay or not. */
-  private waitForPress(): Promise<void> {
+  private waitForPress(last: boolean): Promise<void> {
     this.hud.setAwaiting(true);
-    this.banner.setAwaiting(true);
+    this.banner.setAwaiting(true, last);
+    if (last) this.audio.lastSpin();
     return new Promise((resolve) => (this.spinGate = resolve));
   }
 
@@ -596,7 +657,7 @@ export class Game {
       if (tier >= 0) {
         this.mascot.react('big');
         if (this.mascot.visible) await this.sleep(900);
-        await this.overlays.bigWin(round.totalWin, round.bet, (v) => this.hud.setWin(v));
+        await this.overlays.bigWin(round.totalWin, round.bet, (v) => this.hud.setWin(v), this.isRecord(round));
       }
     }
     this.finishRound(round);
@@ -605,6 +666,10 @@ export class Game {
   private finishRound(round: Round): void {
     this.server.settle();
     this.hud.setWin(round.totalWin);
+    if (this.isRecord(round)) {
+      this.best = round.totalWin / round.bet;
+      this.savePrefs();
+    }
     this.busy = false;
     this.hud.setSpinning(false);
     this.refreshHud();
@@ -676,6 +741,7 @@ export class Game {
       shown += lineSum;
       this.hud.rollWin(shown, celebrate ? 900 : 300, label);
       if (celebrate) this.board.showWinBurst(lineSum, size);
+      if (inFeature) this.sendToPanel(shown, celebrate ? 0.9 : 0.2);
       if (celebrate) this.mascot.react('win');
       await this.board.presentWins(o.lineWins, o.scatter, celebrate, () => this.audio.tick());
     }
@@ -687,7 +753,16 @@ export class Game {
       shown += exp.win;
       this.hud.rollWin(shown, 900, label);
       this.audio.win(exp.win >= bet * 5 ? 2 : 1);
+      this.sendToPanel(shown, 0);
     }
+  }
+
+  /** The gold of a win flies from the reels to the bonus total. */
+  private sendToPanel(total: number, delay: number): void {
+    this.board.flyGold(this.board.toLocal(this.banner.gainPoint), delay, () => {
+      this.banner.rollGain(total);
+      this.audio.gainLand();
+    });
   }
 
   private async runFeature(round: Round, startAt: number): Promise<void> {
@@ -700,7 +775,7 @@ export class Game {
       // …Cleopatra is taken by the infection, the infection spreads over the temple…
       this.mascot.react('feature');
       this.bg.setFeature(true);
-      await this.sleep(this.mascot.visible ? 1500 : 900);
+      await this.sleep(1600);
       // …and the camera dives into the pyramid
       this.audio.stoneDoor(1.6);
       gsap.to(this.world, { alpha: 0, duration: 0.5, ease: 'power2.in' });
@@ -720,19 +795,23 @@ export class Game {
     this.banner.set(startAt, resumeSpin?.total ?? 10, resumeSpin?.specials ?? firstSpecials);
     let featureWin = resumeSpin?.featureWin ?? 0;
     this.hud.setWin(featureWin, 'Gain bonus');
+    this.banner.setGain(featureWin, round.bet);
+    let bestSpin = f.spins.slice(0, startAt).reduce((a, s) => Math.max(a, s.win), 0);
 
     for (let i = startAt; i < f.spins.length; i++) {
       const s: FreeSpinOutcome = f.spins[i];
       const before = f.spins[i - 1]?.specials ?? firstSpecials;
-      await this.waitForPress();
+      const total = i === 0 ? 10 : f.spins[i - 1].total;
+      await this.waitForPress(s.index === total);
       // the count moves on the press, not at the end of the spin before
-      this.banner.set(s.index, i === 0 ? 10 : f.spins[i - 1].total, before);
+      this.banner.set(s.index, total, before);
       this.banner.bump();
       this.audio.spinStart();
       this.hud.pulseSpin();
       await this.spinTo(s.grid, before);
       await this.presentOutcome(s, round.bet, featureWin, true);
       featureWin = s.featureWin;
+      bestSpin = Math.max(bestSpin, s.win);
       this.hud.setWin(featureWin, 'Gain bonus');
       if (winTier(s.win, round.bet) >= 0) await this.overlays.bigWin(s.win, round.bet);
       if (s.retrigger) {
@@ -743,7 +822,7 @@ export class Game {
     }
     await this.sleep(this.turbo ? 300 : 700);
     this.board.clearWins();
-    await this.overlays.featureOutro(f.win, f.spins.length, round.bet, (v) => this.hud.setWin(v, 'Gain bonus'));
+    await this.overlays.featureOutro(f.win, f.spins.length, round.bet, bestSpin, this.isRecord(round), (v) => this.hud.setWin(v, 'Gain bonus'));
     this.enterFeature(false);
     this.board.reels.forEach((r, i) => r.setStrip(BASE_STRIPS[i]));
   }

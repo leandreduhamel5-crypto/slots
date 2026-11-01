@@ -2,7 +2,7 @@ import { Container, Sprite, Texture } from 'pixi.js';
 import { MATERIALS, render3DText } from './art/painters';
 import { fmt } from '../ui/format';
 
-const GLYPHS = '0123456789,. ×';
+const GLYPHS = '0123456789,. ×/';
 interface Glyph {
   tex: Texture;
   /** visible (non-transparent) horizontal extent, relative to the texture centre */

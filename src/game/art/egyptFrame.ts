@@ -1077,19 +1077,29 @@ export function paintReelSurround(w: number, h: number, mx: number, my: number, 
 }
 
 /** The bonus panel: lapis in gold, two compartments and a ruby between them. Painted at 2×. */
-export function paintBonusPanel(w: number, h: number): HTMLCanvasElement {
+/** Margin painted around the panel of the free spins, for its shadow and its cartouche. */
+export const BONUS_PANEL_PAD = 44;
+
+/** Lapis bar of the free spins, with a raised cartouche of width `mid` for the strain. */
+export function paintBonusPanel(w: number, h: number, mid: number): HTMLCanvasElement {
   const S = 2;
-  const [c, ctx] = makeCanvas((w + 24) * S, (h + 24) * S);
+  const P = BONUS_PANEL_PAD;
+  const [c, ctx] = makeCanvas((w + P * 2) * S, (h + P * 2) * S);
   ctx.scale(S, S);
-  ctx.translate(12, 12);
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.75)';
-  ctx.shadowBlur = 12;
-  ctx.shadowOffsetY = 5;
-  ctx.fillStyle = goldGrad(ctx, 0, 0, 0, h);
-  rr(ctx, 0, 0, w, h, 12);
-  ctx.fill();
-  ctx.restore();
+  ctx.translate(P, P);
+  const shadowed = (draw: () => void) => {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 6;
+    draw();
+    ctx.restore();
+  };
+  shadowed(() => {
+    ctx.fillStyle = goldGrad(ctx, 0, 0, 0, h);
+    rr(ctx, 0, 0, w, h, 12);
+    ctx.fill();
+  });
   const face = ctx.createLinearGradient(0, 0, 0, h);
   face.addColorStop(0, '#1c3172');
   face.addColorStop(1, '#0a1230');
@@ -1100,21 +1110,38 @@ export function paintBonusPanel(w: number, h: number): HTMLCanvasElement {
   ctx.lineWidth = 1;
   rr(ctx, 8, 8, w - 16, h - 16, 6);
   ctx.stroke();
-  // the divider
-  ctx.fillStyle = goldGrad(ctx, 0, 0, 0, h);
-  ctx.fillRect(w / 2 - 1.5, 8, 3, h - 16);
-  const g = ctx.createRadialGradient(w / 2 - 3, h / 2 - 4, 1, w / 2, h / 2, 12);
-  g.addColorStop(0, '#ffd8c8');
-  g.addColorStop(0.45, '#ff3a2a');
-  g.addColorStop(1, '#6a0008');
-  ctx.fillStyle = goldGrad(ctx, 0, h / 2 - 15, 0, h / 2 + 15);
-  ctx.beginPath();
-  ctx.arc(w / 2, h / 2, 15, 0, Math.PI * 2);
+  // the cartouche stands proud of the bar, an ember behind the strain
+  const x0 = (w - mid) / 2;
+  const rise = 26;
+  shadowed(() => {
+    ctx.fillStyle = goldGrad(ctx, 0, -rise, 0, h + rise);
+    rr(ctx, x0, -rise, mid, h + rise * 2, 16);
+    ctx.fill();
+  });
+  const well = ctx.createRadialGradient(w / 2, h / 2, 6, w / 2, h / 2, mid * 0.62);
+  well.addColorStop(0, '#8a3a12');
+  well.addColorStop(0.55, '#2a1016');
+  well.addColorStop(1, '#0c0610');
+  ctx.fillStyle = well;
+  rr(ctx, x0 + 5, -rise + 5, mid - 10, h + rise * 2 - 10, 12);
   ctx.fill();
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(w / 2, h / 2, 11, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.strokeStyle = 'rgba(232,200,120,0.6)';
+  rr(ctx, x0 + 9, -rise + 9, mid - 18, h + rise * 2 - 18, 9);
+  ctx.stroke();
+  for (const x of [x0, x0 + mid]) {
+    const g = ctx.createRadialGradient(x - 3, h / 2 - 4, 1, x, h / 2, 12);
+    g.addColorStop(0, '#ffd8c8');
+    g.addColorStop(0.45, '#ff3a2a');
+    g.addColorStop(1, '#6a0008');
+    ctx.fillStyle = goldGrad(ctx, 0, h / 2 - 15, 0, h / 2 + 15);
+    ctx.beginPath();
+    ctx.arc(x, h / 2, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, h / 2, 11, 0, Math.PI * 2);
+    ctx.fill();
+  }
   return c;
 }
 

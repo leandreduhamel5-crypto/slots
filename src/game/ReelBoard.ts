@@ -1020,6 +1020,41 @@ export class ReelBoard extends Container {
     if (n > 0) this.fx.coins(BOARD_W / 2, BOARD_H + 40, n, 0.85);
   }
 
+  /** A stream of gold from the middle of the reels to a point of the board, along a curve. */
+  flyGold(to: { x: number; y: number }, delay: number, onLand: () => void): void {
+    const n = 14;
+    const stagger = 0.03;
+    const x0 = BOARD_W / 2;
+    const y0 = BOARD_H / 2;
+    for (let i = 0; i < n; i++) {
+      const s = new Sprite(i % 3 ? this.tex.glow : this.tex.star);
+      s.anchor.set(0.5);
+      s.blendMode = 'add';
+      s.tint = i % 3 ? 0xffb040 : 0xfff0c8;
+      s.width = s.height = i % 3 ? 44 : 70;
+      s.alpha = 0;
+      this.labelLayer.addChild(s);
+      const bend = (i % 2 ? 1 : -1) * (120 + Math.random() * 180);
+      const cx = (x0 + to.x) / 2 + bend;
+      const cy = (y0 + to.y) / 2 + 60;
+      const o = { t: 0 };
+      gsap.to(o, {
+        t: 1,
+        delay: delay + i * stagger,
+        duration: 0.5,
+        ease: 'power2.in',
+        onUpdate: () => {
+          if (s.destroyed) return;
+          const u = 1 - o.t;
+          s.position.set(u * u * x0 + 2 * u * o.t * cx + o.t * o.t * to.x, u * u * y0 + 2 * u * o.t * cy + o.t * o.t * to.y);
+          s.alpha = Math.min(1, o.t * 6);
+        },
+        onComplete: () => !s.destroyed && s.destroy(),
+      });
+    }
+    gsap.delayedCall(delay + 0.5 + stagger * n * 0.5, onLand);
+  }
+
   /** A pillar of light where a strain slams into a reel. */
   private slamLight(cx: number): void {
     const layer = this.labelLayer;

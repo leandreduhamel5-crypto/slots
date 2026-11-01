@@ -59,6 +59,8 @@ const BASS_WALK = [0, 0, 0, 7, 12, 0, 7, 1];
 const REED_MAKEUP = 1.6;
 const SPIN_LEVEL = 0.07;
 const MUSIC_LEVEL = 0.5;
+/** a phone's little speaker needs a little more */
+const MASTER_LEVEL = LITE ? 1.2 : 0.9;
 
 function softClip(): Float32Array<ArrayBuffer> {
   const curve = new Float32Array(1024);
@@ -90,12 +92,16 @@ export class Audio {
   /** Must be called from a user gesture. */
   unlock(): void {
     if (this.ctx) {
+      // a call or the lock screen leaves an iPhone's sound "interrupted", not suspended
       const live = this.ctx as AudioContext;
-      if (live.state === 'suspended') void live.resume();
+      if (live.state !== 'running') void live.resume();
       return;
     }
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
+    // without this an iPhone on silent plays the game mute, as it would a ringtone
+    const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = 'playback';
     this.attach(new AC());
     this.startMusic();
   }
@@ -106,7 +112,7 @@ export class Audio {
     this.noise = this.makeNoise();
 
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.9;
+    this.master.gain.value = this.muted ? 0 : MASTER_LEVEL;
     const glue = ctx.createDynamicsCompressor();
     glue.threshold.value = -18;
     glue.ratio.value = 3;
@@ -192,7 +198,7 @@ export class Audio {
 
   setMuted(m: boolean): void {
     this.muted = m;
-    if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.9, this.ctx.currentTime, 0.05);
+    if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : MASTER_LEVEL, this.ctx.currentTime, 0.05);
   }
 
   setFeature(on: boolean): void {
@@ -635,8 +641,14 @@ export class Audio {
     if (!this.ctx) return;
     const bpm = this.feature ? 120 : 84;
     const stepDur = 60 / bpm / 2;
+    // a stalled page must not play every step it missed all at once
+    if (this.nextStep < this.t - 0.1) {
+      const missed = Math.ceil((this.t - this.nextStep) / stepDur);
+      this.nextStep += missed * stepDur;
+      this.step += missed;
+    }
     while (this.nextStep < this.t + 0.25) {
-      this.playStep(this.step, this.nextStep, stepDur);
+      if (!this.muted) this.playStep(this.step, this.nextStep, stepDur);
       this.nextStep += stepDur;
       this.step++;
     }
@@ -705,16 +717,16 @@ export class Audio {
   click(): void {
     if (!this.ctx) return;
     const at = this.t;
-    this.voice({ at, f: 320, to: 170, glide: 0.05, vol: 0.2, r: 0.07, a: 0.001, dest: this.ui });
-    this.hiss({ at, dur: 0.018, type: 'bandpass', f0: 1900, q: 2, vol: 0.12, a: 0.001, dest: this.ui });
+    this.voice({ at, f: 320, to: 170, glide: 0.05, vol: 0.45, r: 0.07, a: 0.001, dest: this.ui });
+    this.hiss({ at, dur: 0.018, type: 'bandpass', f0: 1900, q: 2, vol: 0.3, a: 0.001, dest: this.ui });
   }
 
   /** The press: a small, crisp click and a breath of air as the wheels go. */
   spinStart(): void {
     if (!this.ctx) return;
     const at = this.t;
-    this.voice({ at, f: 240, to: 110, glide: 0.04, vol: 0.14, r: 0.07, a: 0.001 });
-    this.hiss({ at, dur: 0.01, type: 'bandpass', f0: 2600, q: 1.5, vol: 0.06, a: 0.0005 });
+    this.voice({ at, f: 240, to: 110, glide: 0.04, vol: 0.28, r: 0.07, a: 0.001 });
+    this.hiss({ at, dur: 0.01, type: 'bandpass', f0: 2600, q: 1.5, vol: 0.14, a: 0.0005 });
     this.hiss({ at: at + 0.01, dur: 0.22, type: 'bandpass', f0: 600, f1: 2200, q: 0.8, vol: 0.035, a: 0.05, pan: -0.3, pan1: 0.3 });
     this.startSpinLoop(at + 0.03);
   }
@@ -786,8 +798,8 @@ export class Audio {
     const at = this.t;
     const pan = (i - 2) * 0.12;
     const last = i >= 4;
-    this.voice({ at, f: 132 - i * 4, to: 68, glide: 0.05, vol: 0.24, r: 0.1, a: 0.001, pan });
-    this.mallet(at, [64, 65, 68, 69, 76][Math.min(4, i)], last ? 0.32 : 0.26, pan, last ? 1.5 : 0.8);
+    this.voice({ at, f: 132 - i * 4, to: 68, glide: 0.05, vol: 0.3, r: 0.1, a: 0.001, pan });
+    this.mallet(at, [64, 65, 68, 69, 76][Math.min(4, i)], last ? 0.44 : 0.36, pan, last ? 1.5 : 0.8);
     if (last) this.spinLoop?.stop(at);
     else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
   }
@@ -796,8 +808,8 @@ export class Audio {
   stoneDoor(dur: number): void {
     if (!this.ctx) return;
     const at = this.t;
-    this.hiss({ at, dur, type: 'bandpass', f0: 130, f1: 260, q: 1.2, vol: 0.46, a: dur * 0.2 });
-    this.voice({ at, f: 46, to: 38, glide: dur, vol: 0.26, r: dur * 0.6, a: dur * 0.3, hold: dur * 0.2 });
+    this.hiss({ at, dur, type: 'bandpass', f0: 130, f1: 260, q: 1.2, vol: 0.32, a: dur * 0.2 });
+    this.voice({ at, f: 46, to: 38, glide: dur, vol: 0.2, r: dur * 0.6, a: dur * 0.3, hold: dur * 0.2 });
     for (let k = 0; k < 4; k++) this.rubble(at + k * (dur / 4) + Math.random() * 0.1, 7, (Math.random() - 0.5) * 1.2);
   }
 
@@ -1001,6 +1013,16 @@ export class Audio {
     this.musicDuck.gain.setTargetAtTime(level, this.ctx!.currentTime, 0.2);
   }
 
+  private breathTimer = 0;
+
+  /** The music steps back for a moment, so a reward can be heard without being louder. */
+  private breathe(): void {
+    if (this.bigLoop) return;
+    this.duck(0.6);
+    clearTimeout(this.breathTimer);
+    this.breathTimer = window.setTimeout(() => !this.bigLoop && this.duck(1), 1100);
+  }
+
   /** Low drum swell under a big-win count-up. */
   timpaniRoll(dur: number): void {
     if (!this.ctx) return;
@@ -1016,6 +1038,7 @@ export class Audio {
   win(size: number, streak = 1): void {
     if (!this.ctx) return;
     const at = this.t;
+    this.breathe();
     const up = Math.min(Math.max(0, streak - 1), 4) * 2; // wins in a row climb
     const scale = [76, 80, 81, 83, 88, 92, 93, 95].map((n) => n + up);
     const count = 4 + size;
@@ -1035,7 +1058,7 @@ export class Audio {
     const at = this.t;
     const note = [76, 80, 83, 88, 92][Math.min(4, reel)];
     const pan = (reel - 2) * 0.3;
-    this.mallet(at, note, 0.16, pan, 1.2);
+    this.mallet(at, note, 0.2, pan, 1.2);
   }
 
   /** Count-up tick: a small coin; give it progress (0..1) and it climbs in pitch as the total grows. */
@@ -1045,8 +1068,8 @@ export class Audio {
     if (progress >= 0) {
       // the count climbs the game's own scale, so a long count-up sings instead of just rattling
       const step = Math.floor(Math.min(1, progress) * (TICK_SCALE.length - 1));
-      this.coin(at, 0.042, (Math.random() - 0.5) * 0.5, Math.pow(2, TICK_SCALE[step] / 12), this.ui, true);
-    } else this.coin(at, 0.05, (Math.random() - 0.5) * 0.4, 0.97 + Math.random() * 0.08, this.ui, true);
+      this.coin(at, 0.13, (Math.random() - 0.5) * 0.5, Math.pow(2, TICK_SCALE[step] / 12), this.ui, true);
+    } else this.coin(at, 0.15, (Math.random() - 0.5) * 0.4, 0.97 + Math.random() * 0.08, this.ui, true);
   }
 
   /** A strain floods a reel: rushing sand, a rising voice, a slab slamming home. */
@@ -1067,11 +1090,11 @@ export class Audio {
     if (power >= 0.5) {
       this.hiss({ at, dur: 0.05, type: 'highpass', f0: 1200, vol: 0.3 * power, a: 0.0008, pan });
       for (let k = 0; k < 7; k++) this.hiss({ at: at + 0.02 + Math.random() * 0.18, dur: 0.015, type: 'highpass', f0: 2500, vol: 0.14 * power, a: 0.0008, pan: pan + (Math.random() - 0.5) * 0.4 });
-      this.boom(at, 0.5 * power, 36, pan);
+      this.boom(at, 0.38 * power, 36, pan);
     }
     const t2 = at + (power >= 0.5 ? 0.08 : 0.6);
-    this.hiss({ at: t2, dur: 2.2 + power, type: 'lowpass', f0: 500 + power * 400, f1: 45, vol: 0.1 + power * 0.18, a: power >= 0.5 ? 0.05 : 0.4, pan: pan - 0.5, pan1: pan + 0.5 });
-    this.voice({ at: t2, f: 38, to: 30, glide: 2, vol: 0.1 + power * 0.16, r: 1.8 + power, a: 0.1 });
+    this.hiss({ at: t2, dur: 2.2 + power, type: 'lowpass', f0: 500 + power * 400, f1: 45, vol: 0.02 + power * 0.22, a: power >= 0.5 ? 0.05 : 0.4, pan: pan - 0.5, pan1: pan + 0.5 });
+    this.voice({ at: t2, f: 38, to: 30, glide: 2, vol: 0.02 + power * 0.2, r: 1.8 + power, a: 0.1 });
   }
 
   /** The curse strikes: sub boom, gong, and a dark cluster of low voices. level 0..3 scales it. */
@@ -1101,8 +1124,34 @@ export class Audio {
     if (!this.ctx) return;
     const at = this.t;
     this.doorSide = -this.doorSide;
-    this.hiss({ at, dur: 0.22, type: 'bandpass', f0: 500, f1: 1600, q: 0.8, vol: 0.09, a: 0.04, pan: this.doorSide * 0.8, pan1: -this.doorSide * 0.8 });
-    this.voice({ at, f: 74, to: 40, glide: 0.12, vol: 0.14, r: 0.16, a: 0.003, pan: this.doorSide * 0.3 });
+    this.hiss({ at, dur: 0.22, type: 'bandpass', f0: 500, f1: 1600, q: 0.8, vol: 0.18, a: 0.04, pan: this.doorSide * 0.8, pan1: -this.doorSide * 0.8 });
+    this.voice({ at, f: 74, to: 40, glide: 0.12, vol: 0.26, r: 0.16, a: 0.003, pan: this.doorSide * 0.3 });
+  }
+
+  /** The last free spin waits for its press: a low gong and the heart of the temple, twice. */
+  lastSpin(): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    this.gong(at, midi(33), 0.06, 0, 3);
+    this.doum(at, 0.8, this.sfx);
+    this.doum(at + 0.3, 0.55, this.sfx);
+  }
+
+  /** The gold of a win reaches the bonus total: one high bowl and two coins. */
+  gainLand(): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    this.mallet(at, 88, 0.16, 0.3, 1.3);
+    this.coin(at, 0.09, 0.2, 1);
+    this.coin(at + 0.06, 0.06, 0.4, 1.12);
+  }
+
+  /** A new record: the bowls climb the scale to the top and a bright ring answers. */
+  record(): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    [76, 80, 83, 88].forEach((n, i) => this.mallet(at + i * 0.09, n, 0.13, (i - 1.5) * 0.2, i === 3 ? 2.4 : 1));
+    this.sagat(at + 0.27, midi(88), 0.02);
   }
 
   /** One tooth of the strain drum going by: a dry catch and a small gold note, climbing the scale. */
@@ -1110,7 +1159,9 @@ export class Audio {
     if (!this.ctx) return;
     const at = this.t;
     const step = Math.floor(Math.min(1, Math.max(0, progress)) * (TICK_SCALE.length - 1));
-    this.mallet(at, 69 + TICK_SCALE[step], 0.07, 0, 0.35);
+    this.hiss({ at, dur: 0.012, type: 'bandpass', f0: 2100, q: 2, vol: 0.2, a: 0.0006 });
+    this.voice({ at, f: 190, to: 120, glide: 0.03, vol: 0.14, r: 0.05, a: 0.001 });
+    this.mallet(at, 69 + TICK_SCALE[step], 0.19, 0, 0.35);
   }
 
   /** The drum locks on the strain: a great gong, the temple choir, and the reed crying out the scale. */

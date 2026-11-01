@@ -12,6 +12,19 @@ import { COLORS } from './layout';
 /** radius of the circle that reveals the infected temple, before scaling */
 const REVEAL_R = 100;
 
+/** The edge of the infection: a torn, uneven circle, so that it creeps instead of inflating like a ball. */
+function blotOutline(): number[] {
+  const rnd = seeded(13);
+  const pts: number[] = [];
+  const n = 180;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const r = REVEAL_R * (0.8 + 0.09 * Math.sin(a * 3 + 1) + 0.06 * Math.sin(a * 8 + 2) + 0.04 * Math.sin(a * 19) + rnd() * 0.05);
+    pts.push(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  return pts;
+}
+
 /** Tileable value-noise fog. */
 function paintFog(size = 512): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(size, size);
@@ -171,9 +184,9 @@ export class Background extends Container {
   private nextStrike = 9;
   templeFx: TempleFx | null = null;
   /**
-   * Circle growing from the capstone: the infection spreading over the night scene. It is drawn, not
+   * Blot growing from the capstone: the infection spreading over the night scene. It is drawn, not
    * a soft sprite: a sprite mask takes a render target as large as itself, and this one ends up
-   * thousands of pixels wide, more than a phone can hold. The ring of light gives it its soft front.
+   * thousands of pixels wide, more than a phone can hold. The ring of light gives it its burning front.
    */
   private reveal: Graphics | null = null;
   private revealFront: Sprite | null = null;
@@ -219,14 +232,14 @@ export class Background extends Container {
         s.alpha = 0;
       }
       this.infectedPulse.blendMode = 'add';
-      this.reveal = new Graphics().circle(0, 0, REVEAL_R).fill(0xffffff);
+      this.reveal = new Graphics().poly(blotOutline()).fill(0xffffff);
       this.reveal.position.set(APEX[0] - W / 2, APEX[1] - H / 2);
       this.reveal.visible = false;
       this.revealFront = new Sprite(Texture.from(paintHaloRing()));
       this.revealFront.anchor.set(0.5);
       this.revealFront.position.copyFrom(this.reveal.position);
       this.revealFront.blendMode = 'add';
-      this.revealFront.tint = 0xff4a24;
+      this.revealFront.tint = 0xff8a4a;
       this.revealFront.visible = false;
       this.sceneC.addChild(this.infected, this.infectedPulse, this.reveal, this.revealFront);
       // low mist drifting over the polished floor
@@ -377,7 +390,7 @@ export class Background extends Container {
   readonly camera = { k: 1, fx: APEX[0], fy: 430 };
 
   private applyCamera(): void {
-    // a little larger than the screen: a camera shake must never uncover the edge of the picture
+    // a little larger than the screen, so the edge of the picture never shows
     const base = Math.max(this.w / W, this.h / H) * 1.06;
     const s = base * this.camera.k;
     const f = [this.camera.fx - W / 2, this.camera.fy - H / 2];
@@ -554,9 +567,9 @@ export class Background extends Container {
         }
         const radius = 40 + r * 2700;
         this.reveal.scale.set(radius / REVEAL_R);
-        // the ring of the halo texture sits at 36% of its radius
-        this.revealFront.width = this.revealFront.height = (radius * 2) / 0.36;
-        this.revealFront.alpha = Math.min(1, Math.sin(Math.PI * r) * 3);
+        // the ring of the halo texture sits at 36% of its radius, a blot at about 80% of its own
+        this.revealFront.width = this.revealFront.height = (radius * 2 * 0.8) / 0.36;
+        this.revealFront.alpha = Math.min(1, Math.sin(Math.PI * r) * 4);
       }
       this.infectedPulse.alpha = f * (beat * 0.1 + this.boltLight * 0.3 + this.flareV * 0.2);
     }
