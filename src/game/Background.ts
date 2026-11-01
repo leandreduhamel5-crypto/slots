@@ -182,6 +182,8 @@ export class Background extends Container {
   private t = 0;
   private feature = 0;
   private nextStrike = 9;
+  /** 0 at rest, 1 while the reels turn: the temple feels them */
+  private energy = 0;
   templeFx: TempleFx | null = null;
   /**
    * Blot growing from the capstone: the infection spreading over the night scene. It is drawn, not
@@ -422,6 +424,12 @@ export class Background extends Container {
     }
   }
 
+  /** The reels are turning: the rays run faster, the capstone and the obelisks burn brighter. */
+  charge(on: boolean): void {
+    gsap.to(this, { energy: on ? 1 : 0, duration: on ? 0.25 : 0.7, ease: 'sine.out', overwrite: 'auto' });
+    if (on) for (const fire of this.fires) fire.roar(0.3);
+  }
+
   /** A lightning strike; without a target it hits the pyramid somewhere along its slopes. */
   strike(power = 1, target?: Pt): void {
     const [ax, ay] = APEX;
@@ -538,8 +546,9 @@ export class Background extends Container {
     this.t += dt;
     const f = this.feature;
     const beat = Math.pow(Math.max(0, Math.sin(this.t * (2.6 + f * 1.6))), 12);
-    this.rayLayer.rotation += dt * 0.012;
-    this.rayLayer.alpha = Math.min(0.2, 0.09 + f * 0.04 + this.flareV * 0.08 + this.boltLight * 0.08);
+    const e = this.energy;
+    this.rayLayer.rotation += dt * 0.012 * (1 + e * 9);
+    this.rayLayer.alpha = Math.min(0.3, 0.09 + f * 0.04 + e * 0.1 + this.flareV * 0.08 + this.boltLight * 0.08);
     this.rayLayer.tint = f > 0.5 ? 0xff5040 : 0xffd8a0;
     this.dunes.tint = lerpTint(0xffffff, 0xff7a6a, f);
     this.blown.tilePosition.x += dt * (150 + f * 170);
@@ -581,11 +590,11 @@ export class Background extends Container {
       g.scale.y = g.scale.x * (1 + 0.1 * Math.sin(this.t * 9 + i));
     });
     this.tips.forEach((g, i) => {
-      g.alpha = 0.3 + 0.12 * Math.sin(this.t * 1.3 + i * 2) + this.flareV * 0.6 + this.boltLight * 0.5;
+      g.alpha = 0.3 + 0.12 * Math.sin(this.t * 1.3 + i * 2) + e * 0.3 + this.flareV * 0.6 + this.boltLight * 0.5;
       g.tint = f > 0.5 ? 0xff3030 : 0xffc870;
     });
     if (this.heart) {
-      this.heart.alpha = Math.min(1, 0.14 + beat * 0.3 * f + f * 0.3 + this.flareV + this.boltLight);
+      this.heart.alpha = Math.min(1, 0.14 + e * 0.4 + beat * 0.3 * f + f * 0.3 + this.flareV + this.boltLight);
       this.heart.tint = f > 0.5 ? COLORS.infection : 0xffd890;
       this.heart.scale.set(((300 + f * 260) / this.heart.texture.width) * (1 + this.flareV * 0.6 + beat * 0.15 * f));
     }

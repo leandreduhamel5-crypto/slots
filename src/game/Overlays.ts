@@ -2,6 +2,7 @@ import { Container, Graphics, Sprite, Text, Texture, type TextStyleOptions } fro
 import { BLOOD_METAL, GOLD, IVORY, metalTitle, textMask } from './art/logoArt';
 import { paintArrowHead, paintDrumShade, paintPlaque, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
 import { Digits } from './Digits';
+import { StrainBar } from './StrainBar';
 import gsap from 'gsap';
 import { SYMBOLS, Sym } from '../math/config';
 import { PREMIUM_EXPANDERS } from '../math/engine';
@@ -667,7 +668,7 @@ export class Overlays extends Container {
    * forward as they pass behind a gold window, while lamps chase round the rim at the wheel's speed.
    * It throws back, spins up, slows to a stop on the strain, and everything blazes.
    */
-  private async roulette(y: number, final: Sym, exclude: Sym[] = []): Promise<void> {
+  private async roulette(y: number, final: Sym, exclude: Sym[], bar: StrainBar): Promise<void> {
     const pool = PREMIUM_EXPANDERS.filter((s) => s === final || !exclude.includes(s));
     const box = new Container();
     box.y = y;
@@ -780,6 +781,7 @@ export class Overlays extends Container {
       const idx = Math.round(state.off / spacing);
       if (idx !== lastIdx) {
         lastIdx = idx;
+        bar.focus(pool[(((startIndex + idx) % pool.length) + pool.length) % pool.length]);
         this.audio.drumTick(state.off / end);
         gsap.fromTo([frame.scale, rim.scale], { x: 0.512, y: 0.512 }, { x: 0.5, y: 0.5, duration: 0.12 });
         gsap.fromTo(arrowL, { x: -(WINDOW / 2 + 16), alpha: 1 }, { x: -(WINDOW / 2 + 28), alpha: 0.7, duration: 0.16 });
@@ -806,6 +808,7 @@ export class Overlays extends Container {
     });
     // lock: the wheel empties, the strain blazes in its window and the light goes straight up
     const chosen = items[target];
+    bar.ignite(final, false);
     for (const sp of items) if (sp !== chosen) gsap.to(sp, { alpha: 0, duration: 0.3 });
     this.audio.impact(0.9);
     this.audio.strainLock();
@@ -842,6 +845,17 @@ export class Overlays extends Container {
     const sy = this.content.y + y * sc;
     this.particles.sand(this.w / 2, sy, 1100 * sc, 110, 2.2);
     this.particles.sparks(this.w / 2, sy, 24, 1.3);
+  }
+
+  /** The row of all the strains under the drum: the light of the wheel passes over them. */
+  private strainRow(y: number, active: Sym[]): StrainBar {
+    const bar = new StrainBar(this.tex);
+    bar.y = y;
+    bar.scale.set(0.82);
+    bar.set(active);
+    this.content.addChild(bar);
+    gsap.fromTo(bar, { alpha: 0 }, { alpha: 1, duration: 0.4 });
+    return bar;
   }
 
   private doorTex: Texture | null = null;
@@ -1053,20 +1067,21 @@ export class Overlays extends Container {
     });
     await this.waitOrSkip(1050);
     const seal = makeSeal(this.tex.seal, 840, 96);
-    seal.y = 236;
+    seal.y = 206;
     this.content.addChild(seal);
     this.popIn(seal);
     const caption = new Text({ text: 'LE ROULEAU CHOISIT VOTRE SOUCHE…', style: body(24, 0xffd9a0) });
     caption.anchor.set(0.5);
-    caption.y = 236;
+    caption.y = 206;
     this.content.addChild(caption);
     gsap.fromTo(caption, { alpha: 0 }, { alpha: 1, duration: 0.4 });
     gsap.to(caption, { alpha: 0.55, duration: 0.6, yoyo: true, repeat: -1, delay: 0.4 });
-    await this.roulette(-30, special);
+    const bar = this.strainRow(306, []);
+    await this.roulette(-30, special, [], bar);
     gsap.killTweensOf(caption);
     caption.destroy();
     const strain = this.head3d(`SOUCHE : ${SYMBOLS[special].name.toUpperCase()}`, 50, 'gold', 660);
-    strain.y = 236;
+    strain.y = 206;
     this.content.addChild(strain);
     this.popIn(strain);
     gsap.delayedCall(0.3, () => {
@@ -1076,7 +1091,7 @@ export class Overlays extends Container {
     });
     const go = new Text({ text: 'TOUCHEZ POUR COMMENCER', style: body(24, 0xffd27a) });
     go.anchor.set(0.5);
-    go.y = 322;
+    go.y = 384;
     gsap.to(go, { alpha: 0.4, duration: 0.7, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.content.addChild(go);
     gsap.fromTo(go, { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.3 });
@@ -1100,18 +1115,19 @@ export class Overlays extends Container {
     this.particles.impact(this.w / 2, this.h / 2, 1.4);
     if (mutation !== null) {
       const seal = makeSeal(this.tex.seal, 840, 96);
-      seal.y = 236;
+      seal.y = 206;
       this.content.addChild(seal);
       this.popIn(seal, 0.2);
       const sub = new Text({ text: 'MUTATION ! UNE NOUVELLE SOUCHE', style: body(24, 0xffd9a0) });
       sub.anchor.set(0.5);
-      sub.y = 236;
+      sub.y = 206;
       this.content.addChild(sub);
       this.popIn(sub, 0.2);
-      await this.roulette(-30, mutation, active);
+      const bar = this.strainRow(306, active);
+      await this.roulette(-30, mutation, active, bar);
       sub.destroy();
       const name = this.head3d(SYMBOLS[mutation].name.toUpperCase(), 50, 'gold', 660);
-      name.y = 236;
+      name.y = 206;
       this.content.addChild(name);
       this.popIn(name);
     }

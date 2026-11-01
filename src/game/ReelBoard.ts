@@ -1,7 +1,8 @@
-import { Container, Graphics, Sprite } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import gsap from 'gsap';
 import { REELS, ROWS, Sym } from '../math/config';
 import type { Expansion, Grid, LineWin, ScatterWin } from '../math/engine';
+import { makeCanvas, seeded } from './art/painters';
 import { Digits } from './Digits';
 import { Particles } from './Particles';
 import { Reel } from './Reel';
@@ -62,6 +63,36 @@ const SYMBOL_GLOW: Record<number, number> = {
 };
 
 
+/** seconds for a spot of light to go once round the opening of the frame */
+const RUNNER_LAP = 1.15;
+const RUNNER_TRAIL = 6;
+
+/** Long thin lines of light, tiling downward: what runs through a turning reel. */
+function paintStreaks(): HTMLCanvasElement {
+  const [c, x] = makeCanvas(128, 512);
+  const rnd = seeded(23);
+  x.lineCap = 'round';
+  for (let i = 0; i < 30; i++) {
+    const px = 6 + rnd() * 116;
+    const y0 = rnd() * 512;
+    const len = 90 + rnd() * 260;
+    x.lineWidth = 1 + rnd() * 3;
+    const a = 0.14 + rnd() * 0.56;
+    for (const off of [-512, 0]) {
+      const g = x.createLinearGradient(0, y0 + off, 0, y0 + off + len);
+      g.addColorStop(0, 'rgba(255,255,255,0)');
+      g.addColorStop(0.8, `rgba(255,255,255,${a})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.strokeStyle = g;
+      x.beginPath();
+      x.moveTo(px, y0 + off);
+      x.lineTo(px, y0 + off + len);
+      x.stroke();
+    }
+  }
+  return c;
+}
+
 export class ReelBoard extends Container {
   readonly reels: Reel[] = [];
   private panels = new Container();
@@ -84,6 +115,22 @@ export class ReelBoard extends Container {
   private rubyFlares: Sprite[] = [];
   private seatLights: Sprite[] = [];
   private edgeLights: Sprite[] = [];
+  /** lines of light racing down each reel */
+  private streaks: TilingSprite[] = [];
+  /** a whole column answering as it locks */
+  private lockLights: Sprite[] = [];
+  /** the star struck on the rail above and below a reel as it locks */
+  private lockStars: Sprite[][] = [];
+  /** the band of light of the press, crossing the reels from top to bottom */
+  private pressWave: Sprite;
+  /** the light that fills the board on the last stop */
+  private finaleGlow: Sprite;
+  /** the ring of light leaving the frame on the last stop */
+  private finaleRing = new Graphics();
+  /** two spots of light with their trails, running round the frame while the reels turn */
+  private runnerLayer = new Container();
+  private runners: { head: number; dots: Sprite[] }[] = [];
+  private runnerT = 0;
   private accent = 0xffc860;
   /** in the bonus, winning symbols light up without moving */
   private still = false;
@@ -124,6 +171,7 @@ export class ReelBoard extends Container {
     const mask = new Graphics().rect(-6, 0, BOARD_W + 12, BOARD_H).fill(0xffffff);
     this.reelLayer.mask = mask;
 
+    const streakTex = Texture.from(paintStreaks());
     for (let r = 0; r < REELS; r++) {
       const initial: Sym[] = [];
       for (let row = 0; row < ROWS; row++) initial.push(strips[r][(row + r * 5) % strips[r].length]);
@@ -193,7 +241,31 @@ export class ReelBoard extends Container {
       edge.blendMode = 'add';
       edge.alpha = 0;
       this.edgeLights.push(edge);
-      this.anticipationLayer.addChild(run, seat);
+      const streak = new TilingSprite({ texture: streakTex, width: CELL_W, height: BOARD_H });
+      streak.position.set(reelX(r), 0);
+      streak.tilePosition.y = r * 170;
+      streak.blendMode = 'add';
+      streak.alpha = 0;
+      this.streaks.push(streak);
+      const lock = new Sprite(tex.glow);
+      lock.anchor.set(0.5);
+      lock.position.set(reelX(r) + CELL_W / 2, BOARD_H / 2);
+      lock.width = CELL_W * 1.5;
+      lock.height = BOARD_H * 1.3;
+      lock.blendMode = 'add';
+      lock.alpha = 0;
+      this.lockLights.push(lock);
+      this.lockStars.push(
+        [0, BOARD_H].map((y) => {
+          const s = new Sprite(tex.star);
+          s.anchor.set(0.5);
+          s.position.set(reelX(r) + CELL_W / 2, y);
+          s.blendMode = 'add';
+          s.alpha = 0;
+          return s;
+        }),
+      );
+      this.anticipationLayer.addChild(streak, lock, run, seat);
     }
 
     const shade = new Sprite(tex.shade);
@@ -299,6 +371,45 @@ export class ReelBoard extends Container {
       run();
     }
 
+    this.pressWave = new Sprite(tex.glow);
+    this.pressWave.anchor.set(0.5);
+    this.pressWave.position.set(BOARD_W / 2, -80);
+    this.pressWave.width = BOARD_W * 1.3;
+    this.pressWave.height = 230;
+    this.pressWave.blendMode = 'add';
+    this.pressWave.alpha = 0;
+    this.finaleGlow = new Sprite(tex.glow);
+    this.finaleGlow.anchor.set(0.5);
+    this.finaleGlow.position.set(BOARD_W / 2, BOARD_H / 2);
+    this.finaleGlow.width = BOARD_W * 1.6;
+    this.finaleGlow.height = BOARD_H * 1.8;
+    this.finaleGlow.blendMode = 'add';
+    this.finaleGlow.alpha = 0;
+    this.anticipationLayer.addChild(this.pressWave, this.finaleGlow);
+    // just outside the gold of the frame
+    const ringW = BOARD_W + FRAME_MARGIN_X * 2 + 170;
+    const ringH = BOARD_H + FRAME_MARGIN_Y * 2 + 150;
+    for (const [w, a] of [[34, 0.1], [14, 0.24], [4, 0.45]] as const) {
+      this.finaleRing.roundRect(-ringW / 2, -ringH / 2, ringW, ringH, 46).stroke({ width: w, color: 0xffffff, alpha: a });
+    }
+    this.finaleRing.position.set(BOARD_W / 2, BOARD_H / 2);
+    this.finaleRing.blendMode = 'add';
+    this.finaleRing.alpha = 0;
+    this.runnerLayer.alpha = 0;
+    for (const head of [0, 0.5]) {
+      const dots: Sprite[] = [];
+      for (let i = 0; i < RUNNER_TRAIL; i++) {
+        const s = new Sprite(tex.glow);
+        s.anchor.set(0.5);
+        s.width = s.height = 84 - i * 11;
+        s.alpha = 1 - i / RUNNER_TRAIL;
+        s.blendMode = 'add';
+        this.runnerLayer.addChild(s);
+        dots.push(s);
+      }
+      this.runners.push({ head, dots });
+    }
+
     this.addChild(
       this.panels,
       mask,
@@ -311,6 +422,8 @@ export class ReelBoard extends Container {
       this.anticipationLayer,
       this.lineLayer,
       this.frameLayer,
+      this.runnerLayer,
+      this.finaleRing,
       ...this.edgeLights,
       this.fx,
       this.labelLayer,
@@ -320,6 +433,16 @@ export class ReelBoard extends Container {
   update(dtMs: number): void {
     for (const r of this.reels) r.update(dtMs);
     this.fx.update(dtMs);
+    for (const s of this.streaks) if (s.alpha > 0) s.tilePosition.y += dtMs * 2.6;
+    if (this.runnerLayer.alpha > 0) {
+      this.runnerT += dtMs / 1000 / RUNNER_LAP;
+      for (const run of this.runners) {
+        run.dots.forEach((s, i) => {
+          s.position.set(...this.frameAt((run.head + this.runnerT) * this.frameLength - i * 34));
+          s.tint = this.still ? 0xff8a60 : 0xfff0c0;
+        });
+      }
+    }
     this.ambientIn -= dtMs / 1000;
     if (this.ambientIn <= 0) {
       this.ambientIn = 2 + Math.random() * 2.5;
@@ -365,7 +488,12 @@ export class ReelBoard extends Container {
       gsap.killTweensOf(run);
       run.tint = this.accent;
       gsap.to(run, { alpha: 0.2, duration: 0.3, delay: i * startGap });
+      const streak = this.streaks[i];
+      gsap.killTweensOf(streak);
+      streak.tint = this.accent;
+      gsap.to(streak, { alpha: 0.55, duration: 0.25, delay: i * startGap });
     });
+    this.igniteSpin();
 
     const first = plan.turbo ? 260 : 500;
     const gap = plan.turbo ? 65 : 130;
@@ -395,15 +523,58 @@ export class ReelBoard extends Container {
     await Promise.all(stops);
   }
 
-  /**
-   * A reel has seated: nothing bounces. The light drains down the column in one blow, gold sand
-   * spills from the seam and dust rolls along the base of the frame.
-   */
+  /** The press: a band of light crosses the reels, the rubies catch one after the other, the light starts round the frame. */
+  private igniteSpin(): void {
+    gsap.killTweensOf(this.pressWave);
+    this.pressWave.tint = this.accent;
+    gsap.fromTo(this.pressWave, { y: -80, alpha: 0.85 }, { y: BOARD_H + 80, alpha: 0.15, duration: 0.34, ease: 'sine.in', onComplete: () => void (this.pressWave.alpha = 0) });
+    this.rubyFlares.forEach((f, i) => {
+      gsap.killTweensOf(f);
+      gsap.fromTo(f, { alpha: 0 }, { alpha: 0.7, duration: 0.12, delay: i * 0.03, yoyo: true, repeat: 1, ease: 'sine.inOut' });
+    });
+    gsap.killTweensOf(this.runnerLayer);
+    gsap.to(this.runnerLayer, { alpha: 1, duration: 0.2 });
+  }
+
+  /** The last reel has locked: the board fills with light and a ring of it leaves the frame. */
+  private finale(): void {
+    gsap.killTweensOf(this.runnerLayer);
+    gsap.to(this.runnerLayer, { alpha: 0, duration: 0.25 });
+    gsap.killTweensOf(this.finaleGlow);
+    this.finaleGlow.tint = this.accent;
+    gsap.fromTo(this.finaleGlow, { alpha: 0.42 }, { alpha: 0, duration: 0.6, ease: 'power2.out' });
+    const ring = this.finaleRing;
+    gsap.killTweensOf([ring, ring.scale]);
+    ring.tint = this.accent;
+    gsap.fromTo(ring, { alpha: 0.9 }, { alpha: 0, duration: 0.6, ease: 'power2.out' });
+    gsap.fromTo(ring.scale, { x: 1, y: 1 }, { x: 1.06, y: 1.13, duration: 0.6, ease: 'power2.out' });
+    this.rubyFlares.forEach((f) => {
+      gsap.killTweensOf(f);
+      gsap.fromTo(f, { alpha: 0.9 }, { alpha: 0, duration: 0.55, ease: 'power2.out' });
+    });
+  }
+
+  /** A reel has seated: nothing bounces. The light drains down the column in one blow and a star is struck on each rail, brighter with each reel. */
   private landImpact(reel: number): void {
     const x = reelX(reel) + CELL_W / 2;
     const run = this.spinLights[reel];
     gsap.killTweensOf(run);
     gsap.to(run, { alpha: 0, duration: 0.18, ease: 'power2.out' });
+    const streak = this.streaks[reel];
+    gsap.killTweensOf(streak);
+    gsap.to(streak, { alpha: 0, duration: 0.14 });
+    const power = (reel + 1) / REELS;
+    const lock = this.lockLights[reel];
+    lock.tint = this.accent;
+    gsap.killTweensOf(lock);
+    gsap.fromTo(lock, { alpha: 0.2 + power * 0.3 }, { alpha: 0, duration: 0.32, ease: 'power2.out' });
+    for (const star of this.lockStars[reel]) {
+      star.tint = this.accent;
+      star.width = star.height = 120 + power * 150;
+      gsap.killTweensOf(star);
+      gsap.fromTo(star, { alpha: 1, rotation: -0.3 }, { alpha: 0, rotation: 0.4, duration: 0.38, ease: 'power2.out' });
+    }
+    if (reel === REELS - 1) this.finale();
     const seat = this.seatLights[reel];
     seat.tint = this.accent;
     gsap.killTweensOf(seat);
@@ -484,8 +655,8 @@ export class ReelBoard extends Container {
       const x = reelX(reel) + CELL_W / 2;
       const emit = () => {
         if (glow.alpha <= 0.05) return;
-        this.fx.sparks(x + (Math.random() - 0.5) * CELL_W, BOARD_H - 10, 3, 0.6);
-        gsap.delayedCall(0.09, emit);
+        this.fx.sparks(x + (Math.random() - 0.5) * CELL_W, BOARD_H - 10, 1, 0.5);
+        gsap.delayedCall(0.14, emit);
       };
       gsap.delayedCall(0.1, emit);
     } else {
@@ -767,7 +938,7 @@ export class ReelBoard extends Container {
     flash.width = flash.height = CELL_W * 2;
     this.labelLayer.addChild(flash);
     gsap.fromTo(flash, { alpha: 0.22 }, { alpha: 0, duration: 0.5, onComplete: () => flash.destroy() });
-    this.fx.sand(c.x, c.y + CELL_H * 0.3, CELL_W * 0.7, 14, 1);
+    this.fx.sand(c.x, c.y + CELL_H * 0.3, CELL_W * 0.7, 8, 1);
     const rig = this.rig(reel, row);
     const tl = gsap.timeline({ onComplete: () => this.dropRig(rig) }).fromTo(rig.glow, { alpha: 0.5 }, { alpha: 0, duration: 0.6, ease: 'sine.out' });
     rig.tweens.push(tl);
@@ -973,25 +1144,30 @@ export class ReelBoard extends Container {
     val.scale.set(k);
     gsap.fromTo(c, { alpha: 0 }, { alpha: 1, duration: 0.18 });
     gsap.fromTo(flash, { alpha: 1 }, { alpha: 0, duration: 0.7, ease: 'power2.out' });
-    this.fx.coins(BOARD_W / 2, BOARD_H / 2, 8 + size * 8, 0.8);
-    this.fx.sand(BOARD_W / 2, BOARD_H / 2, BOARD_W * 0.5, 50 + size * 30, 1.8);
+    this.fx.coins(BOARD_W / 2, BOARD_H / 2, 4 + size * 5, 0.8);
+    this.fx.sand(BOARD_W / 2, BOARD_H / 2, BOARD_W * 0.5, 24 + size * 14, 1.8);
     gsap.to(c, { alpha: 0, duration: 0.3, delay: 1.25, onComplete: () => !c.destroyed && c.destroy({ children: true }) });
   }
 
-  /** Two sparks of gold race round the opening of the frame. */
-  private raceFrame(): void {
+  private readonly frameLength = 2 * (BOARD_W + (FRAME_MARGIN_X - 6) * 2 + BOARD_H + (FRAME_MARGIN_Y - 6) * 2);
+
+  /** The point at a distance `d` along the opening of the frame. */
+  private frameAt(d: number): [number, number] {
     const x0 = -FRAME_MARGIN_X + 6;
     const y0 = -FRAME_MARGIN_Y + 6;
     const w = BOARD_W + (FRAME_MARGIN_X - 6) * 2;
     const h = BOARD_H + (FRAME_MARGIN_Y - 6) * 2;
-    const L = 2 * (w + h);
-    const at = (d: number): [number, number] => {
-      d = ((d % L) + L) % L;
-      if (d < w) return [x0 + d, y0];
-      if (d < w + h) return [x0 + w, y0 + d - w];
-      if (d < 2 * w + h) return [x0 + w - (d - w - h), y0 + h];
-      return [x0, y0 + h - (d - 2 * w - h)];
-    };
+    const L = this.frameLength;
+    d = ((d % L) + L) % L;
+    if (d < w) return [x0 + d, y0];
+    if (d < w + h) return [x0 + w, y0 + d - w];
+    if (d < 2 * w + h) return [x0 + w - (d - w - h), y0 + h];
+    return [x0, y0 + h - (d - 2 * w - h)];
+  }
+
+  /** Two sparks of gold race round the opening of the frame. */
+  private raceFrame(): void {
+    const L = this.frameLength;
     for (const start of [0, L / 2]) {
       const s = new Sprite(this.tex.glow);
       s.anchor.set(0.5);
@@ -1006,18 +1182,11 @@ export class ReelBoard extends Container {
         ease: 'sine.inOut',
         onUpdate: () => {
           if (s.destroyed) return;
-          const [x, y] = at(o.d);
-          s.position.set(x, y);
-          this.fx.sand(x, y, 12, 1, 0.4);
+          s.position.set(...this.frameAt(o.d));
         },
         onComplete: () => !s.destroyed && s.destroy(),
       });
     }
-  }
-
-  /** Gold coins spraying out of the win plaque. */
-  coinBurst(n: number): void {
-    if (n > 0) this.fx.coins(BOARD_W / 2, BOARD_H + 40, n, 0.85);
   }
 
   /** A stream of gold from the middle of the reels to a point of the board, along a curve. */

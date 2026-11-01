@@ -4,10 +4,9 @@ import gsap from 'gsap';
 import { BASE_STRIPS, BET_LEVELS, FREE_STRIPS, REELS, ROWS, Sym, minCount } from '../math/config';
 import type { FreeSpinOutcome, Grid, Round, SpinOutcome } from '../math/engine';
 import { GameServer } from '../server/GameServer';
-import { LITE, slim } from './device';
+import { LITE } from './device';
 import { Hud } from '../ui/Hud';
 import { Paytable } from '../ui/Paytable';
-import { paintBonusPanel } from './art/egyptFrame';
 import { Audio } from './Audio';
 import { Background } from './Background';
 import { Digits } from './Digits';
@@ -19,6 +18,7 @@ import { Particles } from './Particles';
 import { showIntro } from '../ui/Intro';
 import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
+import { STRAIN_BAR_H, STRAIN_BAR_W, StrainBar, makePlate, sizePlate } from './StrainBar';
 import type { SymbolTextures } from './textures';
 
 const PREFS_KEY = 'codex-infecta:prefs';
@@ -26,7 +26,7 @@ const PREFS_KEY = 'codex-infecta:prefs';
 const FRAME_OUTER_W = 1490;
 const FRAME_OUTER_H = 847;
 const FRAME_TOP = 65;
-const UPRIGHT_LOGO_H = 340;
+const UPRIGHT_LOGO_H = 420;
 /** the painting of the queen */
 const QUEEN_H = 1003;
 const BOARD_Y = 186;
@@ -39,33 +39,35 @@ const MASCOT_SCALE = 0.68;
 const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 360;
 
-const PANEL_W = 820;
-const PANEL_H = 128;
-const PANEL_MID = 276;
-/** centre of the two cells either side of the strain */
-const PANEL_CELL = PANEL_MID / 2 + (PANEL_W - PANEL_MID) / 4;
+const CELL_W = 300;
+const CELL_H = 128;
+/** on an upright screen the two cells stand above the bar, lower and wider */
+const STACK_CELL_W = (STRAIN_BAR_W - 8) / 2;
+const STACK_CELL_H = 92;
 
-/** Bonus panel in the place of the title: spins on the left, the strains in their cartouche, the bonus total on the right. */
+/** Bonus panel in the place of the title: the spins and the bonus total, either side of the bar of the strains. */
 class FeatureBanner extends Container {
+  private spins = new Container();
+  private total = new Container();
+  private spinPlate = makePlate(CELL_W, CELL_H);
+  private totalPlate = makePlate(CELL_W, CELL_H);
   private count = new Digits(54);
   private amount = new Digits(54);
+  private amountMax = 1;
   private times: Text;
-  private icons = new Container();
-  /** the strains the icons show: a new bonus can have another strain, with the same count */
-  private shown = '';
+  private totalCaption: Text;
   private caption: Text;
+  private strains: StrainBar;
+  private track = new Graphics().roundRect(-124, 0, 248, 7, 3.5).fill(0x050a1e).stroke({ width: 1, color: 0xc08a30 });
   private bar = new Graphics().roundRect(0, 0, 244, 4, 2).fill(0xf2c25a);
-  private glow: Sprite;
   private spinGlow: Sprite;
   private gainGlow: Sprite;
+  private lit: Sym[] = [];
   private gain = { v: 0 };
   private bet = 1;
 
-  constructor(private tex: SymbolTextures) {
+  constructor(tex: SymbolTextures) {
     super();
-    const plate = new Sprite(slim(paintBonusPanel(PANEL_W, PANEL_H, PANEL_MID), 0.6));
-    plate.anchor.set(0.5);
-    plate.scale.set(0.5);
     const caps = (size: number, fill: number) => ({
       fontFamily: 'Cinzel, serif',
       fontWeight: '900' as const,
@@ -74,69 +76,76 @@ class FeatureBanner extends Container {
       letterSpacing: size * 0.1,
       dropShadow: { color: 0x000000, blur: 3, distance: 2, angle: Math.PI / 2, alpha: 0.9 },
     });
-    const cellGlow = (x: number, w: number, h: number, tint: number) => {
+    const cellGlow = () => {
       const g = new Sprite(tex.glow);
       g.anchor.set(0.5);
-      g.position.set(x, 0);
-      g.width = w;
-      g.height = h;
+      g.width = 300;
+      g.height = 150;
       g.blendMode = 'add';
-      g.tint = tint;
+      g.tint = 0xffc860;
       g.alpha = 0;
       return g;
     };
-    this.spinGlow = cellGlow(-PANEL_CELL, 300, 150, 0xffc860);
-    this.gainGlow = cellGlow(PANEL_CELL, 300, 150, 0xffc860);
+    this.spinGlow = cellGlow();
+    this.gainGlow = cellGlow();
     this.caption = new Text({ text: 'TOURS GRATUITS', style: caps(19, 0xe8c878) });
     this.caption.anchor.set(0.5);
-    this.caption.position.set(-PANEL_CELL, -40);
-    this.count.position.set(-PANEL_CELL, 2);
-    const total = new Text({ text: 'GAIN BONUS', style: caps(19, 0xe8c878) });
-    total.anchor.set(0.5);
-    total.position.set(PANEL_CELL, -40);
-    this.amount.position.set(PANEL_CELL, 2);
+    this.totalCaption = new Text({ text: 'GAIN BONUS', style: caps(19, 0xe8c878) });
+    this.totalCaption.anchor.set(0.5);
     this.times = new Text({ text: '', style: caps(17, 0xfff0c8) });
     this.times.anchor.set(0.5);
-    this.times.position.set(PANEL_CELL, 44);
-    const strains = new Text({ text: 'SOUCHE', style: caps(17, 0xe8c878) });
-    strains.anchor.set(0.5);
-    strains.position.set(0, -68);
-    this.icons.position.set(0, 12);
-    // how far through the free spins we are
-    const track = new Graphics().roundRect(-124, 0, 248, 7, 3.5).fill(0x050a1e).stroke({ width: 1, color: 0xc08a30 });
-    track.position.set(-PANEL_CELL, 41);
-    this.bar.position.set(-PANEL_CELL - 122, 42.5);
     this.bar.scale.x = 0;
-    this.glow = cellGlow(0, 300, 210, 0xffb040);
-    this.glow.position.y = 12;
-    this.glow.alpha = 0.3;
-    gsap.to(this.glow, { alpha: 0.5, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.addChild(plate, this.spinGlow, this.gainGlow, this.caption, this.count, track, this.bar, total, this.amount, this.times, strains, this.glow, this.icons);
+    this.strains = new StrainBar(tex);
+    this.spins.addChild(this.spinPlate, this.spinGlow, this.caption, this.count, this.track, this.bar);
+    this.total.addChild(this.totalPlate, this.gainGlow, this.totalCaption, this.amount, this.times);
+    this.addChild(this.spins, this.strains, this.total);
     this.visible = false;
+  }
+
+  /** In a row on a wide screen; the two cells above the bar on an upright one. */
+  arrange(upright: boolean): void {
+    const w = upright ? STACK_CELL_W : CELL_W;
+    const h = upright ? STACK_CELL_H : CELL_H;
+    sizePlate(this.spinPlate, w, h);
+    sizePlate(this.totalPlate, w, h);
+    const cellX = upright ? w / 2 + 4 : STRAIN_BAR_W / 2 + 10 + CELL_W / 2;
+    const stack = (STACK_CELL_H + 8 + STRAIN_BAR_H) / 2;
+    const cellY = upright ? STACK_CELL_H / 2 - stack : 0;
+    this.spins.position.set(-cellX, cellY);
+    this.total.position.set(cellX, cellY);
+    this.strains.y = upright ? stack - STRAIN_BAR_H / 2 : 0;
+    this.caption.y = this.totalCaption.y = upright ? -28 : -40;
+    this.count.y = this.amount.y = upright ? 10 : 2;
+    this.count.scale.set(upright ? 0.74 : 1);
+    this.amountMax = upright ? 0.74 : 1;
+    this.track.y = upright ? 32 : 41;
+    this.bar.position.set(-122, this.track.y + 1.5);
+    this.totalCaption.x = upright ? -76 : 0;
+    this.times.position.set(upright ? 92 : 0, upright ? -28 : 44);
+    this.showGain(this.gain.v);
+  }
+
+  /** The bonus starts: every strain goes back into the shadow. */
+  reset(): void {
+    this.lit = [];
+    this.strains.set([]);
+  }
+
+  /** A strain has caught in the bar. */
+  set onIgnite(fn: () => void) {
+    this.strains.onIgnite = fn;
   }
 
   set(spin: number, total: number, specials: Sym[]): void {
     this.count.text = `${spin}/${total}`;
     gsap.to(this.bar.scale, { x: Math.min(1, spin / Math.max(1, total)), duration: 0.35, ease: 'power2.out' });
-    const key = specials.join();
-    if (key !== this.shown) {
-      this.shown = key;
-      this.icons.removeChildren().forEach((c) => c.destroy());
-      const size = [118, 104, 86][Math.min(2, specials.length - 1)];
-      specials.forEach((s, i) => {
-        const sp = new Sprite(this.tex.normal[s]);
-        sp.anchor.set(0.5);
-        sp.width = sp.height = size;
-        sp.x = (i - (specials.length - 1) / 2) * (size - 2);
-        this.icons.addChild(sp);
-        gsap.from(sp, { alpha: 0, duration: 0.4 });
-      });
-    }
+    for (const s of specials) if (!this.lit.includes(s)) this.strains.ignite(s);
+    this.lit = [...specials];
   }
 
   private showGain(v: number): void {
     this.amount.value = v;
-    this.amount.scale.set(Math.min(1, 236 / Math.max(1, this.amount.inkWidth)));
+    this.amount.scale.set(Math.min(this.amountMax, 236 / Math.max(1, this.amount.inkWidth)));
   }
 
   private showTimes(v: number): void {
@@ -182,8 +191,7 @@ class FeatureBanner extends Container {
 
   /** The strain has just taken a reel. */
   flash(): void {
-    gsap.killTweensOf(this.glow);
-    gsap.fromTo(this.glow, { alpha: 1 }, { alpha: 0.3, duration: 0.7, ease: 'power2.out', onComplete: () => void gsap.to(this.glow, { alpha: 0.5, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' }) });
+    this.strains.flash();
   }
 }
 
@@ -229,6 +237,7 @@ export class Game {
     this.logo.position.set(BOARD_W / 2, -18);
     this.logo.homeX = BOARD_W / 2;
     this.banner = new FeatureBanner(tex);
+    this.banner.onIgnite = () => this.audio.strainIgnite();
     this.banner.position.set(BOARD_W / 2, 0);
     this.teaser = this.buildTeaser(tex);
     this.mascot = new Mascot(mascotTex);
@@ -423,7 +432,8 @@ export class Game {
     this.logoShade.width = 1000;
     this.logoShade.height = 380;
     this.banner.y = -68;
-    this.banner.scale.set(1.1);
+    this.banner.scale.set(1);
+    this.banner.arrange(false);
     this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + WORLD_BOTTOM) / 2);
     this.world.position.set(w / 2, availH / 2);
@@ -450,13 +460,14 @@ export class Game {
     this.world.pivot.set(BOARD_W / 2, 0);
     this.world.position.set(w / 2, inset + (slack * 0.45 + UPRIGHT_LOGO_H - FRAME_TOP) * scale);
     const logoY = FRAME_TOP - UPRIGHT_LOGO_H / 2;
-    this.logo.scale.set(1.3);
+    this.logo.scale.set(1.5);
     this.logo.y = logoY;
     this.logoShade.position.set(this.logo.x, logoY + 20);
     this.logoShade.width = 1500;
     this.logoShade.height = 520;
     this.banner.y = logoY;
-    this.banner.scale.set(1.75);
+    this.banner.scale.set(1.8);
+    this.banner.arrange(true);
     const frameBottom = FRAME_TOP + FRAME_OUTER_H;
     const shown = room > 300;
     const k = Math.max(0.6, Math.min(1.2, room / (QUEEN_H * 0.8)));
@@ -693,6 +704,7 @@ export class Game {
     }
     let landedCodex = 0;
     let playedRiser = false;
+    this.bg.charge(true);
     await this.board.spin({
       grid,
       turbo: this.turbo,
@@ -720,6 +732,7 @@ export class Game {
         }
       },
     });
+    this.bg.charge(false);
   }
 
   private async presentOutcome(o: SpinOutcome, bet: number, already: number, inFeature: boolean): Promise<void> {
@@ -734,7 +747,6 @@ export class Game {
         this.streak++;
         this.audio.win(size, this.streak);
         this.bg.flare(0.45 + size * 0.2);
-        this.board.coinBurst(size * 8);
         this.audio.coins(6 + size * 8);
       }
       else this.audio.tick();
@@ -788,6 +800,7 @@ export class Game {
       gsap.to(this.hud.root, { opacity: 1, duration: 0.6 });
       await this.overlays.featureIntro(f.special, 10, true);
     }
+    this.banner.reset();
     this.enterFeature(true);
     this.board.clearWins();
     this.board.reels.forEach((r) => r.setStrip(FREE_STRIPS[this.board.reels.indexOf(r)]));

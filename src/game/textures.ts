@@ -17,7 +17,7 @@ import { LITE, slim } from './device';
 import { ICONS as PAINTED } from './art/icons';
 import { downsample } from './art/paint';
 import { paintRoyal } from './art/royals';
-import { goldGrad, paintCoin, paintEgyptFrame, paintGem, paintGoldFlakes, paintGrain, paintSeal, paintReelSurround, paintRisingColumn, paintStonePanel } from './art/egyptFrame';
+import { goldGrad, paintCoin, paintEgyptFrame, paintGem, paintGrain, paintSeal, paintReelSurround, paintRisingColumn, paintStonePanel } from './art/egyptFrame';
 
 /** the painted symbols are 512 px: keep all of it, the screens that show it are getting bigger (phones show them small) */
 export const TEX_SIZE = LITE ? 256 : 512;
@@ -45,7 +45,6 @@ export interface SymbolTextures {
   /** data URLs for DOM usage (paytable, intro) */
   images: string[];
   grain: Texture;
-  flakes: Texture[];
   rigs: Map<Sym, SymbolRig>;
   expanded: Map<Sym, Texture>;
   /** additive glow layers that make each symbol light up */
@@ -396,6 +395,5 @@ export async function buildSymbolTextures(overrides: Map<string, HTMLImageElemen
     sunburst: Texture.from(paintSunburst()),
     coin: Texture.from(paintCoin()),
     grain: Texture.from(paintGrain()),
-    flakes: paintGoldFlakes().map((c) => Texture.from(c)),
   };
 }

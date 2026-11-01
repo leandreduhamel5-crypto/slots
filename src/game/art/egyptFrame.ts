@@ -639,83 +639,6 @@ export function paintGrain(): HTMLCanvasElement {
   return c;
 }
 
-/** What flies off the rail: torn leaves of gold, and a few tiny gold charms (ankh, lotus, eye). */
-export function paintGoldFlakes(): HTMLCanvasElement[] {
-  const gold = (ctx: CanvasRenderingContext2D) => {
-    const g = ctx.createLinearGradient(-20, -24, 20, 24);
-    g.addColorStop(0, '#fff6c8');
-    g.addColorStop(0.42, '#f2c25a');
-    g.addColorStop(0.72, '#b87a1c');
-    g.addColorStop(1, '#ffe08a');
-    return g;
-  };
-  const make = (draw: (ctx: CanvasRenderingContext2D) => void) => {
-    const [c, ctx] = makeCanvas(64, 64);
-    ctx.translate(32, 32);
-    ctx.fillStyle = ctx.strokeStyle = gold(ctx);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.shadowColor = 'rgba(40,18,0,0.8)';
-    ctx.shadowBlur = 3;
-    draw(ctx);
-    return c;
-  };
-  const leaf = (pts: [number, number][]) => (ctx: CanvasRenderingContext2D) => {
-    ctx.beginPath();
-    for (const [x, y] of pts) ctx.lineTo(x, y);
-    ctx.closePath();
-    ctx.fill();
-  };
-  return [
-    make(leaf([[-4, -24], [15, -11], [20, 8], [3, 24], [-15, 13], [-20, -7]])),
-    make(leaf([[0, -26], [11, -3], [6, 21], [-9, 24], [-14, -2]])),
-    make(leaf([[-20, -13], [5, -22], [22, -2], [11, 17], [-13, 12]])),
-    // ankh
-    make((ctx) => {
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.ellipse(0, -14, 7.5, 10, 0, 0, Math.PI * 2);
-      ctx.moveTo(0, -4);
-      ctx.lineTo(0, 26);
-      ctx.moveTo(-15, 4);
-      ctx.lineTo(15, 4);
-      ctx.stroke();
-    }),
-    // lotus
-    make((ctx) => {
-      for (const a of [-0.95, -0.48, 0, 0.48, 0.95]) {
-        ctx.save();
-        ctx.translate(0, 19);
-        ctx.rotate(a);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(10, -18, 0, -38);
-        ctx.quadraticCurveTo(-10, -18, 0, 0);
-        ctx.fill();
-        ctx.restore();
-      }
-    }),
-    // eye
-    make((ctx) => {
-      ctx.lineWidth = 4.5;
-      ctx.beginPath();
-      ctx.moveTo(-24, -1);
-      ctx.quadraticCurveTo(0, -20, 24, -1);
-      ctx.quadraticCurveTo(0, 14, -24, -1);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, -2, 6.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(-5, 9);
-      ctx.quadraticCurveTo(-4, 24, -14, 22);
-      ctx.moveTo(8, 8);
-      ctx.lineTo(18, 21);
-      ctx.stroke();
-    }),
-  ];
-}
-
 /** A small cut ruby in a gold bezel. */
 export function paintGem(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   ctx.beginPath();
@@ -1077,29 +1000,23 @@ export function paintReelSurround(w: number, h: number, mx: number, my: number, 
 }
 
 /** The bonus panel: lapis in gold, two compartments and a ruby between them. Painted at 2×. */
-/** Margin painted around the panel of the free spins, for its shadow and its cartouche. */
-export const BONUS_PANEL_PAD = 44;
-
-/** Lapis bar of the free spins, with a raised cartouche of width `mid` for the strain. */
-export function paintBonusPanel(w: number, h: number, mid: number): HTMLCanvasElement {
+/** Small plate of lapis and gold, meant to be stretched: its edges and corners stay in a 32 px band, its margin 16 px around them. */
+export function paintBonusPlate(): HTMLCanvasElement {
   const S = 2;
-  const P = BONUS_PANEL_PAD;
-  const [c, ctx] = makeCanvas((w + P * 2) * S, (h + P * 2) * S);
+  const M = 16;
+  const w = 120;
+  const h = 128;
+  const [c, ctx] = makeCanvas((w + M * 2) * S, (h + M * 2) * S);
   ctx.scale(S, S);
-  ctx.translate(P, P);
-  const shadowed = (draw: () => void) => {
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 6;
-    draw();
-    ctx.restore();
-  };
-  shadowed(() => {
-    ctx.fillStyle = goldGrad(ctx, 0, 0, 0, h);
-    rr(ctx, 0, 0, w, h, 12);
-    ctx.fill();
-  });
+  ctx.translate(M, M);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 5;
+  ctx.fillStyle = goldGrad(ctx, 0, 0, 0, h);
+  rr(ctx, 0, 0, w, h, 12);
+  ctx.fill();
+  ctx.restore();
   const face = ctx.createLinearGradient(0, 0, 0, h);
   face.addColorStop(0, '#1c3172');
   face.addColorStop(1, '#0a1230');
@@ -1110,38 +1027,6 @@ export function paintBonusPanel(w: number, h: number, mid: number): HTMLCanvasEl
   ctx.lineWidth = 1;
   rr(ctx, 8, 8, w - 16, h - 16, 6);
   ctx.stroke();
-  // the cartouche stands proud of the bar, an ember behind the strain
-  const x0 = (w - mid) / 2;
-  const rise = 26;
-  shadowed(() => {
-    ctx.fillStyle = goldGrad(ctx, 0, -rise, 0, h + rise);
-    rr(ctx, x0, -rise, mid, h + rise * 2, 16);
-    ctx.fill();
-  });
-  const well = ctx.createRadialGradient(w / 2, h / 2, 6, w / 2, h / 2, mid * 0.62);
-  well.addColorStop(0, '#8a3a12');
-  well.addColorStop(0.55, '#2a1016');
-  well.addColorStop(1, '#0c0610');
-  ctx.fillStyle = well;
-  rr(ctx, x0 + 5, -rise + 5, mid - 10, h + rise * 2 - 10, 12);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(232,200,120,0.6)';
-  rr(ctx, x0 + 9, -rise + 9, mid - 18, h + rise * 2 - 18, 9);
-  ctx.stroke();
-  for (const x of [x0, x0 + mid]) {
-    const g = ctx.createRadialGradient(x - 3, h / 2 - 4, 1, x, h / 2, 12);
-    g.addColorStop(0, '#ffd8c8');
-    g.addColorStop(0.45, '#ff3a2a');
-    g.addColorStop(1, '#6a0008');
-    ctx.fillStyle = goldGrad(ctx, 0, h / 2 - 15, 0, h / 2 + 15);
-    ctx.beginPath();
-    ctx.arc(x, h / 2, 15, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, h / 2, 11, 0, Math.PI * 2);
-    ctx.fill();
-  }
   return c;
 }
 

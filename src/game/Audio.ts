@@ -728,6 +728,7 @@ export class Audio {
     this.voice({ at, f: 240, to: 110, glide: 0.04, vol: 0.28, r: 0.07, a: 0.001 });
     this.hiss({ at, dur: 0.01, type: 'bandpass', f0: 2600, q: 1.5, vol: 0.14, a: 0.0005 });
     this.hiss({ at: at + 0.01, dur: 0.22, type: 'bandpass', f0: 600, f1: 2200, q: 0.8, vol: 0.035, a: 0.05, pan: -0.3, pan1: 0.3 });
+    this.sistrum(at + 0.02, 0.022, 0, 3);
     this.startSpinLoop(at + 0.03);
   }
 
@@ -800,7 +801,10 @@ export class Audio {
     const last = i >= 4;
     this.voice({ at, f: 132 - i * 4, to: 68, glide: 0.05, vol: 0.3, r: 0.1, a: 0.001, pan });
     this.mallet(at, [64, 65, 68, 69, 76][Math.min(4, i)], last ? 0.44 : 0.36, pan, last ? 1.5 : 0.8);
-    if (last) this.spinLoop?.stop(at);
+    if (last) {
+      this.sagat(at, midi(88), 0.016);
+      this.spinLoop?.stop(at);
+    }
     else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
   }
 
@@ -1135,6 +1139,15 @@ export class Audio {
     this.gong(at, midi(33), 0.06, 0, 3);
     this.doum(at, 0.8, this.sfx);
     this.doum(at + 0.3, 0.55, this.sfx);
+  }
+
+  /** A strain catches in the bar of the panel: two bowls, and the finger cymbals. */
+  strainIgnite(): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    this.mallet(at, 76, 0.16, -0.1, 1.4);
+    this.mallet(at + 0.08, 83, 0.14, 0.1, 1.8);
+    this.sagat(at + 0.08, midi(88), 0.016);
   }
 
   /** The gold of a win reaches the bonus total: one high bowl and two coins. */
