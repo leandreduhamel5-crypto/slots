@@ -1,5 +1,4 @@
 import { Container, DisplacementFilter, Graphics, Sprite, Texture } from 'pixi.js';
-import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { LITE, slim } from './device';
 import { paintSoftRays } from './art/egyptFrame';
@@ -42,7 +41,7 @@ export interface MascotTextures {
 
 /** 'human' is the queen at peace, 'inhuman' the infected queen of the free spins. */
 export type Form = 'human' | 'inhuman';
-export type Reaction = 'spin' | 'win' | 'big' | 'feature' | 'codex';
+export type Reaction = 'win' | 'big' | 'feature' | 'codex';
 
 function glowCanvas(): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(256, 256);
@@ -333,7 +332,6 @@ export class Mascot extends Container {
   private back = new Container();
   private front = new Container();
   private motes: Mote[] = [];
-  private split = new RGBSplitFilter({ red: { x: 0, y: 0 }, green: { x: 0, y: 0 }, blue: { x: 0, y: 0 } });
   private busy: gsap.core.Timeline | null = null;
   private t = Math.random() * 10;
   private rage = 0;
@@ -691,37 +689,21 @@ export class Mascot extends Container {
       this.rage = to === 'inhuman' ? 1 : 0;
       return;
     }
-    this.filters = [this.split];
-    const tl = gsap.timeline({ onComplete: () => (this.filters = []) });
-    tl.to(this.fx, { flare: 0.8, halo: 1, orb: 1, shake: 4, duration: 0.5, ease: 'power2.out' }, 0);
-    for (let i = 0; i < 6; i++) {
-      tl.add(() => {
-        this.rage = i % 2 ? (to === 'inhuman' ? 0.2 : 0.8) : to === 'inhuman' ? 0.9 : 0.1;
-        this.split.red = { x: (Math.random() - 0.5) * 22, y: (Math.random() - 0.5) * 6 };
-        this.split.blue = { x: (Math.random() - 0.5) * 22, y: 0 };
-        if (to === 'inhuman') this.crackle(0.7);
-      }, 0.15 + i * 0.07);
-    }
-    tl.add(() => {
-      this.form = to;
-      this.split.red = { x: 0, y: 0 };
-      this.split.blue = { x: 0, y: 0 };
-      this.burst(36, PALM, 240);
-      if (to === 'inhuman') this.crackle(1.4);
-      this.onTransform?.(to);
-    }, 0.6)
-      .to(this.fx, { flare: 1.3, duration: 0.14, ease: 'power3.in' }, 0.6)
-      .to(this.fx, { flare: 0, shake: 0, halo: 0, orb: 0, duration: 1, ease: 'sine.inOut' }, 1.4);
+    const tl = gsap.timeline();
+    tl.to(this.fx, { flare: 0.4, halo: 0.7, duration: 0.6, ease: 'sine.inOut' }, 0)
+      .to(this, { rage: to === 'inhuman' ? 1 : 0, duration: 0.9, ease: 'sine.inOut' }, 0.2)
+      .add(() => {
+        this.form = to;
+        if (to === 'inhuman') this.crackle(0.8);
+        this.onTransform?.(to);
+      }, 0.6)
+      .to(this.fx, { flare: 0, halo: 0, duration: 1.1, ease: 'sine.inOut' }, 1.1);
     this.play(tl);
   }
 
   react(kind: Reaction): void {
     const tl = gsap.timeline();
     switch (kind) {
-      case 'spin':
-        this.sweep(0.8);
-        tl.to(this.fx, { flare: 0.3, duration: 0.15, ease: 'power2.out' }).to(this.fx, { flare: 0, duration: 0.6, ease: 'sine.out' });
-        break;
       case 'codex':
         this.glint(COBRA_EYE, 1.5);
         tl.to(this.fx, { flare: 0.7, duration: 0.1, ease: 'power2.out' }).to(this.fx, { flare: 0, duration: 0.6, ease: 'sine.out' });

@@ -1,5 +1,4 @@
 import { Container, Sprite, Texture } from 'pixi.js';
-import { RGBSplitFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { INK, makeCanvas, paintShine, softGlow } from './art/painters';
 import { goldGrad } from './art/egyptFrame';
@@ -165,10 +164,9 @@ interface Drop {
 
 /**
  * The in-game logo, alive: it breathes, a light sweep crosses the letters, a red halo pulses
- * behind it, blood drops fall from the letters, and now and then it glitches.
+ * behind it, blood drops fall from the letters.
  */
 export class Logo extends Container {
-  private split = new RGBSplitFilter({ red: { x: 0, y: 0 }, green: { x: 0, y: 0 }, blue: { x: 0, y: 0 } });
   private inner = new Container();
   private sprite: Sprite;
   private halo: Sprite;
@@ -286,26 +284,6 @@ export class Logo extends Container {
 
   private k(): number {
     return 1100 / this.art.width;
-  }
-
-  /** Struck by an event: a short chromatic tear and a sweep of light. */
-  glitch(power = 1): void {
-    this.filters = [this.split];
-    if (power > 1) this.sweep(0.6);
-    const tl = gsap.timeline();
-    for (let i = 0; i < 5; i++) {
-      tl.add(() => {
-        const j = () => (Math.random() - 0.5) * 10 * power;
-        this.split.red = { x: j(), y: 0 };
-        this.split.blue = { x: j(), y: 0 };
-      });
-      tl.to({}, { duration: 0.04 });
-    }
-    tl.add(() => {
-      this.split.red = { x: 0, y: 0 };
-      this.split.blue = { x: 0, y: 0 };
-      this.filters = [];
-    });
   }
 
   homeX = 0;

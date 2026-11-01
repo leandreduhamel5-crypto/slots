@@ -32,8 +32,6 @@ export class Particles extends Container {
   private ps: P[] = [];
   /** size of a particle relative to the design: small screens get smaller, fewer ones */
   unit = 1;
-  private fountain: { x: number; y: number; rate: number; acc: number } | null = null;
-  private fountain2: { x: number; y: number; rate: number; acc: number } | null = null;
 
   constructor(private tex: ParticleTextures) {
     super();
@@ -104,20 +102,6 @@ export class Particles extends Container {
     }
   }
 
-  /** Comic impact: a ring of stars and smoke. */
-  impact(x: number, y: number, power = 1, puffs = 4): void {
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const v = 380 * power;
-      this.add('star', x, y, Math.cos(a) * v, Math.sin(a) * v, 0.55, 44);
-    }
-    for (let i = 0; i < puffs; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const v = 160 * power;
-      this.add('puff', x + Math.cos(a) * 30, y + Math.sin(a) * 30, Math.cos(a) * v, Math.sin(a) * v, 0.7, 50 + Math.random() * 30);
-    }
-  }
-
   puffs(x: number, y: number, n: number, spread = 60): void {
     for (let i = 0; i < n; i++) {
       this.add('puff', x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread * 0.4, (Math.random() - 0.5) * 80, -50 - Math.random() * 60, 0.9 + Math.random() * 0.5, 36 + Math.random() * 26);
@@ -150,23 +134,6 @@ export class Particles extends Container {
     }
   }
 
-  /** A wall of dust crossing the whole screen. */
-  storm(w: number, h: number, n: number): void {
-    for (let i = 0; i < n; i++) {
-      this.add('puff', -200 - Math.random() * w * 0.5, Math.random() * h, 1500 + Math.random() * 900, (Math.random() - 0.5) * 120, 1.1 + Math.random() * 0.5, 240 + Math.random() * 320);
-      this.ps[this.ps.length - 1].s.tint = 0xb8843e;
-    }
-  }
-
-  /** A reel seats on the rail: a few fine grains of gold jump off the blow, no more. */
-  seat(x: number, y: number, width: number, heavy: boolean): void {
-    for (let i = 0; i < (heavy ? 12 : 6); i++) {
-      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
-      const v = 160 + Math.random() * 260;
-      this.add('sand', x + (Math.random() - 0.5) * width, y, Math.cos(a) * v, Math.sin(a) * v, 0.35 + Math.random() * 0.3, 6 + Math.random() * 6);
-    }
-  }
-
   /** Dust rolling sideways out of a seam. */
   dust(x: number, y: number, width: number, n: number): void {
     for (let i = 0; i < n; i++) {
@@ -191,40 +158,8 @@ export class Particles extends Container {
     this.rainState = null;
   }
 
-  startFountain(x: number, y: number, rate: number): void {
-    this.fountain = { x, y, rate, acc: 0 };
-  }
-
-  startFountain2(x: number, y: number, rate: number): void {
-    this.fountain2 = { x, y, rate, acc: 0 };
-  }
-
-  /** Heavier fountains (big-win tiers escalate them). */
-  setFountainRate(rate: number): void {
-    for (const f of [this.fountain, this.fountain2]) if (f) f.rate = rate;
-  }
-
-  stopFountain(): void {
-    this.fountain = this.fountain2 = null;
-  }
-
   update(dtMs: number): void {
     const dt = Math.min(0.05, dtMs / 1000);
-    for (const f of [this.fountain, this.fountain2]) {
-      if (!f) continue;
-      f.acc += f.rate * this.unit * dt;
-      while (f.acc >= 1) {
-        f.acc--;
-        // both jets lean toward the middle of the screen
-        const lean = !this.fountain2 ? 0 : f === this.fountain2 ? -0.28 : 0.28;
-        const a = -Math.PI / 2 + lean + (Math.random() - 0.5) * 0.7;
-        const v = 800 + Math.random() * 700;
-        const r = Math.random();
-        const kind: Kind = this.tex.coin ? (r < 0.82 ? 'coin' : r < 0.92 ? 'star' : 'spark') : r < 0.55 ? 'drop' : r < 0.75 ? 'cyan' : 'star';
-        const size = kind === 'coin' ? 40 + Math.random() * 24 : kind === 'star' ? 50 : 34 + Math.random() * 20;
-        this.add(kind, f.x + (Math.random() - 0.5) * 80, f.y, Math.cos(a) * v, Math.sin(a) * v, 1.5 + Math.random(), size);
-      }
-    }
     if (this.rainState) {
       const r = this.rainState;
       r.acc += r.rate * this.unit * dt;

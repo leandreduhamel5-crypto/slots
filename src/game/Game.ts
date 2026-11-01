@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js';
-import { AdvancedBloomFilter, ShockwaveFilter } from 'pixi-filters';
+import { AdvancedBloomFilter } from 'pixi-filters';
 import gsap from 'gsap';
 import { BASE_STRIPS, BET_LEVELS, FREE_STRIPS, REELS, ROWS, Sym, minCount } from '../math/config';
 import type { FreeSpinOutcome, Grid, Round, SpinOutcome } from '../math/engine';
@@ -15,7 +15,6 @@ import { Logo, eyeFromCodex, logoCanvas } from './Logo';
 import type { LoadedAssets } from './assets';
 import type { DecorArt } from './art/egypt';
 import { Mascot, type MascotTextures } from './Mascot';
-import { Particles } from './Particles';
 import { showIntro } from '../ui/Intro';
 import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
@@ -215,7 +214,6 @@ export class Game {
   private overlays: Overlays;
   private hud: Hud;
   private paytable: Paytable;
-  private shock = new ShockwaveFilter({ center: { x: 0, y: 0 }, amplitude: 16, wavelength: 180, speed: 1100, brightness: 1.04, radius: -1 });
   private busy = false;
   private turbo = false;
   private sound = true;
@@ -251,25 +249,18 @@ export class Game {
     this.mascot.scale.set(MASCOT_SCALE);
     this.mascot.position.set(MASCOT_X, WORLD_BOTTOM);
     this.mascot.setBook(tex.normal[Sym.CODEX]);
-    this.mascotFx = new Particles(tex);
     this.mascot.onTransform = (to) => {
       if (!this.mascot.visible) return;
-      const x = this.mascot.x + 110 * this.mascot.scale.x;
-      const y = this.mascot.y - 830 * this.mascot.scale.y;
-      this.mascotFx.impact(x, y, 1.6);
-      this.mascotFx.burst(x, y, 30, 1.1);
       this.audio.stinger(to === 'inhuman' ? 2 : 0);
-      this.bg.thump(to === 'inhuman' ? 0.4 : 0.15);
+      this.bg.thump(to === 'inhuman' ? 0.25 : 0.1);
     };
     this.logoShade = new Sprite(tex.glow);
     this.logoShade.anchor.set(0.5);
     this.logoShade.tint = 0x050208;
     this.logoShade.alpha = 0.7;
-    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.mascot, this.teaser, this.mascotFx);
+    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.mascot, this.teaser);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
-      shockwave: () => this.shockwave(),
-      glitch: (p) => this.logo.glitch(p),
       thump: (p) => this.bg.thump(p),
     });
     // bloom: emissive bits (eyes, veins, orb, neon, glows) radiate
@@ -277,7 +268,6 @@ export class Game {
       this.bloom.resolution = app.renderer.resolution;
       this.scene.filters = [this.bloom];
     }
-    this.shock.resolution = app.renderer.resolution;
     app.stage.addChild(this.scene, this.overlays);
 
     this.hud = new Hud({
@@ -355,8 +345,6 @@ export class Game {
 
     showIntro(logoArt.toDataURL('image/png'), tex.images, () => {
       this.audio.unlock();
-      this.logo.glitch(2);
-      this.bg.flash();
       if (this.server.state.pending) void this.resume(this.server.state.pending);
     });
   }
@@ -377,7 +365,6 @@ export class Game {
 
   private teaser: Container;
   private mascot: Mascot;
-  private mascotFx: Particles;
 
   /** Portrait-only reminder of the feature, filling the space under the reels. */
   private buildTeaser(tex: SymbolTextures): Container {
@@ -534,28 +521,11 @@ export class Game {
     this.watchFrameRate(dt);
     dt *= this.warp;
     this.board.update(dt);
-    this.mascotFx.update(dt);
     this.bg.update(dt);
     this.overlays.update(dt);
   }
 
-  private bloom = new AdvancedBloomFilter({ threshold: 0.7, bloomScale: 0.6, brightness: 1, blur: 5, quality: 2 });
-
-  private shockwave(): void {
-    if (LITE) return;
-    this.shock.center = { x: this.viewW / 2, y: this.viewH / 2 };
-    this.shock.time = 0;
-    this.scene.filters = this.quality >= 2 ? [this.shock] : [this.bloom, this.shock];
-    gsap.killTweensOf(this.shock);
-    gsap.to(this.shock, {
-      time: 1.4,
-      duration: 1.4,
-      ease: 'none',
-      onComplete: () => {
-        this.scene.filters = this.quality >= 2 ? [] : [this.bloom];
-      },
-    });
-  }
+  private bloom = new AdvancedBloomFilter({ threshold: 0.82, bloomScale: 0.28, brightness: 1, blur: 4, quality: 2 });
 
   /** the player's biggest win, in times the bet */
   private best = 0;
@@ -664,7 +634,6 @@ export class Game {
     if (round.base.win <= round.bet) this.streak = 0;
     this.audio.spinStart();
     this.hud.pulseSpin();
-    this.mascot.react('spin');
 
     await this.spinTo(round.base.grid, null);
     await this.presentOutcome(round.base, round.bet, 0, false);
@@ -711,7 +680,6 @@ export class Game {
     }
     let landedCodex = 0;
     let playedRiser = false;
-    this.bg.charge(true);
     await this.board.spin({
       grid,
       turbo: this.turbo,
@@ -739,7 +707,6 @@ export class Game {
         }
       },
     });
-    this.bg.charge(false);
   }
 
   private async presentOutcome(o: SpinOutcome, bet: number, already: number, inFeature: boolean): Promise<void> {
@@ -753,9 +720,8 @@ export class Game {
       if (celebrate) {
         this.streak++;
         this.audio.win(size, this.streak);
-        if (size >= 1 && o.lineWins.length) this.audio.signature(o.lineWins.reduce((a, w) => (w.win > a.win ? w : a)).symbol);
-        this.bg.flare(0.45 + size * 0.2);
-        this.audio.coins(6 + size * 8);
+        this.bg.flare(0.2 + size * 0.1);
+        if (size >= 1) this.audio.coins(size * 5);
       }
       else this.audio.tick();
       shown += lineSum;

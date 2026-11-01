@@ -199,7 +199,7 @@ export class TempleFx extends Container {
 
     // capstone flare: breathing, spiking when energy arrives
     const pulse = 0.5 + 0.5 * Math.sin(t * 1.7);
-    const p = 0.55 + pulse * 0.25 + this.flash + f * 0.35 + boltLight * 0.5;
+    const p = 0.3 + pulse * 0.1 + this.flash * 0.6 + f * 0.2 + boltLight * 0.25;
     this.capStreak.width = 260 + p * 340;
     this.capStreak.height = 8 + p * 6;
     this.capStreak.alpha = Math.min(1, 0.2 + p * 0.4);
@@ -217,7 +217,7 @@ export class TempleFx extends Container {
     if (this.nextComet <= 0) {
       const e = PYRAMID_EDGES[Math.floor(Math.random() * PYRAMID_EDGES.length)];
       this.spawnComet(e, red ? 1.1 : 0.6);
-      this.nextComet = red ? 0.5 + Math.random() * 0.9 : 2.5 + Math.random() * 3;
+      this.nextComet = red ? 3 + Math.random() * 3 : 9 + Math.random() * 8;
     }
     for (let i = this.comets.length - 1; i >= 0; i--) {
       const c = this.comets[i];
@@ -250,7 +250,7 @@ export class TempleFx extends Container {
     this.nextBand -= dt;
     if (this.nextBand <= 0) {
       this.spawnBand(Math.random() < 0.5 ? 0 : 1, red ? 0.9 : 0.45);
-      this.nextBand = red ? 0.6 + Math.random() * 0.8 : 1.8 + Math.random() * 2;
+      this.nextBand = red ? 3 + Math.random() * 3 : 8 + Math.random() * 6;
     }
     for (let i = this.bands.length - 1; i >= 0; i--) {
       const b = this.bands[i];
@@ -281,7 +281,7 @@ export class TempleFx extends Container {
     // night: sheet lightning glowing inside distant clouds
     this.nextSheet -= dt;
     if (this.nextSheet <= 0) {
-      this.nextSheet = red ? 1.5 + Math.random() * 2 : 6 + Math.random() * 8;
+      this.nextSheet = red ? 9 + Math.random() * 8 : 18 + Math.random() * 16;
       const x = Math.random() < 0.5 ? 150 + Math.random() * 500 : 1250 + Math.random() * 550;
       this.sheet.position.set(...sc([x, 60 + Math.random() * 200]));
       this.sheet.width = 500 + Math.random() * 400;
@@ -291,9 +291,7 @@ export class TempleFx extends Container {
       gsap
         .timeline()
         .set(this.sheet, { alpha: 0 })
-        .to(this.sheet, { alpha: red ? 0.6 : 0.35, duration: 0.05 })
-        .to(this.sheet, { alpha: 0.05, duration: 0.07 })
-        .to(this.sheet, { alpha: red ? 0.5 : 0.28, duration: 0.05 })
+        .to(this.sheet, { alpha: red ? 0.26 : 0.16, duration: 0.08 })
         .to(this.sheet, { alpha: 0, duration: 0.5 });
     }
   }

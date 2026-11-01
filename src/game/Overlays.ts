@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, Text, Texture, type TextStyleOptions } from 'pixi.js';
 import { BLOOD_METAL, GOLD, IVORY, metalTitle, textMask } from './art/logoArt';
-import { paintArrowHead, paintDrumShade, paintPlaque, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
+import { paintArrowHead, paintDrumShade, paintGoldRule, paintPlaque, paintShrineFrame, paintSoftRays } from './art/egyptFrame';
 import { Digits } from './Digits';
 import { StrainBar } from './StrainBar';
 import gsap from 'gsap';
@@ -24,7 +24,7 @@ export const WIN_TIERS = [
 
 /** Widest a tier title and an amount may be, in overlay units: they stay inside their plates. */
 const BIG_TITLE_W = 850;
-const AMOUNT_W = 720;
+const AMOUNT_W = 820;
 
 export function winTier(win: number, bet: number): number {
   let t = -1;
@@ -48,8 +48,6 @@ const body = (size: number, fill = 0xffffff): TextStyleOptions => ({
 });
 
 export interface FxHooks {
-  shockwave(): void;
-  glitch(power: number): void;
   thump(power: number): void;
 }
 
@@ -97,9 +95,7 @@ export class Overlays extends Container {
   private warmTitles(): void {
     const jobs: [string, number, string][] = [...WIN_TIERS.map((t) => [t.name, 104, t.material] as [string, number, string]), ['10 TOURS GRATUITS', 88, 'gold']];
     const art: (() => void)[] = [
-      () => this.plaqueTex(1020, 500),
       () => this.plaqueTex(1240, 290),
-      () => this.plaqueTex(960, 430),
       () => this.shrineArt(300),
       () => (this.drumShade ??= slim(paintDrumShade(1184, 234))),
       () => this.raysTex(),
@@ -187,7 +183,6 @@ export class Overlays extends Container {
   }
 
   private async close(): Promise<void> {
-    this.particles.stopFountain();
     this.particles.stopRain();
     this.audio.bigWinStop();
     this.emberOn = false;
@@ -226,18 +221,18 @@ export class Overlays extends Container {
     base.anchor.set(0.5);
     base.width = base.height = 2400;
     base.blendMode = 'add';
-    base.alpha = 0.16;
+    base.alpha = 0.07;
     const counter = new Sprite(this.raysTex());
     counter.anchor.set(0.5);
     counter.width = counter.height = 2000;
     counter.blendMode = 'add';
-    counter.alpha = 0.07;
+    counter.alpha = 0.03;
     counter.rotation = 0.08;
     const core = new Sprite(this.tex.glow);
     core.anchor.set(0.5);
     core.width = core.height = 900;
     core.blendMode = 'add';
-    core.alpha = 0.4;
+    core.alpha = 0.2;
     c.addChild(base, counter, core);
     const lighten = (col: number, k: number) => {
       const ch = (sh: number) => Math.min(255, Math.round(((col >> sh) & 255) * k + 18));
@@ -249,7 +244,6 @@ export class Overlays extends Container {
     gsap.to(c, { alpha: 1, duration: 0.3 });
     gsap.to(base, { rotation: Math.PI * 2, duration: 46, repeat: -1, ease: 'none' });
     gsap.to(counter, { rotation: 0.08 - Math.PI * 2, duration: 70, repeat: -1, ease: 'none' });
-    gsap.to(core.scale, { x: core.scale.x * 1.15, y: core.scale.y * 1.15, duration: 1.2, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.back.addChild(c);
     this.startEmbers();
     return c;
@@ -308,6 +302,7 @@ export class Overlays extends Container {
   private plaques = new Map<string, Texture>();
   private drumShade: Texture | null = null;
   private arrowTex: Texture | null = null;
+  private ruleTex: Texture | null = null;
 
   /** The winged ruby of the frame, crowning a title: it sits just above the given height. */
   private ribbon(width: number, _height: number, _color: number): Sprite {
@@ -355,94 +350,12 @@ export class Overlays extends Container {
     return s;
   }
 
-  /** Lamps along the rim of a plaque: they chase round it, and all blaze when something lands. */
-  private lampChain(w: number, h: number): { root: Container; chase: (phase: number) => void; blaze: (ms: number) => void } {
-    const root = new Container();
-    const lamps: Sprite[] = [];
-    const put = (x: number, y: number) => {
-      const s = new Sprite(this.tex.glow);
-      s.anchor.set(0.5);
-      s.width = s.height = 34;
-      s.blendMode = 'add';
-      s.tint = 0xffdc98;
-      s.position.set(x, y);
-      root.addChild(s);
-      lamps.push(s);
-    };
-    const nx = Math.round(w / 44);
-    const ny = Math.round(h / 44);
-    for (let i = 0; i < nx; i++) put(-w / 2 + ((i + 0.5) * w) / nx, -h / 2);
-    for (let i = 0; i < ny; i++) put(w / 2, -h / 2 + ((i + 0.5) * h) / ny);
-    for (let i = 0; i < nx; i++) put(w / 2 - ((i + 0.5) * w) / nx, h / 2);
-    for (let i = 0; i < ny; i++) put(-w / 2, h / 2 - ((i + 0.5) * h) / ny);
-    let until = 0;
-    return {
-      root,
-      chase: (phase) => {
-        const all = performance.now() < until;
-        lamps.forEach((l, i) => {
-          l.alpha = all || (((i - phase) % 4) + 4) % 4 < 1 ? 1 : 0.1;
-        });
-      },
-      blaze: (ms) => {
-        until = performance.now() + ms;
-      },
-    };
-  }
-
-  /** A ruby of a crown breathing with light. */
-  private rubyGlow(y: number, size: number): Sprite {
-    const s = new Sprite(this.tex.glow);
-    s.anchor.set(0.5);
-    s.y = y;
-    s.width = s.height = size;
-    s.blendMode = 'add';
-    s.tint = 0xff5a30;
-    this.content.addChild(s);
-    gsap.fromTo(s, { alpha: 0.35 }, { alpha: 0.9, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    return s;
-  }
-
-  /** Keeps a chain of lamps running on its own for as long as it is on screen. */
-  private runLamps(lamps: { root: Container; chase: (phase: number) => void }): gsap.core.Tween {
-    const run = { p: 0 };
-    const tween = gsap.to(run, {
-      p: 1200,
-      duration: 200,
-      ease: 'none',
-      onUpdate: () => {
-        if (lamps.root.destroyed) tween.kill();
-        else lamps.chase(run.p);
-      },
-    });
-    return tween;
-  }
-
-  private popIn(o: Container, delay = 0, from = 0.2): void {
+  /** Things arrive on the big screens by settling a little into place, never by slamming. */
+  private popIn(o: Container, delay = 0): void {
     const sx = o.scale.x;
     const sy = o.scale.y;
-    gsap.fromTo(o.scale, { x: sx * Math.max(from, 1.5), y: sy * Math.max(from, 1.5) }, { x: sx, y: sy, duration: 0.32, delay, ease: 'power3.in' });
-    gsap.fromTo(o, { alpha: 0 }, { alpha: 1, duration: 0.2, delay });
-  }
-
-  /** A soft bloom of gold opening from a point of the content layer. */
-  private bloom(y: number, tint: number, size = 1400): void {
-    const r = new Sprite(this.tex.glow);
-    r.anchor.set(0.5);
-    r.y = y;
-    r.blendMode = 'add';
-    r.tint = tint;
-    this.content.addChildAt(r, 0);
-    gsap.fromTo(r, { width: size * 0.3, height: size * 0.3, alpha: 0.9 }, { width: size, height: size, alpha: 0, duration: 0.9, ease: 'power2.out', onComplete: () => r.destroy() });
-  }
-
-  /** A title strikes: gold flies off it along its whole width. */
-  private titleHit(y: number, width = 900): void {
-    const k = this.content.scale.y;
-    const sy = this.content.y + y * k;
-    this.particles.sand(this.w / 2, sy, width * k, 110, 2.4);
-    this.particles.sparks(this.w / 2, sy, 26, 1.4);
-    this.bloom(y, 0xffc860, 1500);
+    gsap.fromTo(o.scale, { x: sx * 1.06, y: sy * 1.06 }, { x: sx, y: sy, duration: 0.5, delay, ease: 'power2.out' });
+    gsap.fromTo(o, { alpha: 0 }, { alpha: 1, duration: 0.4, delay });
   }
 
   /** A blade of light crossing a title, masked by its letters. */
@@ -463,7 +376,18 @@ export class Overlays extends Container {
     gsap.fromTo(blade, { x: -700 }, { x: 700, duration: 0.8, ease: 'power1.inOut', onComplete: () => { blade.destroy(); mask.destroy(); } });
   }
 
-  /** Tiered big-win celebration: each tier is a heavier blow; the amount never leaves its cartouche. */
+  /** A thread of gold across a big screen. */
+  private rule(y: number, width: number): Sprite {
+    this.ruleTex ??= Texture.from(paintGoldRule());
+    const s = new Sprite(this.ruleTex);
+    s.anchor.set(0.5);
+    s.y = y;
+    s.scale.set(width / s.texture.width, 1);
+    gsap.fromTo(s, { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.2 });
+    return s;
+  }
+
+  /** Tiered big-win screen: the title climbs from tier to tier over one amount, on the dimmed game. */
   async bigWin(win: number, bet: number, onTick?: (v: number) => void, record = false): Promise<void> {
     const top = winTier(win, bet);
     if (top < 0) return;
@@ -471,44 +395,32 @@ export class Overlays extends Container {
     const t0 = WIN_TIERS[0];
     const rays = this.sunburst(t0.ray);
     this.burstRays = rays;
-    const plaque = this.plaque(1020, 500, 40);
-    const lamps = this.lampChain(1000, 480);
-    lamps.root.y = 40;
     const crown = new Sprite(this.tex.crest);
     crown.anchor.set(0.5);
-    crown.scale.set(0.98);
-    crown.y = -216;
+    crown.scale.set(0.8);
+    crown.y = -262;
     const heading = this.head3d(t0.name, 104, t0.material, BIG_TITLE_W);
-    heading.y = -105;
+    heading.y = -142;
     const pips = this.tierPips();
-    pips.y = -22;
+    pips.y = -52;
     const amount = new Digits(118);
     amount.value = 0;
-    amount.y = 72;
+    amount.y = 70;
     const mult = new Digits(54);
-    mult.y = 178;
+    mult.y = 186;
+    mult.scale.set(0.8);
     const showMult = (v: number) => {
       mult.text = `×${Math.floor(v / bet)}`;
     };
     showMult(0);
-    const multSeal = makeSeal(this.tex.seal, 290, 84);
-    multSeal.y = 178;
-    const foot = new Sprite(this.tex.crest);
-    foot.anchor.set(0.5);
-    foot.scale.set(0.62);
-    foot.y = 292;
     const sub = new Text({ text: 'TOUCHEZ POUR PASSER', style: body(18, 0xd8b878) });
     sub.anchor.set(0.5);
-    sub.y = 378;
+    sub.y = 326;
     gsap.to(sub, { alpha: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.content.addChild(plaque, lamps.root, heading, pips, amount, multSeal, mult, crown, foot, sub);
-    const rubies = [this.rubyGlow(crown.y - 9, 150), this.rubyGlow(foot.y - 6, 96)];
-    const chaser = this.runLamps(lamps);
-    gsap.fromTo(crown, { y: crown.y - 130, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.12 });
-    gsap.fromTo(foot, { y: foot.y + 110, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.12 });
+    this.content.addChild(this.rule(244, 860), heading, pips, amount, mult, crown, sub);
+    gsap.fromTo(crown, { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.1 });
     this.popIn(heading, 0.14);
     this.popIn(amount, 0.24);
-    this.popIn(multSeal, 0.28);
     this.popIn(mult, 0.28);
     this.popIn(pips, 0.3);
     this.lightPip(pips, 0);
@@ -516,29 +428,16 @@ export class Overlays extends Container {
     gsap.delayedCall(0.42, () => {
       if (!this.visible || heading.destroyed) return;
       this.audio.tierUp(0);
-      this.fx.thump(0.35);
-      this.titleHit(-105);
       this.titleSweep(heading);
-      this.titleSweep(plaque, this.content, 640);
-      lamps.blaze(500);
     });
-    this.particles.startFountain(this.w * 0.14, this.h * 0.86, 16);
-    this.particles.startFountain2(this.w * 0.86, this.h * 0.86, 16);
-    this.particles.startRain([this.tex.coin], this.w, 12);
+    this.particles.startRain([this.tex.coin], this.w, 3);
 
     const duration = 2.1 * (top + 1);
     this.audio.timpaniRoll(duration);
     const counter = { v: 0 };
     let tier = 0;
     let lastTick = 0;
-    let punching = false;
-    const fitted = () => Math.min(1, AMOUNT_W / Math.max(1, amount.inkWidth));
-    /** the amount jumps with each new tier, then settles back into its plate */
-    const punch = () => {
-      punching = true;
-      const k = fitted();
-      gsap.fromTo(amount.scale, { x: k * 1.22, y: k * 1.22 }, { x: k, y: k, duration: 0.3, ease: 'power2.out', onComplete: () => void (punching = false) });
-    };
+    const fitted = () => Math.min(1.15, AMOUNT_W / Math.max(1, amount.inkWidth));
     const tween = gsap.to(counter, {
       v: win,
       duration,
@@ -546,7 +445,7 @@ export class Overlays extends Container {
       onUpdate: () => {
         if (amount.destroyed) return;
         amount.value = counter.v;
-        if (!punching) amount.scale.set(fitted());
+        amount.scale.set(fitted());
         showMult(counter.v);
         onTick?.(counter.v);
         const now = performance.now();
@@ -559,11 +458,6 @@ export class Overlays extends Container {
           tier = t;
           this.upgrade(heading, tier);
           this.lightPip(pips, tier);
-          punch();
-          lamps.blaze(600);
-          for (const r of rubies) gsap.fromTo(r.scale, { x: r.scale.x * 2.2, y: r.scale.y * 2.2 }, { x: r.scale.x, y: r.scale.y, duration: 0.5, ease: 'power2.out' });
-          chaser.timeScale(1 + tier * 0.8);
-          this.titleSweep(plaque, this.content, 640);
         }
       },
     });
@@ -575,20 +469,9 @@ export class Overlays extends Container {
       for (let i = tier + 1; i <= top; i++) this.lightPip(pips, i);
       showMult(win);
     }
-    const k = fitted();
-    gsap.fromTo(amount.scale, { x: k * 1.3, y: k * 1.3 }, { x: k, y: k, duration: 0.3, ease: 'power3.in' });
-    gsap.delayedCall(0.3, () => {
-      if (!this.visible || heading.destroyed) return;
-      this.bloom(72, 0xfff0c0, 1700);
-      this.fx.thump(0.5);
-      this.titleSweep(heading);
-      this.titleSweep(plaque, this.content, 640);
-      lamps.blaze(1400);
-      this.titleHit(72, 760);
-      this.particles.coins(this.w / 2, this.h * 0.62, 26 + top * 12, 1.25);
-    });
+    this.titleSweep(heading);
     this.audio.bigWinEnd(top);
-    if (record) this.recordStamp(336, 178);
+    if (record) this.recordStamp(0, 286);
     await this.waitOrSkip(2400);
     await this.close();
   }
@@ -598,9 +481,8 @@ export class Overlays extends Container {
     const c = new Container();
     const t = new Text({ text: 'NOUVEAU RECORD', style: body(22, 0xffe9b0) });
     t.anchor.set(0.5);
-    c.addChild(makeSeal(this.tex.seal, t.width + 70, 66), t);
+    c.addChild(t);
     c.position.set(x, y);
-    c.rotation = -0.07;
     c.alpha = 0;
     this.content.addChild(c);
     gsap.delayedCall(0.55, () => {
@@ -609,7 +491,6 @@ export class Overlays extends Container {
       gsap.delayedCall(0.3, () => {
         if (c.destroyed) return;
         this.audio.record();
-        this.titleHit(y, 340);
       });
     });
   }
@@ -640,7 +521,6 @@ export class Overlays extends Container {
     const pip = row.children[tier] as Container;
     const [halo, , on] = pip.children;
     on.alpha = 1;
-    gsap.fromTo(pip.scale, { x: 2, y: 2 }, { x: 1, y: 1, duration: 0.35, ease: 'power3.in' });
     gsap.fromTo(halo, { alpha: 1 }, { alpha: 0.5, duration: 0.5 });
   }
 
@@ -650,17 +530,11 @@ export class Overlays extends Container {
     heading.texture = tex.texture;
     const k = tex.scale.x;
     gsap.killTweensOf(heading.scale);
-    gsap.fromTo(heading.scale, { x: k * 1.7, y: k * 1.7 }, { x: k, y: k, duration: 0.24, ease: 'power3.in' });
+    gsap.fromTo(heading.scale, { x: k * 1.06, y: k * 1.06 }, { x: k, y: k, duration: 0.4, ease: 'power2.out' });
     if (this.burstRays) this.retint(this.burstRays, t.ray);
     this.audio.tierUp(tier);
-    gsap.delayedCall(0.22, () => {
-      if (!this.visible || heading.destroyed) return;
-      this.fx.thump(0.3 + tier * 0.1);
-      this.titleHit(-105, 900 + tier * 60);
-      this.titleSweep(heading);
-    });
-    this.particles.setRainRate(12 + tier * 10);
-    this.particles.setFountainRate(16 + tier * 9);
+    this.titleSweep(heading);
+    this.particles.setRainRate(3 + tier * 2);
   }
 
   /**
@@ -722,7 +596,6 @@ export class Overlays extends Container {
     foot.anchor.set(0.5);
     foot.scale.set(0.42);
     foot.y = WINDOW / 2 + 26;
-    const lamps = this.lampChain(PW - 22, PH - 22);
     this.arrowTex ??= Texture.from(paintArrowHead());
     const arrowL = new Sprite(this.arrowTex);
     const arrowR = new Sprite(this.arrowTex);
@@ -749,13 +622,13 @@ export class Overlays extends Container {
     flash.anchor.set(0.5);
     flash.blendMode = 'add';
     flash.alpha = 0;
-    box.addChild(aura, rays, shaft, plaque, frame, well, strip, shade, rim, lamps.root, crown, foot, arrowL, arrowR, flash);
+    box.addChild(aura, rays, shaft, plaque, frame, well, strip, shade, rim, crown, foot, arrowL, arrowR, flash);
     this.content.addChild(box);
     gsap.fromTo(box, { alpha: 0 }, { alpha: 1, duration: 0.3 });
     gsap.fromTo(crown, { y: crown.y - 100, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.1 });
     gsap.fromTo(foot, { y: foot.y + 100, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.1 });
-    this.popIn(frame, 0, 0.4);
-    this.popIn(rim, 0, 0.4);
+    this.popIn(frame);
+    this.popIn(rim);
 
     const state = { off: 0 };
     let lastIdx = 0;
@@ -775,7 +648,6 @@ export class Overlays extends Container {
         const v = Math.round(96 + 159 * Math.pow(depth, 4));
         sp.tint = (v << 16) | (v << 8) | v;
       }
-      lamps.chase((state.off / spacing) * 2);
       // the window warms as the wheel runs out of speed
       well.alpha = Math.max(0, 1 - (end - state.off) / (spacing * 3)) * 0.42;
       const idx = Math.round(state.off / spacing);
@@ -783,7 +655,6 @@ export class Overlays extends Container {
         lastIdx = idx;
         bar.focus(pool[(((startIndex + idx) % pool.length) + pool.length) % pool.length]);
         this.audio.drumTick(state.off / end);
-        gsap.fromTo([frame.scale, rim.scale], { x: 0.512, y: 0.512 }, { x: 0.5, y: 0.5, duration: 0.12 });
         gsap.fromTo(arrowL, { x: -(WINDOW / 2 + 16), alpha: 1 }, { x: -(WINDOW / 2 + 28), alpha: 0.7, duration: 0.16 });
         gsap.fromTo(arrowR, { x: WINDOW / 2 + 16, alpha: 1 }, { x: WINDOW / 2 + 28, alpha: 0.7, duration: 0.16 });
       }
@@ -812,27 +683,18 @@ export class Overlays extends Container {
     for (const sp of items) if (sp !== chosen) gsap.to(sp, { alpha: 0, duration: 0.3 });
     this.audio.impact(0.9);
     this.audio.strainLock();
-    this.fx.shockwave();
-    this.fx.thump(0.45);
-    lamps.blaze(1500);
-    lamps.chase(0);
-    const chaser = this.runLamps(lamps);
-    chaser.timeScale(0.5);
-    gsap.fromTo(flash, { alpha: 1, width: 240, height: 240 }, { alpha: 0, width: 1300, height: 1300, duration: 0.65, ease: 'power2.out' });
-    gsap.fromTo(shaft, { alpha: 1 }, { alpha: 0.3, duration: 0.9, ease: 'power2.out' });
+    this.fx.thump(0.3);
+    gsap.fromTo(flash, { alpha: 0.5, width: 240, height: 240 }, { alpha: 0, width: 700, height: 700, duration: 0.65, ease: 'power2.out' });
     const size = chosen.width;
-    gsap.fromTo(chosen, { width: size * 1.45, height: size * 1.45 }, { width: 262, height: 262, duration: 0.32, ease: 'power3.in' });
-    gsap.fromTo([frame.scale, rim.scale], { x: 0.6, y: 0.6 }, { x: 0.5, y: 0.5, duration: 0.32, ease: 'power3.in' });
-    gsap.to(rays, { alpha: 0.55, duration: 0.3 });
+    gsap.fromTo(chosen, { width: size, height: size }, { width: 262, height: 262, duration: 0.4, ease: 'power2.out' });
+    gsap.to(rays, { alpha: 0.14, duration: 0.5 });
     gsap.killTweensOf(aura, 'alpha');
-    gsap.to(aura, { alpha: 0.7, duration: 0.2 });
-    gsap.to(well, { alpha: 0.5, duration: 0.2 });
+    gsap.to(aura, { alpha: 0.3, duration: 0.4 });
+    gsap.to(well, { alpha: 0.3, duration: 0.3 });
     gsap.delayedCall(0.34, () => {
       if (chosen.destroyed) return;
       this.titleSweep(chosen, box);
-      this.titleSweep(plaque, box, 500);
     });
-    gsap.to(chosen, { y: -6, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.4 });
     // the emptied wings of the plaque say what the strain will do
     for (const [text, side] of [['ENVAHIT\nTOUT LE ROULEAU', -1], ['PAIE SUR\nLES 10 LIGNES', 1]] as const) {
       const t = new Text({ text, style: { ...body(30, 0xffe2ac), lineHeight: 46 } });
@@ -841,10 +703,6 @@ export class Overlays extends Container {
       box.addChild(t);
       gsap.fromTo(t, { x: side * 330, alpha: 0 }, { x: side * 400, alpha: 1, duration: 0.45, ease: 'power3.out', delay: 0.3 });
     }
-    const sc = this.content.scale.y;
-    const sy = this.content.y + y * sc;
-    this.particles.sand(this.w / 2, sy, 1100 * sc, 110, 2.2);
-    this.particles.sparks(this.w / 2, sy, 24, 1.3);
   }
 
   /** The row of all the strains under the drum: the light of the wheel passes over them. */
@@ -1017,54 +875,32 @@ export class Overlays extends Container {
             tch.s.width = tch.s.height = 140 * k;
             tch.s.alpha = Math.min(1, (8 - tch.z) * 0.4) * (0.8 + Math.random() * 0.2);
           }
-          core.width = core.height = 160 + Math.pow(st.t, 3) * 3000;
-          core.alpha = 0.45 + st.t * 0.55;
-          core.tint = st.t > 0.85 ? 0xffd0b0 : 0xff3a1a;
-          layer.y = Math.sin(st.t * 40) * 3 * st.t;
+          core.width = core.height = 160 + Math.pow(st.t, 3) * 1500;
+          core.alpha = (0.4 + st.t * 0.3) * Math.min(1, (1 - st.t) * 8);
+          layer.alpha = Math.min(1, (1 - st.t) * 6);
         },
         onComplete: resolve,
       });
     });
-    this.fx.thump(0.8);
-    this.audio.impact(1.3);
-    // the wall of sand that follows us out of the corridor
-    this.particles.storm(this.w, this.h, 46);
+    this.audio.impact(0.8);
     layer.destroy({ children: true });
   }
 
   async featureIntro(special: Sym, spins: number, fromCorridor = false): Promise<void> {
     if (!fromCorridor) this.open();
     else {
-      // we arrive inside: the white-red flash fades to the chamber
+      // out of the dark, into the chamber
       this.content.alpha = 1;
-      this.dim.tint = 0xffffff;
-      gsap.fromTo(this.dim, { alpha: 1 }, { alpha: 0.86, duration: 0.6 });
+      gsap.fromTo(this.dim, { alpha: 1 }, { alpha: 0.86, duration: 0.9 });
     }
     this.audio.featureStart();
-    this.fx.glitch(3);
     this.sunburst(0x46060c);
     const head = this.head3d(`${spins} TOURS GRATUITS`, 88, 'gold', 1000);
     head.y = -312;
     this.content.addChild(head);
     // a player may skip this screen at any moment: nothing delayed may touch what is gone
-    head.alpha = 0;
-    gsap.delayedCall(0.3, () => {
-      if (head.destroyed) return;
-      head.alpha = 1;
-      const k = head.scale.x;
-      gsap.fromTo(head.scale, { x: k * 2.6, y: k * 2.6 }, {
-        x: k,
-        y: k,
-        duration: 0.32,
-        ease: 'power3.in',
-        onComplete: () => {
-          if (head.destroyed) return;
-          this.fx.shockwave();
-          this.titleHit(head.y, 1000);
-          this.titleSweep(head);
-        },
-      });
-    });
+    this.popIn(head, 0.3);
+    gsap.delayedCall(0.8, () => !head.destroyed && this.titleSweep(head));
     await this.waitOrSkip(1050);
     const seal = makeSeal(this.tex.seal, 840, 96);
     seal.y = 206;
@@ -1084,11 +920,7 @@ export class Overlays extends Container {
     strain.y = 206;
     this.content.addChild(strain);
     this.popIn(strain);
-    gsap.delayedCall(0.3, () => {
-      if (strain.destroyed) return;
-      this.titleHit(strain.y, 640);
-      this.titleSweep(strain);
-    });
+    gsap.delayedCall(0.3, () => !strain.destroyed && this.titleSweep(strain));
     const go = new Text({ text: 'TOUCHEZ POUR COMMENCER', style: body(24, 0xffd27a) });
     go.anchor.set(0.5);
     go.y = 384;
@@ -1102,7 +934,6 @@ export class Overlays extends Container {
   async retrigger(spins: number, mutation: Sym | null, active: Sym[]): Promise<void> {
     this.open();
     this.audio.stinger(1);
-    this.fx.glitch(2);
     this.sunburst(0x3e1806);
     const ribbon = this.ribbon(1120, 150, 0x8a0f26);
     ribbon.y = -20;
@@ -1112,7 +943,6 @@ export class Overlays extends Container {
     this.content.addChild(ribbon, head);
     this.popIn(ribbon);
     this.popIn(head, 0.05);
-    this.particles.impact(this.w / 2, this.h / 2, 1.4);
     if (mutation !== null) {
       const seal = makeSeal(this.tex.seal, 840, 96);
       seal.y = 206;
@@ -1139,38 +969,24 @@ export class Overlays extends Container {
     this.open();
     this.audio.stinger(1);
     this.sunburst(0x3a2408);
-    const plaque = this.plaque(960, 430, 0);
-    const lamps = this.lampChain(940, 410);
     const crown = new Sprite(this.tex.crest);
     crown.anchor.set(0.5);
-    crown.scale.set(0.9);
-    crown.y = -214;
+    crown.scale.set(0.8);
+    crown.y = -256;
     const head = this.head3d('INFECTION TERMINÉE', 74, 'gold', 760);
-    head.y = -98;
+    head.y = -138;
     const amount = new Digits(114);
     amount.value = 0;
-    amount.y = 34;
+    amount.y = 30;
     const sub = new Text({ text: `${spins} tours · ×${Math.floor(total / bet)} la mise${bestSpin > 0 ? ` · meilleur tour ${fmt(bestSpin)}` : ''}`, style: body(22, 0xffe2ac) });
     sub.anchor.set(0.5);
-    sub.y = 142;
-    const seal = makeSeal(this.tex.seal, Math.max(620, sub.width + 90), 78);
-    seal.y = 142;
-    const foot = new Sprite(this.tex.crest);
-    foot.anchor.set(0.5);
-    foot.scale.set(0.56);
-    foot.y = 228;
-    this.content.addChild(plaque, lamps.root, head, amount, seal, sub, crown, foot);
-    this.runLamps(lamps);
-    gsap.fromTo(crown, { y: crown.y - 120, alpha: 0 }, { y: crown.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.1 });
-    gsap.fromTo(foot, { y: foot.y + 100, alpha: 0 }, { y: foot.y, alpha: 1, duration: 0.42, ease: 'power3.out', delay: 0.1 });
+    sub.y = 164;
+    this.content.addChild(this.rule(-62, 860), this.rule(112, 860), head, amount, sub, crown);
+    gsap.fromTo(crown, { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.1 });
     this.popIn(head, 0.12);
     this.popIn(amount, 0.2);
-    this.popIn(seal, 0.26);
     this.popIn(sub, 0.26);
-    if (total > 0) {
-      this.particles.startFountain(this.w / 2, this.h * 0.7, 30);
-      this.audio.coins(20);
-    }
+    if (total > 0) this.particles.startRain([this.tex.coin], this.w, 3);
     const counter = { v: 0 };
     const tween = gsap.to(counter, {
       v: total,
@@ -1179,16 +995,15 @@ export class Overlays extends Container {
       onUpdate: () => {
         if (amount.destroyed) return;
         amount.value = counter.v;
-        amount.scale.set(Math.min(1, AMOUNT_W / Math.max(1, amount.inkWidth)));
+        amount.scale.set(Math.min(1.15, AMOUNT_W / Math.max(1, amount.inkWidth)));
         onTick?.(counter.v);
       },
     });
     await Promise.race([new Promise<void>((r) => tween.eventCallback('onComplete', () => r())), this.waitOrSkip(5000)]);
     tween.progress(1);
     this.audio.bigWinEnd(1);
-    lamps.blaze(1200);
-    this.titleSweep(plaque, this.content, 640);
-    if (record) this.recordStamp(0, 322);
+    this.titleSweep(head);
+    if (record) this.recordStamp(0, 236);
     await this.waitOrSkip(2600);
     await this.close();
   }

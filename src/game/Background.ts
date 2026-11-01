@@ -229,8 +229,6 @@ export class Background extends Container {
   private t = 0;
   private feature = 0;
   private nextStrike = 9;
-  /** 0 at rest, 1 while the reels turn: the temple feels them */
-  private energy = 0;
   templeFx: TempleFx | null = null;
   /**
    * Blot growing from the capstone: the infection spreading over the night scene. It is drawn, not
@@ -281,6 +279,8 @@ export class Background extends Container {
         s.scale.set(artScale);
         s.alpha = 0;
       }
+      // deep rather than loud: the red must not fight the reels
+      this.infected.tint = 0xb4a8a8;
       this.infectedPulse.blendMode = 'add';
       this.reveal = new Graphics().poly(blotOutline()).fill(0xffffff);
       this.reveal.position.set(APEX[0] - W / 2, APEX[1] - H / 2);
@@ -443,7 +443,7 @@ export class Background extends Container {
       this.grainLayer.addChild(s);
       this.grains.push({ s, v: 240 + Math.random() * 420, y: Math.random(), phase: Math.random() * 10 });
     }
-    for (let i = 0; i < 50; i++) this.spores.push(this.spawn(true));
+    for (let i = 0; i < 22; i++) this.spores.push(this.spawn(true));
   }
 
   private spawn(initial: boolean): Spore {
@@ -531,12 +531,6 @@ export class Background extends Container {
     }
   }
 
-  /** The reels are turning: the rays run faster, the capstone and the obelisks burn brighter. */
-  charge(on: boolean): void {
-    gsap.to(this, { energy: on ? 1 : 0, duration: on ? 0.25 : 0.7, ease: 'sine.out', overwrite: 'auto' });
-    if (on) for (const fire of this.fires) fire.roar(0.3);
-  }
-
   /** A lightning strike; without a target it hits the pyramid somewhere along its slopes. */
   strike(power = 1, target?: Pt): void {
     const [ax, ay] = APEX;
@@ -620,7 +614,7 @@ export class Background extends Container {
     // the sky answers, softly
     this.pulse.clear().rect(0, 0, this.w, this.h).fill({ color: infected ? 0xff9080 : 0xa0b4ff });
     this.pulse.blendMode = 'add';
-    gsap.fromTo(this.pulse, { alpha: 0.13 * power }, { alpha: 0, duration: 0.55, ease: 'power3.out' });
+    gsap.fromTo(this.pulse, { alpha: 0.05 * power }, { alpha: 0, duration: 0.55, ease: 'power3.out' });
     this.flare(0.5 * power);
     if (power < 0.5) this.onLightning?.(power);
   }
@@ -641,7 +635,7 @@ export class Background extends Container {
     this.flare(strength * 2);
     this.pulse.clear().rect(0, 0, this.w, this.h).fill({ color: COLORS.infection });
     this.pulse.blendMode = 'add';
-    gsap.fromTo(this.pulse, { alpha: strength * 0.35 }, { alpha: 0, duration: 0.5, ease: 'power2.out' });
+    gsap.fromTo(this.pulse, { alpha: strength * 0.1 }, { alpha: 0, duration: 0.5, ease: 'power2.out' });
   }
 
   setRays(on: boolean): void {
@@ -653,11 +647,10 @@ export class Background extends Container {
     this.t += dt;
     const f = this.feature;
     const beat = Math.pow(Math.max(0, Math.sin(this.t * (2.6 + f * 1.6))), 12);
-    const e = this.energy;
-    this.rayLayer.rotation += dt * 0.012 * (1 + e * 9);
-    this.rayLayer.alpha = Math.min(0.3, 0.09 + f * 0.04 + e * 0.1 + this.flareV * 0.08 + this.boltLight * 0.08);
+    this.rayLayer.rotation += dt * 0.008;
+    this.rayLayer.alpha = Math.min(0.1, 0.04 + f * 0.02 + this.flareV * 0.03 + this.boltLight * 0.03);
     this.rayLayer.tint = f > 0.5 ? 0xff5040 : 0xffd8a0;
-    this.dunes.tint = lerpTint(0xffffff, 0xff7a6a, f);
+    this.dunes.tint = lerpTint(0xffffff, 0xb25a50, f);
     this.blown.tilePosition.x += dt * (150 + f * 170);
     this.blown.tilePosition.y += dt * 8;
     this.blown.tint = f > 0.5 ? 0xff5a40 : 0xd8a868;
@@ -677,14 +670,14 @@ export class Background extends Container {
         g.y = Math.random();
       }
       g.s.y = sandTop + g.y * 190 * this.duneScale + Math.sin(this.t * 2 + g.phase) * 7;
-      g.s.alpha = (0.2 + gust * 0.5 + f * 0.2) * this.dunes.alpha;
+      g.s.alpha = (0.08 + gust * 0.26) * this.dunes.alpha;
       g.s.tint = f > 0.5 ? 0xff7a50 : 0xffd8a0;
     }
     this.fog.tilePosition.x += dt * 12;
     this.fog.tilePosition.y += dt * 3;
     this.fog.tint = f > 0.5 ? 0xa02030 : 0x6a5070;
     this.fog.alpha = 0.07 + f * 0.05;
-    this.redWash.alpha = f * (0.1 + beat * 0.1);
+    this.redWash.alpha = f * 0.05;
     if (this.infected && this.infectedPulse) {
       const r = this.spread.r;
       this.infected.alpha = Math.min(1, f * 3);
@@ -705,21 +698,21 @@ export class Background extends Container {
         this.revealFront.width = this.revealFront.height = (radius * 2 * 0.8) / 0.36;
         this.revealFront.alpha = Math.min(1, Math.sin(Math.PI * r) * 4);
       }
-      this.infectedPulse.alpha = f * (beat * 0.1 + this.boltLight * 0.3 + this.flareV * 0.2);
+      this.infectedPulse.alpha = f * (beat * 0.03 + this.boltLight * 0.14 + this.flareV * 0.06);
     }
     this.flareV *= Math.pow(0.25, dt);
     this.lampGlows.forEach((g, i) => {
       const flick = 0.75 + 0.25 * Math.sin(this.t * (11 + i * 2.3)) * Math.sin(this.t * (4.7 + i));
-      g.alpha = Math.min(1, 0.6 * flick + this.flareV * 0.5);
+      g.alpha = Math.min(0.7, 0.34 * flick + this.flareV * 0.25);
       g.tint = f > 0.5 ? 0xff3a2a : 0xff8a2a;
       g.scale.y = g.scale.x * (1 + 0.1 * Math.sin(this.t * 9 + i));
     });
     this.tips.forEach((g, i) => {
-      g.alpha = 0.3 + 0.12 * Math.sin(this.t * 1.3 + i * 2) + e * 0.3 + this.flareV * 0.6 + this.boltLight * 0.5;
+      g.alpha = 0.12 + 0.05 * Math.sin(this.t * 1.3 + i * 2) + this.flareV * 0.2 + this.boltLight * 0.3;
       g.tint = f > 0.5 ? 0xff3030 : 0xffc870;
     });
     if (this.heart) {
-      this.heart.alpha = Math.min(1, 0.14 + e * 0.4 + beat * 0.3 * f + f * 0.3 + this.flareV + this.boltLight);
+      this.heart.alpha = Math.min(0.7, 0.08 + beat * 0.1 * f + f * 0.14 + this.flareV * 0.3 + this.boltLight * 0.4);
       this.heart.tint = f > 0.5 ? COLORS.infection : 0xffd890;
       this.heart.scale.set(((300 + f * 260) / this.heart.texture.width) * (1 + this.flareV * 0.6 + beat * 0.15 * f));
     }
@@ -744,7 +737,7 @@ export class Background extends Container {
     }
     if (this.moonHalo) {
       this.moonHalo.tint = f > 0.5 ? 0xff3020 : 0xffe8c0;
-      this.moonHalo.alpha = 0.35 + 0.1 * Math.sin(this.t * 0.7) + f * 0.25;
+      this.moonHalo.alpha = 0.16 + 0.03 * Math.sin(this.t * 0.7) + f * 0.08;
       this.moonHalo.scale.set((MOON[2] * 5.8) / 256);
     }
     // ibises pass in front of the moon, wings beating and gliding
@@ -794,8 +787,8 @@ export class Background extends Container {
     this.nextStrike -= dt;
     if (this.nextStrike <= 0 && this.infected) {
       if (f > 0.5) {
-        this.strike(0.6 + Math.random() * 0.3);
-        this.nextStrike = 8 + Math.random() * 6;
+        this.strike(0.5 + Math.random() * 0.2);
+        this.nextStrike = 20 + Math.random() * 14;
       } else {
         const x = Math.random() < 0.5 ? 200 + Math.random() * 300 : 1420 + Math.random() * 300;
         this.strike(0.3, [x, HORIZON - 60]);
@@ -807,7 +800,7 @@ export class Background extends Container {
       const p = this.spores[i];
       p.s.x += (p.vx + Math.sin(this.t + p.phase) * 8) * dt * speed;
       p.s.y += p.vy * dt * speed;
-      p.s.alpha = 0.3 + 0.4 * Math.abs(Math.sin(this.t * 1.7 + p.phase));
+      p.s.alpha = 0.12 + 0.2 * Math.abs(Math.sin(this.t * 1.7 + p.phase));
       if (p.s.y < -30 || p.s.x < -30 || p.s.x > this.w + 30) {
         p.s.destroy();
         this.spores[i] = this.spawn(false);

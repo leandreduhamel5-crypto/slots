@@ -201,10 +201,12 @@ function finishPremium(src: HTMLCanvasElement, aura: string): HTMLCanvasElement 
 
 function motionBlur(src: HTMLCanvasElement): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(src.width, src.height);
-  const steps = 9;
+  // each layer weighs 1/n of what is already there: the result is a true average, with no visible copies
+  const steps = LITE ? 24 : 44;
+  const span = 120 * TEX_UNIT;
   for (let i = 0; i < steps; i++) {
-    ctx.globalAlpha = 0.22;
-    ctx.drawImage(src, 0, (i - steps / 2) * 8 * TEX_UNIT);
+    ctx.globalAlpha = 1 / (i + 1);
+    ctx.drawImage(src, 0, (i / (steps - 1) - 0.5) * span);
   }
   ctx.globalAlpha = 1;
   return c;

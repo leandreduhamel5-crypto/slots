@@ -1,13 +1,12 @@
-import { Sym } from '../math/config';
 import { LITE } from './device';
 /**
- * Procedural sound design with the Web Audio API: no audio files, everything is synthesised.
+ * Procedural sound design with the Web Audio API: no audio files. The strings are physical models
+ * (Karplus-Strong), so what rewards the player is a plucked string, not an oscillator.
  *
  * Mix: sfx / ui / music buses → glue compressor → limiter, with a shared stone-hall reverb
  * (generated impulse response) and a dark echo for the plucked and blown instruments.
- * The temple's instruments: ney flute, mizmar reed, frame drum, sistrum, finger cymbals, gong,
- * low voices; no strings. Music walks on the E Hijaz scale over a desert drone, then drives in maqsum during the
- * free spins; big wins run their own 132 bpm loop that climbs with each tier.
+ * The temple's instruments: qanun and oud, ney flute, frame drum, finger cymbals, gong. Music walks
+ * on the E Hijaz scale over a desert drone and keeps out of the way; big wins run their own loop.
  */
 
 type Pan = number;
@@ -24,8 +23,6 @@ const PROGRESSION = [
   [40, 56, 59, 64],
   [38, 57, 62, 65],
 ];
-/** Baladi, the street rhythm of Cairo, over 8 eighths: D D . T D . T . */
-const BALADI = ['D', 'D', '', 'T', 'D', '', 'T', ''];
 /** Saidi, the horse-dance of Upper Egypt: D T . D D . T . */
 const SAIDI = ['D', 'T', '', 'D', 'D', '', 'T', ''];
 type Note = [step: number, midi: number, len: number];
@@ -56,10 +53,10 @@ const MIZMAR_THEME = score(16, [
 ]);
 /** the walking bass under the bonus: root, fifth, octave */
 const BASS_WALK = [0, 0, 0, 7, 12, 0, 7, 1];
-/** the formants keep only a sliver of the reed's energy: this gives it back */
-const REED_MAKEUP = 1.6;
 const SPIN_LEVEL = 0.07;
 const MUSIC_LEVEL = 0.5;
+/** a string carries more than the bowls it replaced, for the same nominal volume */
+const STRING_LEVEL = 1.7;
 /** a phone's little speaker needs a little more */
 const MASTER_LEVEL = LITE ? 1.2 : 0.9;
 
@@ -344,68 +341,79 @@ export class Audio {
 
   /* ================================================================ instruments */
 
-  /**
-   * Mizmar, the double-reed oboe of Egyptian processions: a nasal buzz through vocal-like
-   * formants, a scoop into the note and a wide vibrato. This is the sound that says Egypt.
-   */
   private doorSide = 1;
 
-  private reed(at: number, note: number, len: number, vol: number, pan: Pan = 0, dest: AudioNode = this.sfx, echo = 0.2): void {
+  private strings = new Map<number, { buffer: AudioBuffer; rate: number }>();
+
+  /**
+   * One string, computed once per note: a burst of noise softened by the finger, running round a
+   * delay line that loses its highs on every pass. The result is tuned by playback rate.
+   */
+  private string(note: number): { buffer: AudioBuffer; rate: number } {
+    let s = this.strings.get(note);
+    if (s) return s;
     const ctx = this.ctx!;
+    const sr = ctx.sampleRate;
     const f = midi(note);
-    // the two reeds of the pipe never quite agree: that beating is its bite
-    const pipes = [-7, 7].map((detune) => {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.detune.value = detune;
-      o.frequency.setValueAtTime(f * 0.94, at);
-      o.frequency.exponentialRampToValueAtTime(f, at + 0.05);
-      return o;
-    });
-    const vib = ctx.createOscillator();
-    vib.frequency.value = 5.6 + Math.random() * 1;
-    const vg = ctx.createGain();
-    vg.gain.setValueAtTime(0, at);
-    vg.gain.linearRampToValueAtTime(f * 0.016, at + Math.min(0.2, len * 0.7));
-    vib.connect(vg);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, at);
-    g.gain.exponentialRampToValueAtTime(vol, at + 0.025);
-    g.gain.setValueAtTime(vol * 0.85, at + len * 0.75);
-    g.gain.exponentialRampToValueAtTime(0.0001, at + len + 0.06);
-    const sum = ctx.createGain();
-    sum.gain.value = 0.7;
-    for (const o of pipes) {
-      vg.connect(o.frequency);
-      o.connect(sum);
+    const N = Math.max(2, Math.round(sr / f + 0.38));
+    const line = new Float32Array(N);
+    let lp = 0;
+    for (let i = 0; i < N; i++) {
+      lp = lp * 0.5 + (Math.random() * 2 - 1) * 0.5;
+      line[i] = lp;
     }
-    for (const [ff, q, k] of [[820, 5, 1], [1500, 6, 0.6], [2900, 7, 0.12]]) {
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = ff;
-      bp.Q.value = q;
-      const bg = ctx.createGain();
-      bg.gain.value = k * REED_MAKEUP;
-      sum.connect(bp).connect(bg).connect(g);
+    // plucked a seventh of the way along the string: that notch is what makes it sound like a string
+    const comb = Math.max(1, Math.round(N / 7));
+    const shaped = line.map((v, i) => v - line[(i + N - comb) % N] * 0.9);
+    const seconds = LITE ? 1.2 : 1.9;
+    const buffer = ctx.createBuffer(1, Math.floor(sr * seconds), sr);
+    const d = buffer.getChannelData(0);
+    // low strings ring longer than high ones
+    const loss = Math.pow(0.001, 1 / (f * Math.min(2.6, 1.5 * Math.pow(330 / f, 0.5))));
+    let peak = 0;
+    let i = 0;
+    for (let n = 0; n < d.length; n++) {
+      const a = shaped[i];
+      const b = shaped[(i + 1) % N];
+      const v = a * 0.62 + b * 0.38;
+      d[n] = a;
+      shaped[i] = v * loss;
+      i = (i + 1) % N;
+      peak = Math.max(peak, Math.abs(a));
     }
-    g.connect(this.pan(pan, dest));
-    if (echo) {
-      const e = ctx.createGain();
-      e.gain.value = echo;
-      g.connect(e).connect(this.echoIn);
-    }
-    for (const n of [...pipes, vib]) {
-      n.start(at);
-      n.stop(at + len + 0.1);
-    }
+    for (let n = 0; n < d.length; n++) d[n] /= peak;
+    s = { buffer, rate: f / (sr / (N - 0.38)) };
+    this.strings.set(note, s);
+    return s;
   }
 
-  /** A soft mallet on a tuned bronze bowl: round, warm and short. Every reward in the game is made of it. */
+  /** A string of the qanun. Every reward in the game is made of it. */
   private mallet(at: number, note: number, vol: number, pan: Pan = 0, ring = 1, dest: AudioNode = this.sfx): void {
-    const f = midi(note);
-    this.voice({ at, f, vol, r: 0.42 * ring, a: 0.003, pan, dest, echo: 0.12 });
-    this.voice({ at, f: f * 2, vol: vol * 0.22, r: 0.2 * ring, a: 0.002, pan, dest });
-    this.voice({ at, f: f * 3.98, vol: vol * 0.07, r: 0.06, a: 0.001, pan, dest });
+    const ctx = this.ctx!;
+    const { buffer, rate } = this.string(note);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.playbackRate.value = rate;
+    const len = 0.45 + ring * 0.55;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol * STRING_LEVEL, at);
+    g.gain.setValueAtTime(vol * STRING_LEVEL, at + len * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    // the wooden box of the instrument
+    const body = ctx.createBiquadFilter();
+    body.type = 'peaking';
+    body.frequency.value = 420;
+    body.Q.value = 0.8;
+    body.gain.value = 4;
+    const top = ctx.createBiquadFilter();
+    top.type = 'lowpass';
+    top.frequency.value = 5200;
+    src.connect(body).connect(top).connect(g).connect(this.pan(pan, dest));
+    const e = ctx.createGain();
+    e.gain.value = 0.1;
+    g.connect(e).connect(this.echoIn);
+    src.start(at);
+    src.stop(at + len + 0.05);
   }
 
   /** A chord of bowls rolled from the bottom up, on a soft drum. */
@@ -432,13 +440,6 @@ export class Audio {
     ];
     for (const [r, g, a, d] of parts) this.voice({ at, f: f * r, vol: vol * g, a, r: len * d, pan, echo: 0.15, detune: (Math.random() - 0.5) * 6 });
     this.hiss({ at, dur: 0.05, type: 'lowpass', f0: 900, vol: vol * 0.8, a: 0.001, pan });
-  }
-
-  /** Metallic inharmonic bell. */
-  private bell(at: number, f: number, vol: number, pan: Pan = 0): void {
-    [1, 2.76, 5.4, 8.93].forEach((r, k) =>
-      f * r < 12000 && this.voice({ at, f: f * r, vol: vol / (k + 1.2), r: 1.8 - k * 0.35, a: 0.002, pan, echo: 0.3, detune: (Math.random() - 0.5) * 8 }),
-    );
   }
 
   /** Sistrum: a shaken rattle of small metal discs, the sound of the temple rites. */
@@ -510,12 +511,6 @@ export class Audio {
     this.hiss({ at, dur: 0.014, type: 'bandpass', f0: 2800, q: 1.4, vol: 0.2 * vol, a: 0.0006, dest, pan: 0.15 });
   }
 
-  /** Riq: the jingles of the Egyptian tambourine. */
-  private riq(at: number, vol: number, pan: Pan = 0): void {
-    this.hiss({ at, dur: 0.05, type: 'bandpass', f0: 7400, q: 3, vol, a: 0.0015, dest: this.music, pan });
-    this.hiss({ at, dur: 0.03, type: 'bandpass', f0: 10400, q: 4, vol: vol * 0.6, a: 0.001, dest: this.music, pan });
-  }
-
   /** Warm low chord: soft triangles, slow swell. No buzz, so it can sit under the game for hours. */
   private pad(at: number, chord: number[], len: number): void {
     const ctx = this.ctx!;
@@ -526,13 +521,13 @@ export class Audio {
     f.frequency.linearRampToValueAtTime(this.feature ? 700 : 420, at + len);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, at);
-    g.gain.linearRampToValueAtTime(this.feature ? 0.07 : 0.06, at + len * 0.35);
+    g.gain.linearRampToValueAtTime(0.04, at + len * 0.35);
     g.gain.linearRampToValueAtTime(0.0001, at + len);
     f.connect(g).connect(this.music);
     for (const n of chord.slice(1)) {
       for (const det of [-5, 5]) {
         const o = ctx.createOscillator();
-        o.type = this.feature ? 'sawtooth' : 'triangle';
+        o.type = 'triangle';
         o.frequency.value = midi(n);
         o.detune.value = det;
         o.connect(f);
@@ -548,49 +543,11 @@ export class Audio {
     this.hiss({ at, dur: 0.12, type: 'lowpass', f0: 900, f1: 200, vol: vol * 0.35, a: 0.002 });
   }
 
-  /** Formant "aah" made from filtered saws. */
-  private choir(at: number, freqs: number[], len: number, vol: number, dest: AudioNode = this.sfx): void {
-    const ctx = this.ctx!;
-    const out = ctx.createGain();
-    out.gain.setValueAtTime(0.0001, at);
-    out.gain.linearRampToValueAtTime(vol, at + len * 0.3);
-    out.gain.exponentialRampToValueAtTime(0.0001, at + len);
-    out.connect(dest);
-    for (const [ff, q, g] of [[700, 8, 1], [1150, 10, 0.6], [2800, 12, 0.25]]) {
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = ff;
-      bp.Q.value = q;
-      const bg = ctx.createGain();
-      bg.gain.value = g * 3;
-      bp.connect(bg).connect(out);
-      for (const f of freqs) {
-        for (const det of [-12, 12]) {
-          const o = ctx.createOscillator();
-          o.type = 'sawtooth';
-          o.frequency.value = f;
-          o.detune.value = det;
-          const v = ctx.createOscillator();
-          v.frequency.value = 5 + Math.random();
-          const vg = ctx.createGain();
-          vg.gain.value = 6;
-          v.connect(vg).connect(o.detune);
-          o.connect(bp);
-          o.start(at);
-          v.start(at);
-          o.stop(at + len + 0.1);
-          v.stop(at + len + 0.1);
-        }
-      }
-    }
-  }
-
   /* ================================================================ ambience & music */
 
   private startMusic(): void {
     this.startDrone();
     this.scheduleAmbience();
-    this.crackle();
     this.nextStep = this.t + 0.3;
     this.step = 0;
     clearInterval(this.seqTimer);
@@ -641,7 +598,7 @@ export class Audio {
   /** Step sequencer (eighth notes), scheduled ahead of time for sample-accurate timing. */
   private sequence(): void {
     if (!this.ctx) return;
-    const bpm = this.feature ? 120 : 84;
+    const bpm = this.feature ? 104 : 80;
     const stepDur = 60 / bpm / 2;
     // a stalled page must not play every step it missed all at once
     if (this.nextStep < this.t - 0.1) {
@@ -663,55 +620,22 @@ export class Audio {
     const chord = PROGRESSION[Math.floor(bar / 2) % PROGRESSION.length];
     if (s === 0 && bar % 2 === 0) this.pad(at, chord, dur * 16);
     if (!this.feature) {
-      // the night: the ney sings the theme over a baladi kept low, as if heard from the next chamber
+      // the night: the ney sings the theme, a qanun answers now and then, a drum far away
       const n = NEY_THEME.notes.get(step % NEY_THEME.steps);
-      if (n) this.ney(at, midi(n[1]), dur * n[2] * 0.95, 0.11, n[2] >= 3);
-      const hit = BALADI[s];
-      if (hit === 'D') this.doum(at, s === 0 ? 0.45 : 0.32);
-      else if (hit === 'T') this.tek(at, 0.35);
-      if (s % 2 === 1) this.riq(at, 0.012, 0.3);
-      if (s === 0 && bar % 8 === 7) this.sistrum(at, 0.03, 0.5, 4);
+      if (n) this.ney(at, midi(n[1]), dur * n[2] * 0.95, 0.1, n[2] >= 3);
+      if (s === 0 || s === 3 || s === 6) this.mallet(at, chord[s === 0 ? 1 : s === 3 ? 2 : 3] + 12, 0.05, s === 3 ? 0.3 : -0.3, 1.8, this.music);
+      if (s === 0) this.doum(at, 0.26);
+      else if (s === 4 && bar % 2) this.doum(at, 0.16);
     } else {
-      // the infected temple: saidi at full tilt, the mizmar crying over a walking bass, and every
-      // eighth bar a roll of the drums
+      // the infected temple: an oud on the walking bass, the saidi on the drum, and the ney
       const root = chord[0];
       const hit = SAIDI[s];
       const n = MIZMAR_THEME.notes.get(step % MIZMAR_THEME.steps);
-      if (n) {
-        this.ney(at, midi(n[1]), dur * n[2] * 0.92, 0.09, n[2] >= 3);
-        this.reed(at, n[1], dur * n[2] * 0.92, 0.04, 0.08, this.music, 0.16);
-      }
-      if (hit === 'D') this.doum(at, s === 0 ? 0.7 : 0.55);
-      else if (hit === 'T') this.tek(at, 0.55);
-      if (bar % 8 === 7 && s >= 4) {
-        this.tek(at, 0.45);
-        this.tek(at + dur / 2, 0.4);
-      }
-      this.riq(at, s % 2 ? 0.022 : 0.012, s % 2 ? 0.35 : -0.35);
-      if (s === 0 && bar % 8 === 6) this.choirIn(at, chord, dur * 12);
-      this.voice({ at, f: midi(root + BASS_WALK[s]), vol: 0.14, r: dur * 0.85, a: 0.005, type: 'triangle', dest: this.music });
+      if (n) this.ney(at, midi(n[1]), dur * n[2] * 0.92, 0.08, n[2] >= 3);
+      if (hit === 'D') this.doum(at, s === 0 ? 0.42 : 0.32);
+      else if (hit === 'T') this.tek(at, 0.26);
+      this.mallet(at, root + 12 + BASS_WALK[s], 0.1, 0, 0.9, this.music);
     }
-  }
-
-  /** The temple's voices behind the music. */
-  private choirIn(at: number, chord: number[], len: number): void {
-    this.choir(at, chord.slice(1).map((n) => midi(n)), len, 0.045, this.music);
-  }
-
-  /** The braziers: small dry snaps, and now and then a run of them. */
-  private crackle(): void {
-    window.setTimeout(() => {
-      if (!this.ctx) return;
-      if (!this.muted) {
-        const at = this.t;
-        const run = Math.random() < 0.2 ? 3 + Math.floor(Math.random() * 4) : 1;
-        const pan = Math.random() < 0.5 ? -0.75 : 0.75;
-        for (let i = 0; i < run; i++) {
-          this.hiss({ at: at + i * (0.03 + Math.random() * 0.06), dur: 0.009, type: 'bandpass', f0: 1500 + Math.random() * 3200, q: 2.2, vol: 0.05 + Math.random() * 0.1, a: 0.0006, dest: this.music, pan: pan + (Math.random() - 0.5) * 0.3 });
-        }
-      }
-      this.crackle();
-    }, 160 + Math.random() * 900);
   }
 
   /** Now and then, far away in the temple: a gong, or a sistrum in another chamber. */
@@ -746,7 +670,6 @@ export class Audio {
     this.voice({ at, f: 240, to: 110, glide: 0.04, vol: 0.28, r: 0.07, a: 0.001 });
     this.hiss({ at, dur: 0.01, type: 'bandpass', f0: 2600, q: 1.5, vol: 0.14, a: 0.0005 });
     this.hiss({ at: at + 0.01, dur: 0.22, type: 'bandpass', f0: 600, f1: 2200, q: 0.8, vol: 0.035, a: 0.05, pan: -0.3, pan1: 0.3 });
-    this.sistrum(at + 0.02, 0.022, 0, 3);
     this.startSpinLoop(at + 0.03);
   }
 
@@ -819,10 +742,7 @@ export class Audio {
     const last = i >= 4;
     this.voice({ at, f: 132 - i * 4, to: 68, glide: 0.05, vol: 0.3, r: 0.1, a: 0.001, pan });
     this.mallet(at, [64, 65, 68, 69, 76][Math.min(4, i)], last ? 0.44 : 0.36, pan, last ? 1.5 : 0.8);
-    if (last) {
-      this.sagat(at, midi(88), 0.016);
-      this.spinLoop?.stop(at);
-    }
+    if (last) this.spinLoop?.stop(at);
     else if (this.spinGain) this.spinGain.gain.setTargetAtTime(SPIN_LEVEL * ((4 - i) / 5), at, 0.03);
   }
 
@@ -898,41 +818,21 @@ export class Audio {
     this.gong(at, midi(note) / 2, 0.07 + n * 0.01, (n - 3) * 0.25, 2.4);
     this.boom(at, 0.22, 46);
     this.mallet(at, note + 24, 0.14, 0, 2);
-    this.choir(at, [midi(note), midi(note + 7)], 1.3, 0.02 + n * 0.008);
   }
 
   /** The last reel decides: drum roll closing in, sistrum shaking faster, strings climbing. */
   anticipation(dur: number): void {
     if (!this.ctx) return;
-    const ctx = this.ctx;
     const at = this.t;
-    for (const det of [-11, 11]) {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(82.4, at);
-      o.frequency.exponentialRampToValueAtTime(329.6, at + dur);
-      o.detune.value = det;
-      const f = ctx.createBiquadFilter();
-      f.type = 'lowpass';
-      f.Q.value = 2;
-      f.frequency.setValueAtTime(240, at);
-      f.frequency.exponentialRampToValueAtTime(2600, at + dur);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, at);
-      g.gain.exponentialRampToValueAtTime(0.08, at + dur * 0.92);
-      g.gain.exponentialRampToValueAtTime(0.0001, at + dur + 0.12);
-      o.connect(f).connect(g).connect(this.pan(det > 0 ? 0.4 : -0.4, this.sfx));
-      o.start(at);
-      o.stop(at + dur + 0.2);
-    }
-    this.hiss({ at, dur, type: 'bandpass', f0: 400, f1: 3600, q: 1.6, vol: 0.05, a: dur * 0.8 });
+    this.hiss({ at, dur, type: 'bandpass', f0: 400, f1: 2400, q: 1.2, vol: 0.025, a: dur * 0.8 });
     // the drum roll tightens as the reel slows
     let t = 0;
     let gap = 0.26;
     while (t < dur) {
       const k = t / dur;
-      this.doum(at + t, 0.35 + k * 0.5, this.sfx);
-      if (k > 0.3) this.sistrum(at + t + gap * 0.5, 0.02 + k * 0.03, (Math.random() - 0.5) * 0.8, 2);
+      this.doum(at + t, 0.25 + k * 0.35, this.sfx);
+      // the same string, plucked faster and faster
+      this.mallet(at + t, 64, 0.05 + k * 0.08, 0, 0.3);
       t += gap;
       gap = Math.max(0.075, gap * 0.9);
     }
@@ -952,8 +852,7 @@ export class Audio {
   riser(dur: number, power = 1): void {
     if (!this.ctx) return;
     const at = this.t;
-    this.hiss({ at, dur, type: 'bandpass', f0: 300, f1: 5000, q: 1.5, vol: 0.16 * power, a: dur * 0.9, pan: -0.4, pan1: 0.4 });
-    for (const det of [-12, 12]) this.voice({ at, f: 110, to: 440, glide: dur, type: 'sawtooth', vol: 0.05 * power, r: 0.15, a: dur, lp: 2000, detune: det });
+    this.hiss({ at, dur, type: 'bandpass', f0: 300, f1: 3000, q: 1.2, vol: 0.08 * power, a: dur * 0.9, pan: -0.4, pan1: 0.4 });
   }
 
   /* ---------------------------------------------------------------- big wins */
@@ -1002,8 +901,7 @@ export class Audio {
     const r = [52, 55, 57, 59][Math.min(tier, 3)];
     this.timpani(at, midi(r - 24), 0.5);
     this.fanfare(at, [r + 12, r + 19, r + 24], 1, 0.06 + tier * 0.01);
-    this.choir(at, [midi(r), midi(r + 7)], 1.5, 0.05 + tier * 0.015);
-    this.impact(0.5 + tier * 0.15);
+    this.impact(0.4 + tier * 0.1);
     this.coins(10 + tier * 4);
   }
 
@@ -1014,10 +912,9 @@ export class Audio {
     if (this.bigLoop) this.bigLoop.until = at;
     this.timpani(at, midi(28), 0.6);
     this.fanfare(at, [52, 64, 71, 76, 80], 2, 0.07);
-    this.choir(at, [midi(52), midi(56), midi(59), midi(64)], 3, 0.09 + tier * 0.012);
-    this.gong(at, 41, 0.24, 0, 4.5);
-    this.impact(0.9);
-    for (let i = 0; i < 6; i++) this.bell(at + 0.08 + i * 0.07, midi(76 + [0, 4, 5, 7, 11, 12][i]), 0.04, (i - 2.5) * 0.25);
+    this.gong(at, 41, 0.18 + tier * 0.01, 0, 4.5);
+    this.impact(0.7);
+    for (let i = 0; i < 6; i++) this.mallet(at + 0.08 + i * 0.07, 64 + [0, 4, 5, 7, 11, 12][i], 0.12, (i - 2.5) * 0.25, 1.6);
     this.coins(24);
   }
 
@@ -1062,51 +959,20 @@ export class Audio {
     const at = this.t;
     this.breathe();
     const up = Math.min(Math.max(0, streak - 1), 4) * 2; // wins in a row climb
-    const scale = [76, 80, 81, 83, 88, 92, 93, 95].map((n) => n + up);
+    const scale = [64, 68, 69, 71, 76, 80, 81, 83].map((n) => n + up);
     const count = 4 + size;
     const gap = 0.075;
-    for (let i = 0; i < count; i++) this.mallet(at + i * gap, scale[i % scale.length], 0.1, (i / count - 0.5) * 0.9, 1);
+    for (let i = 0; i < count; i++) this.mallet(at + i * gap, scale[i % scale.length], 0.13, (i / count - 0.5) * 0.9, 1);
     const end = at + count * gap;
-    for (const n of [76, 83, 88]) this.mallet(end, n + up, 0.09, 0, 2);
-    this.sagat(end, midi(88 + up), 0.012, 0);
-    if (size >= 1) this.choir(end, [midi(52), midi(59)], 1.2, 0.03);
-    if (size >= 2) this.gong(end, 55, 0.05, 0, 2.2);
-    if (size >= 3) this.choir(end, [midi(45), midi(52), midi(57)], 2.4, 0.08);
-  }
-
-  /** Each great symbol answers its win in its own voice. */
-  signature(s: Sym): void {
-    if (!this.ctx) return;
-    const at = this.t;
-    if (s === Sym.ZERO) {
-      // the Pharaoh: a deep gong and low voices
-      this.gong(at, midi(33), 0.09, 0, 3);
-      this.choir(at, [midi(45), midi(52)], 1.5, 0.05);
-    } else if (s === Sym.MASK) {
-      // Anubis: a growl in the dark
-      for (const detune of [-14, 14]) this.voice({ at, f: 62, to: 47, glide: 0.8, type: 'sawtooth', vol: 0.12, r: 0.65, a: 0.07, lp: 460, detune });
-      this.hiss({ at, dur: 0.6, type: 'bandpass', f0: 240, f1: 130, q: 2, vol: 0.09, a: 0.08 });
-    } else if (s === Sym.ANTIDOTE) {
-      // the scarab: its shell clicking across the stone
-      for (let i = 0; i < 8; i++) {
-        const t = at + i * 0.042;
-        const pan = -0.5 + i * 0.14;
-        this.hiss({ at: t, dur: 0.012, type: 'bandpass', f0: 2600 + (i % 3) * 700, q: 4, vol: 0.5, a: 0.0006, pan });
-        this.voice({ at: t, f: 1100 + (i % 3) * 240, to: 760, glide: 0.02, vol: 0.09, r: 0.03, a: 0.001, pan });
-      }
-      this.sistrum(at + 0.34, 0.04, 0.3, 3);
-    } else if (s === Sym.BLOOD) {
-      // the Eye: two clear bells
-      this.bell(at, midi(76), 0.11, -0.2);
-      this.bell(at + 0.14, midi(83), 0.11, 0.2);
-    }
+    for (const n of [64, 71, 76]) this.mallet(end, n + up, 0.09, 0, 2);
+    if (size >= 2) this.gong(end, 55, 0.04, 0, 2.2);
   }
 
   /** A winning symbol lights up: one clear note, higher along the reels. */
   ignite(reel: number): void {
     if (!this.ctx) return;
     const at = this.t;
-    const note = [76, 80, 83, 88, 92][Math.min(4, reel)];
+    const note = [64, 68, 71, 76, 80][Math.min(4, reel)];
     const pan = (reel - 2) * 0.3;
     this.mallet(at, note, 0.2, pan, 1.2);
   }
@@ -1127,12 +993,10 @@ export class Audio {
     if (!this.ctx) return;
     const at = this.t;
     // the bolt that falls from the bar
-    this.hiss({ at, dur: 0.04, type: 'highpass', f0: 1800, vol: 0.14, a: 0.0008 });
-    for (let k = 0; k < 4; k++) this.hiss({ at: at + 0.02 + k * 0.03, dur: 0.012, type: 'highpass', f0: 2800, vol: 0.08, a: 0.0006, pan: (Math.random() - 0.5) * 0.6 });
-    this.hiss({ at, dur: 0.42, type: 'bandpass', f0: 300, f1: 2600, q: 1.4, vol: 0.08, a: 0.26 });
-    this.boom(at + 0.42, 0.34, 46);
+    this.hiss({ at, dur: 0.42, type: 'bandpass', f0: 300, f1: 2000, q: 1.2, vol: 0.05, a: 0.26 });
+    this.boom(at + 0.42, 0.24, 46);
     this.gong(at + 0.42, 55, 0.06, 0, 2);
-    for (const n of [76, 83, 88]) this.mallet(at + 0.42, n, 0.1, 0, 2);
+    for (const n of [64, 71, 76]) this.mallet(at + 0.42, n, 0.11, 0, 2);
   }
 
   /** Lightning: a whip-crack and crackle for a close strike, then thunder rolling across the stereo field. */
@@ -1141,13 +1005,11 @@ export class Audio {
     const at = this.t;
     const pan = (Math.random() - 0.5) * 0.8;
     if (power >= 0.5) {
-      this.hiss({ at, dur: 0.05, type: 'highpass', f0: 1200, vol: 0.3 * power, a: 0.0008, pan });
-      for (let k = 0; k < 7; k++) this.hiss({ at: at + 0.02 + Math.random() * 0.18, dur: 0.015, type: 'highpass', f0: 2500, vol: 0.14 * power, a: 0.0008, pan: pan + (Math.random() - 0.5) * 0.4 });
-      this.boom(at, 0.38 * power, 36, pan);
+      this.boom(at, 0.16 * power, 36, pan);
     }
     const t2 = at + (power >= 0.5 ? 0.08 : 0.6);
-    this.hiss({ at: t2, dur: 2.2 + power, type: 'lowpass', f0: 500 + power * 400, f1: 45, vol: 0.02 + power * 0.22, a: power >= 0.5 ? 0.05 : 0.4, pan: pan - 0.5, pan1: pan + 0.5 });
-    this.voice({ at: t2, f: 38, to: 30, glide: 2, vol: 0.02 + power * 0.2, r: 1.8 + power, a: 0.1 });
+    this.hiss({ at: t2, dur: 2.2 + power, type: 'lowpass', f0: 500 + power * 400, f1: 45, vol: 0.015 + power * 0.1, a: power >= 0.5 ? 0.05 : 0.4, pan: pan - 0.5, pan1: pan + 0.5 });
+    this.voice({ at: t2, f: 38, to: 30, glide: 2, vol: 0.015 + power * 0.1, r: 1.8 + power, a: 0.1 });
   }
 
   /** The curse strikes: sub boom, gong, and a dark cluster of low voices. level 0..3 scales it. */
@@ -1156,10 +1018,6 @@ export class Audio {
     const at = this.t;
     this.boom(at, 0.7, 40);
     this.gong(at, 44 + level * 3, 0.16 + level * 0.03, 0, 3);
-    this.choir(at, [midi(40), midi(41), midi(47)], 1.8 + level * 0.3, 0.07 + level * 0.015);
-    for (const f of [110, 116.5, 155.6, 164.8]) {
-      this.voice({ at, f: f * (1 + level * 0.02), type: 'sawtooth', vol: 0.026, r: 2, a: 0.08, lp: 1200, detune: 6 });
-    }
   }
 
   /** A pyramid sends its thread of gold: a note climbing at speed, higher with each one. */
@@ -1231,17 +1089,13 @@ export class Audio {
     if (!this.ctx) return;
     const at = this.t;
     this.gong(at, midi(33), 0.1, 0, 4);
-    this.choir(at + 0.05, [midi(45), midi(52), midi(57), midi(61)], 2.2, 0.05);
-    [76, 80, 81, 83, 88].forEach((n, i) => this.mallet(at + 0.08 + i * 0.08, n, 0.1, (i - 2) * 0.2, i === 4 ? 2.4 : 1));
-    this.coins(8);
+    [64, 68, 69, 71, 76].forEach((n, i) => this.mallet(at + 0.08 + i * 0.08, n, 0.12, (i - 2) * 0.2, i === 4 ? 2.4 : 1));
   }
 
   featureStart(): void {
     if (!this.ctx) return;
     const at = this.t;
     this.stinger(2);
-    this.choir(at + 0.3, [midi(45), midi(52), midi(57), midi(60)], 3, 0.1);
-    [69, 72, 76, 81].forEach((n, i) => this.reed(at + 0.5 + i * 0.18, n, i === 3 ? 1.1 : 0.2, 0.09, (i - 1.5) * 0.4, this.sfx, 0.4));
-    this.sistrum(at + 0.5, 0.05, 0, 6);
+    [57, 60, 64, 69, 72, 76].forEach((n, i) => this.mallet(at + 0.4 + i * 0.1, n, 0.13, (i - 2.5) * 0.25, i === 5 ? 2.4 : 1.2));
   }
 }

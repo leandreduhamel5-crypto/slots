@@ -1029,3 +1029,50 @@ export function paintBonusPlate(): HTMLCanvasElement {
   ctx.stroke();
   return c;
 }
+
+/** The band a win is read on: a soft dark strip with a thread of gold above and below, fading out at both ends. */
+export function paintWinBand(): HTMLCanvasElement {
+  const w = 1024;
+  const h = 200;
+  const [c, ctx] = makeCanvas(w, h);
+  const fade = (colour: string, a: number) => {
+    const g = ctx.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, `rgba(${colour},0)`);
+    g.addColorStop(0.2, `rgba(${colour},${a})`);
+    g.addColorStop(0.8, `rgba(${colour},${a})`);
+    g.addColorStop(1, `rgba(${colour},0)`);
+    return g;
+  };
+  ctx.fillStyle = fade('6,4,10', 0.86);
+  ctx.fillRect(0, 12, w, h - 24);
+  ctx.fillStyle = fade('242,194,90', 1);
+  ctx.fillRect(0, 10, w, 2.5);
+  ctx.fillRect(0, h - 12.5, w, 2.5);
+  ctx.fillStyle = fade('242,194,90', 0.3);
+  ctx.fillRect(0, 17, w, 1);
+  ctx.fillRect(0, h - 18, w, 1);
+  return c;
+}
+
+/** A thread of gold with a small diamond in its middle, fading out at both ends. */
+export function paintGoldRule(): HTMLCanvasElement {
+  const w = 1024;
+  const h = 40;
+  const [c, ctx] = makeCanvas(w, h);
+  const g = ctx.createLinearGradient(0, 0, w, 0);
+  g.addColorStop(0, 'rgba(242,194,90,0)');
+  g.addColorStop(0.3, 'rgba(255,226,150,1)');
+  g.addColorStop(0.7, 'rgba(255,226,150,1)');
+  g.addColorStop(1, 'rgba(242,194,90,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, h / 2 - 1.25, w, 2.5);
+  ctx.fillStyle = goldGrad(ctx, 0, 6, 0, 34);
+  ctx.beginPath();
+  ctx.moveTo(w / 2, 4);
+  ctx.lineTo(w / 2 + 16, h / 2);
+  ctx.lineTo(w / 2, h - 4);
+  ctx.lineTo(w / 2 - 16, h / 2);
+  ctx.closePath();
+  ctx.fill();
+  return c;
+}
