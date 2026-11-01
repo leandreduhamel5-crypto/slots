@@ -30,6 +30,9 @@ export interface HudHandlers {
   auto(count: number): void;
   refill(): void;
   buy(): void;
+  /** the spin button is being held down: rounds follow each other */
+  hold(on: boolean): void;
+  pickBet(index: number): void;
 }
 
 export class Hud {
@@ -71,6 +74,10 @@ export class Hud {
         <p>Tours automatiques</p>
         <div>${[10, 25, 50, 100].map((n) => `<button data-auto="${n}">${n}</button>`).join('')}</div>
       </div>
+      <div class="auto-menu bet-menu" data-k="betMenu">
+        <p>Mise</p>
+        <div data-k="betLevels"></div>
+      </div>
       <button class="refill" data-k="refill">Recharger 1 000 crédits</button>
       <div class="buy-modal" data-k="buyModal">
         <div class="buy-card">
@@ -88,7 +95,31 @@ export class Hud {
     this.root.querySelectorAll<HTMLElement>('[data-k]').forEach((e) => (this.el[e.dataset.k!] = e));
     this.autoMenu = this.el.autoMenu;
 
-    this.el.spin.addEventListener('click', () => h.spin());
+    // a press spins; held down, the rounds run on until it is released
+    let holdTimer = 0;
+    let held = false;
+    this.el.spin.addEventListener('pointerdown', () => {
+      holdTimer = window.setTimeout(() => {
+        held = true;
+        h.hold(true);
+      }, 450);
+    });
+    for (const e of ['pointerup', 'pointercancel', 'pointerleave']) {
+      this.el.spin.addEventListener(e, () => {
+        clearTimeout(holdTimer);
+        if (held) h.hold(false);
+      });
+    }
+    this.el.spin.addEventListener('click', () => {
+      if (held) held = false;
+      else h.spin();
+    });
+    this.onPick = h.pickBet;
+    const meter = this.el.bet.parentElement!;
+    meter.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.el.betMenu.classList.toggle('open');
+    });
     this.el.betDec.addEventListener('click', () => h.betDelta(-1));
     this.el.betInc.addEventListener('click', () => h.betDelta(1));
     this.el.turbo.addEventListener('click', () => h.toggleTurbo());
@@ -113,7 +144,7 @@ export class Hud {
         h.auto(Number(b.dataset.auto));
       }),
     );
-    document.addEventListener('click', () => this.autoMenu.classList.remove('open'));
+    document.addEventListener('click', () => this.closeMenus());
     this.arrange();
     window.addEventListener('resize', () => this.arrange());
   }
@@ -142,6 +173,16 @@ export class Hud {
   closeMenus(): void {
     this.el.buyModal.classList.remove('open');
     this.autoMenu.classList.remove('open');
+    this.el.betMenu.classList.remove('open');
+  }
+
+  private onPick: (index: number) => void = () => {};
+
+  /** Fills the list of stakes, opened from the bet meter. */
+  setBetLevels(levels: number[]): void {
+    const box = this.el.betLevels;
+    box.innerHTML = levels.map((v, i) => `<button data-bet="${i}">${fmt(v)}</button>`).join('');
+    box.querySelectorAll<HTMLButtonElement>('[data-bet]').forEach((b) => b.addEventListener('click', () => this.onPick(Number(b.dataset.bet))));
   }
 
   setBuy(price: number, enabled: boolean): void {
@@ -169,8 +210,27 @@ export class Hud {
     if (room > 0 && width > room) el.style.transform = `scale(${room / width})`;
   }
 
+  private balanceTween = 0;
+  private balanceTarget = NaN;
+
   setBalance(v: number): void {
+    if (v === this.balanceTarget) return;
+    cancelAnimationFrame(this.balanceTween);
+    this.balanceTarget = v;
     this.amount(this.el.balance, v);
+  }
+
+  /** A win comes in: the balance climbs to its new amount instead of jumping. */
+  rollBalance(from: number, to: number, ms: number): void {
+    cancelAnimationFrame(this.balanceTween);
+    this.balanceTarget = to;
+    const t0 = performance.now();
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / ms);
+      this.amount(this.el.balance, from + (to - from) * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) this.balanceTween = requestAnimationFrame(step);
+    };
+    step();
   }
 
   setBet(v: number, canDec: boolean, canInc: boolean): void {
@@ -202,8 +262,14 @@ export class Hud {
     step();
   }
 
+  /** While the reels turn the button says what it does: stop them. */
+  private showStop(on: boolean): void {
+    this.el.spinIcon.innerHTML = on ? ICONS.stop : ICONS.spin;
+  }
+
   setSpinning(spinning: boolean): void {
     this.root.classList.toggle('spinning', spinning);
+    this.showStop(spinning);
     (this.el.betDec as HTMLButtonElement).disabled ||= spinning;
     (this.el.betInc as HTMLButtonElement).disabled ||= spinning;
   }
@@ -212,6 +278,7 @@ export class Hud {
   setAwaiting(on: boolean): void {
     this.root.classList.toggle('awaiting', on);
     this.root.classList.toggle('spinning', !on);
+    this.showStop(!on);
   }
 
   setLocked(locked: boolean): void {

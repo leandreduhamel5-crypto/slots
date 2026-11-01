@@ -10,7 +10,6 @@ import gsap from 'gsap';
 import { Game } from './game/Game';
 import { LITE } from './game/device';
 import { bookCanvas, buildSymbolTextures } from './game/textures';
-import { buildMascotTextures } from './game/Mascot';
 import { warmDigits } from './game/Digits';
 import { loadAssets } from './game/assets';
 import { loadEgyptArt } from './game/art/egypt';
@@ -62,11 +61,11 @@ async function boot(): Promise<void> {
   // built-in painted art first, then anything the user dropped into public/assets wins
   setProgress(0.72);
   const symbolArt = new Map([...egypt.symbols, ...assets.symbols]);
-  const [tex, mascot] = await Promise.all([buildSymbolTextures(symbolArt, egypt.extra.frame), buildMascotTextures(egypt.extra.cleoFull)]);
+  const tex = await buildSymbolTextures(symbolArt, egypt.extra.frame);
   warmDigits([118, 114, 56, 54]);
   setProgress(1);
 
-  const game = new Game(app, tex, bookCanvas(), mascot, assets, egypt.extra.templeNight, egypt.extra.templeInfected, egypt.extra.logo, egypt.extra);
+  const game = new Game(app, tex, bookCanvas(), assets, egypt.extra.templeNight, egypt.extra.templeInfected, egypt.extra.logo, egypt.extra.corridorDoor);
   if (import.meta.env.DEV) Object.assign(window, { game, app, gsap });
 
   if (loader) {

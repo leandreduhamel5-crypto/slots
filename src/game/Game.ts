@@ -13,8 +13,6 @@ import { Digits } from './Digits';
 import { BOARD_H, BOARD_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y } from './layout';
 import { Logo, eyeFromCodex, logoCanvas } from './Logo';
 import type { LoadedAssets } from './assets';
-import type { DecorArt } from './art/egypt';
-import { Mascot, type MascotTextures } from './Mascot';
 import { showIntro } from '../ui/Intro';
 import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
@@ -27,16 +25,10 @@ const FRAME_OUTER_W = 1490;
 const FRAME_OUTER_H = 847;
 const FRAME_TOP = 65;
 const UPRIGHT_LOGO_H = 420;
-/** the painting of the queen */
-const QUEEN_H = 1003;
 const BOARD_Y = 186;
 const WORLD_TOP = -172;
 /** just under the frame: everything on screen stays clear of the console */
 const WORLD_BOTTOM = BOARD_Y + BOARD_H + 142;
-/** Cleopatra stands left of the reels, her cobra staff right beside the frame */
-const MASCOT_X = -437;
-const MASCOT_SCALE = 0.68;
-const SHOW_MASCOT = true;
 const WORLD_W = BOARD_W + 360;
 
 const CELL_W = 300;
@@ -225,14 +217,13 @@ export class Game {
     private app: Application,
     tex: SymbolTextures,
     codexCanvas: HTMLCanvasElement,
-    mascotTex: MascotTextures,
     assets: LoadedAssets,
     templeNight: HTMLImageElement,
     templeInfected: HTMLImageElement,
     logoImage: HTMLImageElement,
-    decor: DecorArt,
+    corridorDoor: HTMLImageElement,
   ) {
-    this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, decor, assets.background);
+    this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, assets.background);
     this.bg.onLightning = (power) => this.audio.lightning(power);
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
@@ -245,24 +236,15 @@ export class Game {
     this.banner.onIgnite = () => this.audio.strainIgnite();
     this.banner.position.set(BOARD_W / 2, 0);
     this.teaser = this.buildTeaser(tex);
-    this.mascot = new Mascot(mascotTex);
-    this.mascot.scale.set(MASCOT_SCALE);
-    this.mascot.position.set(MASCOT_X, WORLD_BOTTOM);
-    this.mascot.setBook(tex.normal[Sym.CODEX]);
-    this.mascot.onTransform = (to) => {
-      if (!this.mascot.visible) return;
-      this.audio.stinger(to === 'inhuman' ? 2 : 0);
-      this.bg.thump(to === 'inhuman' ? 0.25 : 0.1);
-    };
     this.logoShade = new Sprite(tex.glow);
     this.logoShade.anchor.set(0.5);
     this.logoShade.tint = 0x050208;
     this.logoShade.alpha = 0.7;
-    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.mascot, this.teaser);
+    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.teaser);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       thump: (p) => this.bg.thump(p),
-    });
+    }, corridorDoor);
     // bloom: emissive bits (eyes, veins, orb, neon, glows) radiate
     if (!LITE) {
       this.bloom.resolution = app.renderer.resolution;
@@ -305,6 +287,16 @@ export class Game {
         this.hud.setAuto(0);
         void this.play(true);
       },
+      hold: (on) => {
+        this.holding = on;
+        if (on && !this.busy) void this.play();
+      },
+      pickBet: (i) => {
+        if (this.busy) return;
+        this.server.setBetIndex(i);
+        this.audio.click();
+        this.refreshHud();
+      },
     });
     this.paytable = new Paytable(tex.images);
     document.body.append(this.hud.root, this.paytable.root);
@@ -318,10 +310,15 @@ export class Game {
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
         // a key held down must not run through the player's free spins or skip a big win
+        if (e.repeat && this.spinGate === null && !this.overlays.busy && this.busy) return;
         if (e.repeat && (this.spinGate || this.overlays.busy)) return;
         if (this.paytable.isOpen) this.paytable.close();
         else if (!this.hud.buyOpen) this.onSpinPressed();
       }
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'ArrowUp') this.changeBet(1);
+      else if (e.code === 'ArrowDown') this.changeBet(-1);
     });
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape') return;
@@ -342,6 +339,7 @@ export class Game {
     this.refreshHud();
     this.loadPrefs();
     this.hud.setBuyArt(tex.images[Sym.CODEX]);
+    this.hud.setBetLevels(BET_LEVELS);
 
     showIntro(logoArt.toDataURL('image/png'), tex.images, () => {
       this.audio.unlock();
@@ -364,7 +362,6 @@ export class Game {
   }
 
   private teaser: Container;
-  private mascot: Mascot;
 
   /** Portrait-only reminder of the feature, filling the space under the reels. */
   private buildTeaser(tex: SymbolTextures): Container {
@@ -412,7 +409,7 @@ export class Game {
     const availH = h - hudH;
     if (w < h) this.layoutUpright(w, availH);
     else this.layoutWide(w, availH);
-    this.bg.resize(w, h, hudH);
+    this.bg.resize(w, h);
     this.overlays.resize(w, h, hudH);
   }
 
@@ -431,24 +428,18 @@ export class Game {
     this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + WORLD_BOTTOM) / 2);
     this.world.position.set(w / 2, availH / 2);
-    // shown when her face is on screen (the veil and arm may run off the left edge)
-    const faceX = (MASCOT_X + 113 * MASCOT_SCALE - BOARD_W / 2) * scale + w / 2;
-    this.mascot.x = MASCOT_X;
-    this.mascot.scale.set(MASCOT_SCALE);
-    this.mascot.y = WORLD_BOTTOM;
-    this.mascot.visible = SHOW_MASCOT && faceX > 40;
   }
 
   /**
    * Upright screens are read from the top: the logo, the reels as wide as the screen allows, and in
-   * whatever room is left above the console, the queen and the reminder of the feature.
+   * whatever room is left above the console, the decor and the reminder of the feature.
    */
   private layoutUpright(w: number, availH: number): void {
     const inset = 16;
     const scale = Math.min((w * 0.985) / FRAME_OUTER_W, (availH - inset) / (UPRIGHT_LOGO_H + FRAME_OUTER_H));
     let room = (availH - inset) / scale - UPRIGHT_LOGO_H - FRAME_OUTER_H;
-    // on very tall screens the slack goes above the logo, so the queen is not left floating
-    const slack = Math.max(0, room - QUEEN_H * 1.2);
+    // on very tall screens the slack goes above the logo
+    const slack = Math.max(0, room - 1200);
     room -= slack * 0.45;
     this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, 0);
@@ -463,16 +454,9 @@ export class Game {
     this.banner.scale.set(1.8);
     this.banner.arrange(true);
     const frameBottom = FRAME_TOP + FRAME_OUTER_H;
-    const shown = room > 300;
-    const k = Math.max(0.6, Math.min(1.2, room / (QUEEN_H * 0.8)));
-    this.mascot.visible = SHOW_MASCOT && shown;
-    this.mascot.scale.set(k);
-    this.mascot.x = BOARD_W * 0.76;
-    // cut by the console at the thighs, her head always clear of the frame
-    this.mascot.y = Math.max(frameBottom + room + QUEEN_H * k * 0.2, frameBottom - 8 + QUEEN_H * k);
-    this.teaser.visible = shown && !this.inFeature;
-    this.teaser.scale.set(Math.max(0.62, Math.min(1.05, room / 620)));
-    this.teaser.position.set(BOARD_W * 0.15, frameBottom + room / 2 - 4);
+    this.teaser.visible = room > 300 && !this.inFeature;
+    this.teaser.scale.set(Math.max(0.62, Math.min(1.15, room / 620)));
+    this.teaser.position.set(BOARD_W / 2, frameBottom + room / 2 - 4);
   }
 
   /** Time warp for hit-stops (1 = normal). */
@@ -609,6 +593,9 @@ export class Game {
     void this.play();
   }
 
+  /** the spin button is held down */
+  private holding = false;
+
   private async play(bought = false): Promise<void> {
     if (this.busy) return;
     if (this.server.state.balance < (bought ? this.server.bonusPrice : this.server.bet)) {
@@ -618,6 +605,7 @@ export class Game {
       return;
     }
     this.busy = true;
+    this.hud.closeMenus();
     this.hud.setSpinning(true);
     this.hud.setWin(0);
     this.refreshHud();
@@ -642,8 +630,6 @@ export class Game {
     else {
       const tier = winTier(round.totalWin, round.bet);
       if (tier >= 0) {
-        this.mascot.react('big');
-        if (this.mascot.visible) await this.sleep(900);
         await this.overlays.bigWin(round.totalWin, round.bet, (v) => this.hud.setWin(v), this.isRecord(round));
       }
     }
@@ -651,8 +637,10 @@ export class Game {
   }
 
   private finishRound(round: Round): void {
+    const before = this.server.state.balance;
     this.server.settle();
     this.hud.setWin(round.totalWin);
+    if (round.totalWin > 0) this.hud.rollBalance(before, this.server.state.balance, Math.min(1400, 450 + (round.totalWin / round.bet) * 30));
     if (this.isRecord(round)) {
       this.best = round.totalWin / round.bet;
       this.savePrefs();
@@ -664,6 +652,8 @@ export class Game {
       this.autoLeft--;
       this.hud.setAuto(this.autoLeft);
       if (this.autoLeft > 0) setTimeout(() => void this.play(), round.totalWin > 0 ? 550 : 120);
+    } else if (this.holding) {
+      setTimeout(() => this.holding && void this.play(), round.totalWin > 0 ? 450 : 80);
     }
   }
 
@@ -685,14 +675,13 @@ export class Game {
       turbo: this.turbo,
       anticipate,
       onReelStop: (r) => {
-        this.audio.reelStop(r);
+        this.audio.reelStop(r, this.board.slammed);
         navigator.vibrate?.(r === REELS - 1 ? 16 : 7);
         for (let row = 0; row < ROWS; row++) {
           const s = grid[r][row];
           if (s === Sym.CODEX) {
             landedCodex++;
             this.audio.codex(landedCodex);
-            this.mascot.react('codex');
             this.board.popCell(r, row);
             if (landedCodex === 3) this.triggerHit(r === REELS - 1);
             else if (landedCodex > 3) this.bg.thump(0.25);
@@ -728,7 +717,6 @@ export class Game {
       this.hud.rollWin(shown, celebrate ? 900 : 300, label);
       if (celebrate) this.board.showWinBurst(lineSum, size);
       if (inFeature) this.sendToPanel(shown, celebrate ? 0.9 : 0.2);
-      if (celebrate) this.mascot.react('win');
       await this.board.presentWins(o.lineWins, o.scatter, celebrate, () => this.audio.tick());
     }
     for (const exp of o.expansions) {
@@ -760,10 +748,10 @@ export class Game {
     const firstSpecials = f.spins[0]?.specials.slice(0, 1) ?? [f.special];
     if (startAt === 0) {
       await this.sleep(this.turbo ? 200 : 450);
+      this.audio.hush(true);
       // the pyramids on the reels wake the great one: a thread of gold from each to the capstone…
       await this.board.callTemple(this.board.toLocal(this.bg.apexOnScreen()), (i) => this.audio.templeCall(i));
-      // …Cleopatra is taken by the infection, the infection spreads over the temple…
-      this.mascot.react('feature');
+      // …the infection spreads over the temple…
       this.bg.setFeature(true);
       await this.sleep(1600);
       // …and the camera dives into the pyramid
@@ -821,13 +809,12 @@ export class Game {
   private inFeature = false;
 
   private enterFeature(on: boolean): void {
-    if (!on) this.mascot.setForm('human');
-    else if (this.mascot.form !== 'inhuman') this.mascot.setForm('inhuman', false);
     this.inFeature = on;
     this.layout();
     this.bg.setFeature(on);
     this.board.setFeature(on);
     this.audio.setFeature(on);
+    if (on) this.audio.hush(false);
     this.hud.setFeature(on);
     this.banner.visible = true;
     gsap.to(this.logo, { alpha: on ? 0 : 1, duration: 0.5 });

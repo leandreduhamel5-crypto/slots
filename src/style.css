@@ -2630,3 +2630,35 @@ body {
   animation: none;
   box-shadow: 0 0 0 4px rgba(255, 214, 130, 0.9), 0 0 30px rgba(255, 170, 60, 0.9);
 }
+
+/* the stop square does not turn */
+#hud.spinning .spin-icon svg {
+  animation: none;
+}
+/* the list of stakes, opened from the bet meter */
+#hud.console .c-betmeter {
+  cursor: pointer;
+}
+#hud.spinning .c-betmeter,
+#hud.feature .c-betmeter {
+  pointer-events: none;
+}
+.bet-menu {
+  left: 76%;
+}
+.bet-menu div {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+.bet-menu button {
+  min-width: 64px;
+  font-size: 17px;
+}
+#hud.console.mobile .bet-menu {
+  left: 50%;
+}
+#hud.console.mobile .bet-menu button {
+  min-width: 56px;
+  font-size: 15px;
+  padding: 10px 2px 8px;
+}

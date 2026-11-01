@@ -363,6 +363,11 @@ export class ReelBoard extends Container {
     gsap.fromTo(edge, { alpha: 0.3 }, { alpha: 0, duration: 0.25, ease: 'power2.out' });
   }
 
+  /** the player has stopped the reels by hand */
+  get slammed(): boolean {
+    return this.hurried;
+  }
+
   /** Slam-stop: lands all remaining reels as fast as possible. */
   hurry(): void {
     this.hurried = true;
