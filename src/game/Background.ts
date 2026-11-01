@@ -1,13 +1,52 @@
 import { coverCanvas } from './assets';
 import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import gsap from 'gsap';
-import { paintDunes, paintSoftRays } from './art/egyptFrame';
+import type { DecorArt } from './art/egypt';
+import { paintSoftRays } from './art/egyptFrame';
 import { makeCanvas, seeded } from './art/painters';
 import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, OBELISK_TIP_Y, PYRAMID_HALF, TH as H, TW as W } from './art/templeHD';
 import { LITE, slim } from './device';
 import { Fire, paintFlameBlob } from './Fire';
 import { TempleFx } from './TempleFx';
 import { COLORS } from './layout';
+
+/** The palms in the sand: x from the middle and foot from the bottom of the dunes, size, art, facing. */
+const PALMS: { x: number; y: number; k: number; art: 'A' | 'B'; flip: 1 | -1 }[] = [
+  { x: -1180, y: -230, k: 0.62, art: 'A', flip: 1 },
+  { x: -1030, y: -190, k: 0.44, art: 'B', flip: -1 },
+  { x: 1190, y: -240, k: 0.66, art: 'B', flip: 1 },
+  { x: 1050, y: -180, k: 0.44, art: 'A', flip: -1 },
+];
+/** Broken columns of the old temple, half lost in the sand. */
+const RUINS: { x: number; y: number; k: number; flip: 1 | -1 }[] = [
+  { x: -900, y: -168, k: 0.52, flip: 1 },
+  { x: 915, y: -176, k: 0.42, flip: -1 },
+];
+/** birds of the flock, in a long V */
+const FLOCK = 9;
+const FLOCK_SPEED = 92;
+
+/** how far the top of each trunk leans, in the pixels of its art */
+const TRUNK_LEAN = { A: 46, B: -30 };
+const TRUNK_H = 800;
+/** where the heart of the crown is in its picture */
+const CROWN_HEART = 0.44;
+
+interface Palm {
+  root: Container;
+  crown: Sprite;
+  x: number;
+  k: number;
+  tall: boolean;
+  phase: number;
+}
+
+interface WindGrain {
+  s: Sprite;
+  v: number;
+  y: number;
+  phase: number;
+}
 
 /** radius of the circle that reveals the infected temple, before scaling */
 const REVEAL_R = 100;
@@ -168,8 +207,16 @@ export class Background extends Container {
   private strikeGlow: Sprite;
   private boltLight = 0;
   private rayLayer: Sprite;
-  private dunes: Sprite;
+  private dunes = new Container();
   private duneScale = 1;
+  private palms: Palm[] = [];
+  private ruins: Sprite[] = [];
+  /** ibises crossing the sky now and then */
+  private flock = new Container();
+  private nextFlock = 14;
+  /** grains carried low over the sand by the wind */
+  private grains: WindGrain[] = [];
+  private grainLayer = new Container();
   /** sand blown low along the ground */
   private blown: TilingSprite;
   /** height of the console over the bottom of the screen */
@@ -211,6 +258,7 @@ export class Background extends Container {
     glowTex: Texture,
     night: HTMLImageElement,
     infected: HTMLImageElement,
+    decor: DecorArt,
     custom: HTMLImageElement | null = null,
   ) {
     super();
@@ -280,6 +328,14 @@ export class Background extends Container {
       this.moonHalo.position.set(MOON[0] - W / 2, MOON[1] - H / 2);
       this.moonHalo.blendMode = 'add';
       this.sceneC.addChild(this.moonHalo);
+      for (let i = 0; i < FLOCK; i++) {
+        const bird = new Graphics().moveTo(-13, 0).quadraticCurveTo(-6, -7, 0, 0).quadraticCurveTo(6, -7, 13, 0).stroke({ width: 2.6, color: 0x05040a, cap: 'round' });
+        const rank = Math.ceil(i / 2);
+        bird.position.set(-rank * 36, (i % 2 ? -1 : 1) * rank * 19);
+        this.flock.addChild(bird);
+      }
+      this.flock.visible = false;
+      this.sceneC.addChild(this.flock);
       // slow clouds drifting across the sky
       this.clouds = new TilingSprite({ texture: Texture.from(paintClouds()), width: W, height: 560 });
       this.clouds.position.set(-W / 2, -H / 2 - 40);
@@ -340,12 +396,53 @@ export class Background extends Container {
     this.rayLayer = new Sprite(Texture.from(paintSoftRays(LITE ? 512 : 1024)));
     this.rayLayer.anchor.set(0.5);
     this.rayLayer.blendMode = 'add';
-    this.dunes = new Sprite(slim(paintDunes(2560, 560)));
-    this.dunes.anchor.set(0.5, 1);
+    const bank = (art: HTMLImageElement) => {
+      const s = new Sprite(slim(art));
+      s.anchor.set(0.5, 1);
+      return s;
+    };
+    this.dunes.addChild(bank(decor.dunesBack));
+    const art = {
+      A: { trunk: slim(decor.palmATrunk), crown: slim(decor.palmACrown) },
+      B: { trunk: slim(decor.palmBTrunk), crown: slim(decor.palmBCrown) },
+    };
+    const ruinTex = slim(decor.ruinColumn);
+    for (const r of RUINS) {
+      const s = new Sprite(ruinTex);
+      s.anchor.set(0.5, 1);
+      s.position.set(r.x, r.y);
+      s.scale.set(r.flip * r.k, r.k);
+      this.dunes.addChild(s);
+      this.ruins.push(s);
+    }
+    PALMS.forEach((p, i) => {
+      const root = new Container();
+      root.position.set(p.x, p.y);
+      root.scale.set(p.flip * p.k, p.k);
+      const trunk = new Sprite(art[p.art].trunk);
+      trunk.anchor.set(0.5, 1);
+      const crown = new Sprite(art[p.art].crown);
+      crown.anchor.set(0.5, CROWN_HEART);
+      crown.position.set(TRUNK_LEAN[p.art], -TRUNK_H);
+      root.addChild(trunk, crown);
+      this.dunes.addChild(root);
+      this.palms.push({ root, crown, x: p.x, k: p.k, tall: p.k > 0.5, phase: i * 1.7 });
+    });
+    this.dunes.addChild(bank(decor.dunesFront));
     this.blown = new TilingSprite({ texture: fogTex, width: 400, height: 200 });
     this.blown.tileScale.set(1.7, 0.42);
     this.blown.blendMode = 'add';
-    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.dunes, this.blown, this.sporeLayer, this.pulse);
+    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.dunes, this.blown, this.grainLayer, this.sporeLayer, this.pulse);
+    for (let i = 0; i < (LITE ? 16 : 40); i++) {
+      const s = new Sprite(sporeTex);
+      s.anchor.set(0.5);
+      s.blendMode = 'add';
+      s.tint = 0xffd8a0;
+      s.scale.set((2 + Math.random() * 2.4) / sporeTex.width);
+      s.position.x = Math.random() * 2000;
+      this.grainLayer.addChild(s);
+      this.grains.push({ s, v: 240 + Math.random() * 420, y: Math.random(), phase: Math.random() * 10 });
+    }
     for (let i = 0; i < 50; i++) this.spores.push(this.spawn(true));
   }
 
@@ -373,6 +470,16 @@ export class Background extends Container {
     this.blown.width = w * 1.2;
     this.blown.height = h * 0.3;
     this.blown.position.set(-w * 0.1, h * 0.72);
+    // on a narrow screen the two tall palms stand at its edges, half out of the picture; the others would crowd it
+    const reach = w / 2 / this.duneScale;
+    const narrow = reach < 700;
+    for (const r of this.ruins) r.visible = !narrow;
+    for (const p of this.palms) {
+      p.root.visible = !narrow || p.tall;
+      p.root.x = narrow ? Math.sign(p.x) * reach : p.x;
+      p.root.scale.y = p.k * (narrow ? 0.72 : 1);
+      p.root.scale.x = Math.sign(p.root.scale.x) * p.root.scale.y;
+    }
     this.placeDunes();
     this.rayLayer.position.set(w / 2, h * 0.06);
     this.rayLayer.width = this.rayLayer.height = Math.max(w, h) * 2.4;
@@ -555,6 +662,24 @@ export class Background extends Container {
     this.blown.tilePosition.y += dt * 8;
     this.blown.tint = f > 0.5 ? 0xff5a40 : 0xd8a868;
     this.blown.alpha = (0.1 + f * 0.1) * this.dunes.alpha;
+    // the wind comes in gusts: the crowns lean into them, the trunks hardly
+    const gust = Math.max(0, Math.sin(this.t * 0.37) * Math.sin(this.t * 0.61 + 1)) * (1 + f);
+    for (const p of this.palms) {
+      const flutter = Math.sin(this.t * 1.5 + p.phase) * (0.012 + gust * 0.018) + Math.sin(this.t * 3.7 + p.phase) * 0.004;
+      p.root.rotation = (Math.sin(this.t * 0.8 + p.phase) * 0.004 + gust * 0.01) * Math.sign(p.root.scale.x);
+      p.crown.rotation = flutter + gust * 0.03;
+    }
+    const sandTop = this.h - this.ground - 210 * this.duneScale;
+    for (const g of this.grains) {
+      g.s.x += g.v * (1 + gust * 1.2 + f * 0.6) * dt;
+      if (g.s.x > this.w + 20) {
+        g.s.x = -20;
+        g.y = Math.random();
+      }
+      g.s.y = sandTop + g.y * 190 * this.duneScale + Math.sin(this.t * 2 + g.phase) * 7;
+      g.s.alpha = (0.2 + gust * 0.5 + f * 0.2) * this.dunes.alpha;
+      g.s.tint = f > 0.5 ? 0xff7a50 : 0xffd8a0;
+    }
     this.fog.tilePosition.x += dt * 12;
     this.fog.tilePosition.y += dt * 3;
     this.fog.tint = f > 0.5 ? 0xa02030 : 0x6a5070;
@@ -621,6 +746,24 @@ export class Background extends Container {
       this.moonHalo.tint = f > 0.5 ? 0xff3020 : 0xffe8c0;
       this.moonHalo.alpha = 0.35 + 0.1 * Math.sin(this.t * 0.7) + f * 0.25;
       this.moonHalo.scale.set((MOON[2] * 5.8) / 256);
+    }
+    // ibises pass in front of the moon, wings beating and gliding
+    this.nextFlock -= dt;
+    if (this.nextFlock <= 0 && !this.flock.visible && this.infected) {
+      this.flock.visible = true;
+      this.flock.position.set(-W / 2 - 160, MOON[1] - H / 2 + 40 - Math.random() * 170);
+    }
+    if (this.flock.visible) {
+      this.flock.x += FLOCK_SPEED * dt;
+      this.flock.y -= 5 * dt;
+      this.flock.children.forEach((bird, i) => {
+        const beat = Math.sin(this.t * 7 + i * 0.9);
+        bird.scale.y = Math.sin(this.t * 0.8 + i) > 0.35 ? 0.5 : 0.25 + 0.75 * Math.abs(beat);
+      });
+      if (this.flock.x > W / 2 + 500) {
+        this.flock.visible = false;
+        this.nextFlock = 26 + Math.random() * 30;
+      }
     }
     // a shooting star now and then on calm nights
     this.nextMeteor -= dt;

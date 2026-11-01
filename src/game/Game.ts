@@ -13,6 +13,7 @@ import { Digits } from './Digits';
 import { BOARD_H, BOARD_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y } from './layout';
 import { Logo, eyeFromCodex, logoCanvas } from './Logo';
 import type { LoadedAssets } from './assets';
+import type { DecorArt } from './art/egypt';
 import { Mascot, type MascotTextures } from './Mascot';
 import { Particles } from './Particles';
 import { showIntro } from '../ui/Intro';
@@ -190,8 +191,13 @@ class FeatureBanner extends Container {
   }
 
   /** The strain has just taken a reel. */
-  flash(): void {
-    this.strains.flash();
+  flash(s: Sym): void {
+    this.strains.flash(s);
+  }
+
+  /** Where a strain sits in the bar, on screen. */
+  strainPoint(s: Sym): { x: number; y: number } {
+    return this.strains.pointOf(s);
   }
 }
 
@@ -226,8 +232,9 @@ export class Game {
     templeNight: HTMLImageElement,
     templeInfected: HTMLImageElement,
     logoImage: HTMLImageElement,
+    decor: DecorArt,
   ) {
-    this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, assets.background);
+    this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, decor, assets.background);
     this.bg.onLightning = (power) => this.audio.lightning(power);
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
@@ -746,6 +753,7 @@ export class Game {
       if (celebrate) {
         this.streak++;
         this.audio.win(size, this.streak);
+        if (size >= 1 && o.lineWins.length) this.audio.signature(o.lineWins.reduce((a, w) => (w.win > a.win ? w : a)).symbol);
         this.bg.flare(0.45 + size * 0.2);
         this.audio.coins(6 + size * 8);
       }
@@ -758,10 +766,14 @@ export class Game {
       await this.board.presentWins(o.lineWins, o.scatter, celebrate, () => this.audio.tick());
     }
     for (const exp of o.expansions) {
-      await this.board.expand(exp, () => {
-        this.banner.flash();
-        this.audio.expand();
-      });
+      await this.board.expand(
+        exp,
+        () => {
+          this.banner.flash(exp.symbol);
+          this.audio.expand();
+        },
+        this.board.toLocal(this.banner.strainPoint(exp.symbol)),
+      );
       shown += exp.win;
       this.hud.rollWin(shown, 900, label);
       this.audio.win(exp.win >= bet * 5 ? 2 : 1);

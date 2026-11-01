@@ -1,3 +1,4 @@
+import { Sym } from '../math/config';
 import { LITE } from './device';
 /**
  * Procedural sound design with the Web Audio API: no audio files, everything is synthesised.
@@ -589,6 +590,7 @@ export class Audio {
   private startMusic(): void {
     this.startDrone();
     this.scheduleAmbience();
+    this.crackle();
     this.nextStep = this.t + 0.3;
     this.step = 0;
     clearInterval(this.seqTimer);
@@ -694,6 +696,22 @@ export class Audio {
   /** The temple's voices behind the music. */
   private choirIn(at: number, chord: number[], len: number): void {
     this.choir(at, chord.slice(1).map((n) => midi(n)), len, 0.045, this.music);
+  }
+
+  /** The braziers: small dry snaps, and now and then a run of them. */
+  private crackle(): void {
+    window.setTimeout(() => {
+      if (!this.ctx) return;
+      if (!this.muted) {
+        const at = this.t;
+        const run = Math.random() < 0.2 ? 3 + Math.floor(Math.random() * 4) : 1;
+        const pan = Math.random() < 0.5 ? -0.75 : 0.75;
+        for (let i = 0; i < run; i++) {
+          this.hiss({ at: at + i * (0.03 + Math.random() * 0.06), dur: 0.009, type: 'bandpass', f0: 1500 + Math.random() * 3200, q: 2.2, vol: 0.05 + Math.random() * 0.1, a: 0.0006, dest: this.music, pan: pan + (Math.random() - 0.5) * 0.3 });
+        }
+      }
+      this.crackle();
+    }, 160 + Math.random() * 900);
   }
 
   /** Now and then, far away in the temple: a gong, or a sistrum in another chamber. */
@@ -1056,6 +1074,34 @@ export class Audio {
     if (size >= 3) this.choir(end, [midi(45), midi(52), midi(57)], 2.4, 0.08);
   }
 
+  /** Each great symbol answers its win in its own voice. */
+  signature(s: Sym): void {
+    if (!this.ctx) return;
+    const at = this.t;
+    if (s === Sym.ZERO) {
+      // the Pharaoh: a deep gong and low voices
+      this.gong(at, midi(33), 0.09, 0, 3);
+      this.choir(at, [midi(45), midi(52)], 1.5, 0.05);
+    } else if (s === Sym.MASK) {
+      // Anubis: a growl in the dark
+      for (const detune of [-14, 14]) this.voice({ at, f: 62, to: 47, glide: 0.8, type: 'sawtooth', vol: 0.12, r: 0.65, a: 0.07, lp: 460, detune });
+      this.hiss({ at, dur: 0.6, type: 'bandpass', f0: 240, f1: 130, q: 2, vol: 0.09, a: 0.08 });
+    } else if (s === Sym.ANTIDOTE) {
+      // the scarab: its shell clicking across the stone
+      for (let i = 0; i < 8; i++) {
+        const t = at + i * 0.042;
+        const pan = -0.5 + i * 0.14;
+        this.hiss({ at: t, dur: 0.012, type: 'bandpass', f0: 2600 + (i % 3) * 700, q: 4, vol: 0.5, a: 0.0006, pan });
+        this.voice({ at: t, f: 1100 + (i % 3) * 240, to: 760, glide: 0.02, vol: 0.09, r: 0.03, a: 0.001, pan });
+      }
+      this.sistrum(at + 0.34, 0.04, 0.3, 3);
+    } else if (s === Sym.BLOOD) {
+      // the Eye: two clear bells
+      this.bell(at, midi(76), 0.11, -0.2);
+      this.bell(at + 0.14, midi(83), 0.11, 0.2);
+    }
+  }
+
   /** A winning symbol lights up: one clear note, higher along the reels. */
   ignite(reel: number): void {
     if (!this.ctx) return;
@@ -1080,6 +1126,9 @@ export class Audio {
   expand(): void {
     if (!this.ctx) return;
     const at = this.t;
+    // the bolt that falls from the bar
+    this.hiss({ at, dur: 0.04, type: 'highpass', f0: 1800, vol: 0.14, a: 0.0008 });
+    for (let k = 0; k < 4; k++) this.hiss({ at: at + 0.02 + k * 0.03, dur: 0.012, type: 'highpass', f0: 2800, vol: 0.08, a: 0.0006, pan: (Math.random() - 0.5) * 0.6 });
     this.hiss({ at, dur: 0.42, type: 'bandpass', f0: 300, f1: 2600, q: 1.4, vol: 0.08, a: 0.26 });
     this.boom(at + 0.42, 0.34, 46);
     this.gong(at + 0.42, 55, 0.06, 0, 2);

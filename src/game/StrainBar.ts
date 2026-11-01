@@ -168,10 +168,14 @@ export class StrainBar extends Container {
     });
   }
 
-  /** The strains at work answer: one of them has just taken a reel. */
-  flash(): void {
-    for (const slot of this.slots) {
-      if (this.active.includes(slot.sym)) gsap.fromTo(slot.flare, { alpha: 0.8 }, { alpha: 0, duration: 0.7, ease: 'power2.out' });
-    }
+  /** A strain has just taken a reel: its place in the row flares. */
+  flash(s: Sym): void {
+    const slot = this.slots.find((k) => k.sym === s)!;
+    gsap.fromTo(slot.flare, { alpha: 1 }, { alpha: 0, duration: 0.7, ease: 'power2.out' });
+  }
+
+  /** Where a strain sits on screen. */
+  pointOf(s: Sym): { x: number; y: number } {
+    return this.slots.find((k) => k.sym === s)!.lit.toGlobal({ x: 0, y: 0 });
   }
 }

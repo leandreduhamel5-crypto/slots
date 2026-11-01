@@ -1310,8 +1310,51 @@ export class ReelBoard extends Container {
     });
   }
 
+  /** A bolt falls from the strain in its bar onto the top of the reel it is taking. */
+  private strikeReel(from: { x: number; y: number }, x: number): void {
+    const g = new Graphics();
+    g.blendMode = 'add';
+    this.labelLayer.addChild(g);
+    const fork = (a: { x: number; y: number }, b: { x: number; y: number }): { x: number; y: number }[] => {
+      let pts = [a, b];
+      let rough = Math.hypot(b.x - a.x, b.y - a.y) * 0.18;
+      for (let k = 0; k < 5; k++) {
+        const next = [pts[0]];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p = pts[i];
+          const q = pts[i + 1];
+          next.push({ x: (p.x + q.x) / 2 + (Math.random() - 0.5) * rough, y: (p.y + q.y) / 2 + (Math.random() - 0.5) * rough * 0.4 }, q);
+        }
+        pts = next;
+        rough *= 0.55;
+      }
+      return pts;
+    };
+    const draw = () => {
+      if (g.destroyed) return;
+      const pts = fork(from, { x, y: 2 });
+      g.clear();
+      for (const [width, color, alpha] of [[26, 0xff5a20, 0.14], [10, 0xffa050, 0.42], [3.5, 0xfff4e0, 1]] as const) {
+        g.moveTo(pts[0].x, pts[0].y);
+        for (const p of pts) g.lineTo(p.x, p.y);
+        g.stroke({ width, color, alpha, cap: 'round', join: 'round' });
+      }
+    };
+    draw();
+    gsap
+      .timeline({ onComplete: () => !g.destroyed && g.destroy() })
+      .to(g, { alpha: 0.25, duration: 0.05 })
+      .add(draw)
+      .to(g, { alpha: 1, duration: 0.03 })
+      .to(g, { alpha: 0.35, duration: 0.06 })
+      .add(draw)
+      .to(g, { alpha: 1, duration: 0.03 })
+      .to(g, { alpha: 0, duration: 0.3, ease: 'power2.in' });
+    this.fx.sparks(x, 6, 10, 0.7);
+  }
+
   /** Book-style expansion: infected light rises up the reel, it bursts, then the strain slams in. */
-  async expand(exp: Expansion, onReel?: (reel: number) => void): Promise<void> {
+  async expand(exp: Expansion, onReel: (reel: number) => void, source: { x: number; y: number }): Promise<void> {
     await this.settleWins();
     this.clearHighlights();
     for (const r of exp.reels) {
@@ -1363,7 +1406,8 @@ export class ReelBoard extends Container {
       // under every column: the lights of neighbouring reels must not wash each other out
       this.expandLayer.addChildAt(light, 0);
       this.expandLayer.addChild(vm, veins, big, sweepMask, sweep);
-      onReel?.(r);
+      onReel(r);
+      this.strikeReel(source, x + CELL_W / 2);
       await new Promise<void>((resolve) => {
         gsap
           .timeline({ onComplete: resolve })
