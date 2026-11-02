@@ -192,6 +192,7 @@ export class Background extends Container {
   private live: TempleLight | null = null;
   private gateGlow: Sprite | null = null;
   private boltSide = 1;
+  private moon = MOON;
   /** the two leaves of the door of the pyramid, in the picture of the sands */
   private door = new Container();
   private doorLeaves: Sprite[] = [];
@@ -397,7 +398,8 @@ export class Background extends Container {
     this.scene.visible = !outside;
     if (this.outside) this.outside.visible = outside;
     this.live?.useScene(outside ? 'pyramid' : 'hall');
-    this.moonHalo?.position.set((outside ? MOON_OUT[0] : MOON[0]) - W / 2, (outside ? MOON_OUT[1] : MOON[1]) - H / 2);
+    this.moon = outside ? MOON_OUT : MOON;
+    this.moonHalo?.position.set(this.moon[0] - W / 2, this.moon[1] - H / 2);
     this.gateGlow?.position.set(outside ? DOOR[0] + DOOR[2] / 2 - W / 2 : GATE[0] - W / 2, outside ? DOOR[1] + DOOR[3] / 2 - H / 2 : GATE[1] - H / 2);
     this.camera.fx = outside ? DOOR[0] + DOOR[2] / 2 : GATE[0];
     this.camera.fy = outside ? DOOR[1] + DOOR[3] / 2 : GATE[1];
@@ -493,7 +495,7 @@ export class Background extends Container {
       this.strike(1, APEX);
       this.templeFx?.surge(1);
       this.nextStrike = 6;
-      this.live?.wave(0xff3a1a, 1.5, false, 75, 1);
+      this.live?.wave(0xff3a1a, 1, false, 75, 0.12);
     }
   }
 
@@ -672,7 +674,7 @@ export class Background extends Container {
     if (this.moonHalo) {
       this.moonHalo.tint = f > 0.5 ? 0xff3020 : 0xffe8c0;
       this.moonHalo.alpha = 0.16 + 0.03 * Math.sin(this.t * 0.7) + f * 0.08;
-      this.moonHalo.scale.set((MOON[2] * 5.8) / 256);
+      this.moonHalo.scale.set((this.moon[2] * 5.8) / 256);
     }
     // a shooting star now and then on calm nights
     this.nextMeteor -= dt;

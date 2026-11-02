@@ -1,7 +1,7 @@
 """
 Paints what the 3D render of tools/render_temple.py does not cover, into src/game/art/egypt/:
 
-  temple_night, pyramid_night, pyramid_infected   sky and moon under the rendered scenes
+  tools/out/view_*.png    sky and moon under the rendered scenes, what tools/paint_ai.py starts from
   corridor_door                    a doorway of the corridor inside the pyramid
 
 Run from the root of the repository: python tools/paint_decor.py [sky|door]
@@ -245,22 +245,19 @@ def grade(c, infected):
     return np.clip(c, 0, 1) * (1 - 0.62 * smooth(0.55, 1.15, d))[..., None]
 
 
-def compose_over_sky(court, out, infected, moon):
-    img = paint_moon(paint_sky(infected), infected, moon)
+def compose_over_sky(court, out, moon):
+    img = paint_moon(paint_sky(False), False, moon)
     c = np.asarray(Image.open(f'tools/out/{court}.png').convert('RGBA').resize((W, H), Image.LANCZOS), dtype=np.float64) / 255
     a = c[..., 3:4]
-    img = img * (1 - a) + grade(c[..., :3], infected) * a
-    im = Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB')
-    im.save(f'{OUT}{out}.webp', 'WEBP', quality=84, method=6)
-    im.resize((2048, 1152), Image.LANCZOS).save(f'{OUT}{out}_m.webp', 'WEBP', quality=72, method=6)
+    img = img * (1 - a) + grade(c[..., :3], False) * a
+    Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB').save(f'tools/out/{out}.png')
     print(out)
 
 
 def run_temple():
     """The sky and the moon, under what the two render scripts have made."""
-    compose_over_sky('court_night', 'temple_night', False, (1270, 110))
-    compose_over_sky('out_night', 'pyramid_night', False, (560, 120))
-    compose_over_sky('out_infected', 'pyramid_infected', True, (560, 120))
+    compose_over_sky('court_night', 'view_hall', (1270, 110))
+    compose_over_sky('out_night', 'view_night', (560, 120))
 
 
 # ------------------------------------------------------------------------------------------ doorway

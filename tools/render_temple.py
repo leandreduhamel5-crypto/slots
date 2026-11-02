@@ -217,12 +217,7 @@ def scene_id(x, y, z):
     add(box(a - (ROW_NEAR + WALL_X) / 2, y - BEAM_Y, z - FIRST_Z - across * BAY, (WALL_X - ROW_NEAR) / 2, 0.8, 1.2), STONE)
     add(box(a - (ROW_NEAR + WALL_X) / 2 - 1.0, y - (ROOF_Y + 0.35), z - mid, (WALL_X - ROW_NEAR) / 2 + 2.6, 0.55, length), ROOF)
     add(box(a - WALL_X, y - ROOF_Y / 2, z - mid, 1.0, ROOF_Y / 2, length), STONE)
-    # the avenue
-    b_k = np.clip(np.round((z - SPHINX_FIRST) / SPHINX_BAY), 0, SPHINX_COUNT - 1)
-    sb, snemes, sface = sphinx(a - SPHINX_X, y, z - SPHINX_FIRST - b_k * SPHINX_BAY)
-    add(sb, SPHINX)
-    add(snemes, NEMES)
-    add(sface, FACE)
+    # the sphinxes of the avenue are painted statues, set in by tools/finish_ai.py
     # the pylon: two battered towers, and the gate between them
     add(box(a - PYLON_X, y - PYLON_H / 2, z - PYLON_Z, 10.6 - y * 0.09, PYLON_H / 2, 3.6) * 0.86, PYLON)
     add(box(x, y - (GATE_H + 3.0) / 2, z - PYLON_Z, GATE_W + 1.4, (GATE_H + 3.0) / 2, 2.4), PYLON)

@@ -159,10 +159,13 @@ export class TempleLight extends Container {
     this.shader.resources.uMapB = b.source;
     this.set('uGateAt', ...(SCENES[name].at as [number, number, number]));
     this.far = SCENES[name].far;
-    this.gateBase = name === 'hall' ? 0.24 : 0;
+    this.gateBase = name === 'hall' ? 0.14 : 0;
+    this.reach = name === 'hall' ? 0.6 : 0.16;
   }
 
-  private gateBase = 0.24;
+  private gateBase = 0.14;
+  /** the pictures are painted with their own light: what is added stays well under it, above all in the dark of the bonus */
+  private reach = 0.6;
 
   /** A wave of light runs through the hall: from the far end to the viewer, or (from the slot) away down the nave. */
   wave(colour: number, strength: number, away = false, speed = 90, body = 0.4): void {
@@ -182,13 +185,13 @@ export class TempleLight extends Container {
     const t = this.t;
     const mix = (k: number) => NIGHT[k] + (RED[k] - NIGHT[k]) * feature;
     // the slot lights the hall: it breathes, it sways a little, and it blazes on a win
-    const slot = 0.13 + 0.035 * Math.sin(t * 0.7) + flare * 1.1;
+    const slot = (0.13 + 0.035 * Math.sin(t * 0.7) + flare * 1.1) * this.reach;
     this.set('uWarm', mix(0) * slot, mix(1) * slot, mix(2) * slot);
     this.set('uWarmAt', Math.sin(t * 0.23) * 3.4, 9 + Math.sin(t * 0.31) * 1.3, 8 + Math.sin(t * 0.17) * 2.2);
     const beat = Math.pow(Math.max(0, Math.sin(t * 2.2)), 8);
-    const gate = this.gateBase + 0.05 * Math.sin(t * 1.3) * (this.gateBase > 0 ? 1 : feature) + feature * (0.14 + beat * 0.22);
+    const gate = this.gateBase + 0.05 * Math.sin(t * 1.3) * (this.gateBase > 0 ? 1 : feature) + feature * (0.14 + beat * 0.22) * this.reach;
     // what comes out of the pyramid is red, whatever the hour
-    const door = this.doorLight * 0.4;
+    const door = this.doorLight * 0.16;
     this.set('uGate', mix(0) * gate + RED[0] * door, mix(1) * gate + RED[1] * door, mix(2) * gate + RED[2] * door);
     const boltC = feature > 0.5 ? [1, 0.3, 0.2] : [0.62, 0.72, 1];
     this.set('uFlash', boltC[0] * bolt * 0.55, boltC[1] * bolt * 0.55, boltC[2] * bolt * 0.55);
@@ -197,7 +200,7 @@ export class TempleLight extends Container {
     this.nextWave -= dt;
     if (this.nextWave <= 0 && !this.flow) {
       this.nextWave = feature > 0.5 ? 2.6 : 11 + Math.random() * 6;
-      if (feature > 0.5) this.wave(0xff2a14, 0.45, false, 80, 0.25);
+      if (feature > 0.5) this.wave(0xff2a14, 0.4, false, 80, 0.03);
       else this.wave(0xffd890, 0.32, false, 46, 0.03);
     }
     const f = this.flow;

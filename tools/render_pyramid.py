@@ -260,6 +260,8 @@ def shade(g, infected):
     nx, ny, nz = nx / nn, ny / nn, nz / nn
     g['final_n'] = np.stack([nx, ny, nz], 1)
     g['albedo'] = alb
+    if infected and 'burn' not in g:
+        g['burn'] = burn
     view = np.stack([g['dx'], g['dy'], g['dz']], 1)
     moon = MOON_DIR
     half_v = moon - view
@@ -285,6 +287,19 @@ def shade(g, infected):
     haze_c = np.array([0.34, 0.02, 0.02]) if infected else np.array([0.03, 0.035, 0.08])
     haze = 1 - np.exp(-t / 330.0)
     return rgb * (1 - haze[:, None]) + haze_c * haze[:, None]
+
+
+def save_layers(g):
+    """For tools/finish_ai.py: what each pixel is, and how much of it burns."""
+    w, h = g['w'], g['h']
+
+    def plane(values, empty, kind):
+        flat = np.full(w * h, empty, kind)
+        flat[g['idx']] = values
+        return flat.reshape(h, w)
+
+    Image.fromarray(plane(g['ids'], 0, np.uint8) * 20).save('tools/out/pyramid_ids.png')
+    Image.fromarray((np.clip(plane(g['burn'], 0, np.float32), 0, 1) * 255).astype(np.uint8)).save('tools/out/pyramid_burn.png')
 
 
 def paint_leaf(path):
@@ -328,6 +343,7 @@ def main():
     if only_maps:
         shade(g, True)
         rt.light_maps(g, 'pyramid')
+        save_layers(g)
         return
     for infected, name in ((False, 'out_night'), (True, 'out_infected')):
         img = rt.compose(g, infected)
