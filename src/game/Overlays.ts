@@ -445,10 +445,8 @@ export class Overlays extends Container {
     this.particles.startRain([this.tex.coin], this.w, 3);
 
     const duration = 2.1 * (top + 1);
-    this.audio.timpaniRoll(duration);
     const counter = { v: 0 };
     let tier = 0;
-    let lastTick = 0;
     const fitted = () => Math.min(1.15, AMOUNT_W / Math.max(1, amount.inkWidth));
     const tween = gsap.to(counter, {
       v: win,
@@ -460,11 +458,6 @@ export class Overlays extends Container {
         amount.scale.set(fitted());
         showMult(counter.v);
         onTick?.(counter.v);
-        const now = performance.now();
-        if (now - lastTick > 70) {
-          this.audio.tick(counter.v / win);
-          lastTick = now;
-        }
         const t = winTier(counter.v, bet);
         if (t > tier) {
           tier = t;

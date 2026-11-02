@@ -7,7 +7,7 @@ the moonlit night and the infected temple.
   python tools/render_temple.py [scale]       scale 0.25 is a quick look, 1 the final picture
   python tools/render_temple.py maps          only the light maps, in two minutes
 
-It writes tools/out/court_night.png and court_infected.png, transparent where the sky shows.
+It writes tools/out/court_night.png, transparent where the sky shows.
 tools/paint_decor.py then lays them over its sky. It prints where the props fall on screen, for
 src/game/art/templeHD.ts. It also writes temple_map_a and temple_map_b into the art folder: the
 normals, the depth and the colours of the surfaces, with which the game relights the picture live.
@@ -50,7 +50,7 @@ PYR = np.array([0.0, 0.0, 420.0])
 PYR_H = 242.6
 PYR_B = 192.0
 PYR_ROT = 0.62
-COURSE = 1.8
+COURSE = 3.2
 
 # the pylon that closes the avenue, its gate of gold open on the light
 PYLON_Z = 128.0
@@ -122,27 +122,62 @@ def column(lx, y, lz):
     return np.minimum(np.minimum(d, base), abacus)
 
 
-def sphinx(a, h, b):
-    """A lion's body and a king's head, seen from the side. a runs from the paws to the tail, h is the height."""
-    plinth = box(a - 3.9, h - 0.22, b, 4.3, 0.24, 1.25)
-    haunch = ellipsoid(a - 6.3, h - 1.25, b, 1.75, 1.05, 1.02)
-    torso = ellipsoid(a - 4.2, h - 1.4, b, 2.5, 0.92, 0.92)
-    chest = ellipsoid(a - 2.35, h - 1.85, b, 0.86, 1.28, 0.84)
-    neck = ellipsoid(a - 2.2, h - 3.0, b, 0.5, 0.72, 0.46)
-    paw_a = capsule(a, h, b, (2.3, 0.72, 0.56), (0.25, 0.72, 0.56), 0.27)
-    paw_b = capsule(a, h, b, (2.3, 0.72, -0.56), (0.25, 0.72, -0.56), 0.27)
-    leg = ellipsoid(a - 6.2, h - 0.8, np.abs(b) - 0.72, 1.1, 0.42, 0.32)
-    body = smin(smin(smin(smin(torso, haunch, 0.5), chest, 0.45), neck, 0.2), leg, 0.2)
-    body = np.minimum(smin(body, np.minimum(paw_a, paw_b), 0.2), plinth)
-    cap = ellipsoid(a - 2.15, h - 3.72, b, 0.66, 0.55, 0.62)
-    cap = np.maximum(cap, -ellipsoid(a - 1.7, h - 3.5, b, 0.4, 0.48, 0.37))
-    w = 0.52 + np.clip(3.55 - h, 0, 0.95) * 0.6
-    wings = np.maximum(np.maximum(np.abs(b) - w, np.abs(a - 2.25) - 0.36), np.maximum(h - 3.6, 2.65 - h)) * 0.7
-    wings = np.maximum(wings, -ellipsoid(a - 1.72, h - 3.2, b, 0.36, 0.65, 0.38))
-    nemes = np.minimum(cap, wings)
-    face = ellipsoid(a - 1.98, h - 3.42, b, 0.4, 0.5, 0.34)
-    face = smin(face, ellipsoid(a - 1.58, h - 3.4, b, 0.09, 0.16, 0.07), 0.05)
-    return body, nemes, face
+def sphinx(a, h, b, k=0.8):
+    """
+    A lion couchant with a king's head, in the proportions of Giza, cut from one block: forelegs laid
+    straight out, deep chest, shoulders and haunches standing out of the flanks, tail along the side,
+    the nemes falling on the shoulders. a runs from the paws to the tail, h is the height. k is its size.
+    """
+    a, h, b = a / k, h / k, b / k
+    s = np.abs(b)
+    plinth = box(a - 4.6, h - 0.4, b, 5.5, 0.4, 2.0)
+    step = box(a - 4.6, h - 0.86, b, 5.2, 0.1, 1.75)
+    plinth = np.minimum(plinth, step)
+    y = h - 0.94
+    # the wind has worn the rock in soft layers
+    layers = 0.009 * np.sin(y * 7.5 + 1.6 * np.sin(a * 0.9 + b * 1.3)) + 0.004 * np.sin(y * 21 + a * 1.7)
+
+    arm = capsule(a, y, s, (3.4, 0.6, 0.74), (1.0, 0.32, 0.74), 0.35)
+    paw = ellipsoid(a - 0.82, y - 0.27, s - 0.76, 0.66, 0.28, 0.42) + 0.014 * np.sin(s * 26) * smooth(1.2, 0.5, a)
+    shoulder = ellipsoid(a - 3.65, y - 1.25, s - 0.8, 1.08, 1.18, 0.46)
+    chest = ellipsoid(a - 3.0, y - 1.42, b, 0.9, 1.42, 1.02)
+    barrel = ellipsoid(a - 5.5, y - 1.26, b, 3.05, 1.08, 1.06)
+    haunch = ellipsoid(a - 7.55, y - 1.12, s - 0.74, 1.34, 1.12, 0.58)
+    rump = ellipsoid(a - 7.7, y - 1.18, b, 1.2, 1.08, 1.0)
+    hind = capsule(a, y, s, (7.8, 0.32, 1.18), (5.5, 0.28, 1.22), 0.28)
+    tail = capsule(a, y, b, (8.8, 0.42, 0.98), (6.4, 0.2, 1.46), 0.1)
+    neck = ellipsoid(a - 3.05, y - 2.42, b, 0.6, 0.86, 0.6)
+    body = smin(smin(barrel, chest, 0.5), rump, 0.5)
+    body = smin(smin(body, shoulder, 0.28), haunch, 0.28)
+    body = smin(smin(body, neck, 0.3), arm, 0.22)
+    body = smin(smin(body, paw, 0.14), hind, 0.14)
+    body = smin(body, tail, 0.1) + layers
+    body = np.minimum(body, plinth)
+
+    # the head, a little smaller than life on the great body of the lion
+    q = 0.86
+    ha, hy, hb, hs = (a - 2.85) / q + 2.85, (y - 2.7) / q + 2.7, b / q, s / q
+
+    # the nemes: flat on the crown, a band across the brow, wings from the temples to the shoulders,
+    # and two flat lappets on the chest
+    cap = np.maximum(ellipsoid(ha - 2.98, hy - 3.42, hb, 0.8, 0.68, 0.78), hy - 3.95)
+    w = 0.7 + np.clip(3.4 - hy, 0, 1.1) * 0.52
+    wings = np.maximum(np.maximum(np.abs(hb) - w, np.abs(ha - 3.05) - 0.34), np.maximum(hy - 3.42, 2.32 - hy)) * 0.7 - 0.03
+    drop = np.clip(3.2 - hy, 0, 1.1)
+    lappet = np.maximum(np.maximum(np.abs(ha - 2.44 + drop * 0.1) - 0.11, np.abs(hs - 0.62) - (0.17 + drop * 0.1)), np.maximum(hy - 3.2, 2.08 - hy)) * 0.7 - 0.03
+    nemes = smin(smin(cap, wings, 0.1), lappet, 0.06)
+    nemes = np.maximum(nemes, -ellipsoid(ha - 2.2, hy - 3.08, hb, 0.5, 0.56, 0.41))
+    nemes = nemes + 0.005 * np.sin(hy * 46)
+
+    head = ellipsoid(ha - 2.62, hy - 3.16, hb, 0.42, 0.6, 0.44)
+    nose = capsule(ha, hy, hb, (2.24, 3.26, 0), (2.17, 3.08, 0), 0.05)
+    brow = capsule(ha, hy, hs, (2.27, 3.33, 0.04), (2.36, 3.34, 0.34), 0.035)
+    lips = ellipsoid(ha - 2.24, hy - 2.93, hb, 0.07, 0.05, 0.13)
+    face = smin(smin(smin(head, nose, 0.08), brow, 0.08), lips, 0.05)
+    sockets = np.sqrt((ha - 2.2) ** 2 + (hy - 3.24) ** 2 + (hs - 0.18) ** 2) - 0.08
+    face = -smin(-face, sockets, 0.05)
+    uraeus = capsule(ha, hy, hb, (2.5, 3.8, 0), (2.36, 3.62, 0), 0.04)
+    return body * k, np.minimum(nemes, uraeus) * q * k, face * q * k
 
 
 def scene(x, y, z):
@@ -388,6 +423,7 @@ def shade(g, infected):
     red = np.array([0.5, 0.13, 0.08], np.float32)
     green = np.array([0.05, 0.24, 0.2], np.float32)
     sand_c = np.array([0.82, 0.66, 0.46], np.float32)
+    stone_c = np.array([0.8, 0.68, 0.52], np.float32)
     lx, lz = row_coords(x, z)
 
     # the columns: sandstone that still carries its paint, worn in patches
@@ -486,31 +522,28 @@ def shade(g, infected):
         spec[np.nonzero(m)[0][star]] = 0.6
         blue[np.nonzero(m)[0][~star]] = 0.5
 
+    # the sphinxes are one block of limestone, its layers worn by the wind; the paint has nearly gone
     m = ids == SPHINX
     if m.any():
-        alb[m] = np.outer(0.75 + 0.6 * (grain[m] - 0.5), [0.07, 0.065, 0.07])
-        spec[m] = 0.6
-        low = y[m] < 0.46
-        a = alb[m]
-        a[low] = gold_c
-        alb[m] = a
-        sp = spec[m]
-        sp[low] = 1.0
-        spec[m] = sp
+        rock = 0.62 + 0.55 * (grain[m] - 0.5) + 0.6 * (blotch[m] - 0.5) + 0.08 * np.sin(y[m] * 11 + 4 * (blotch[m] - 0.5))
+        c = np.outer(rock, stone_c)
+        plinth = y[m] < 0.74
+        s_, _, _ = signs(x[m] + z[m], y[m] * 2.2, 3.4)
+        c[plinth & (s_ > 0.42)] *= 0.55
+        alb[m] = c
 
     m = ids == NEMES
     if m.any():
-        stripe = np.mod(y[m], 0.22) < 0.11
-        c = np.zeros((m.sum(), 3), np.float32)
-        c[:] = lapis
-        c[stripe] = gold_c
+        rock = 0.66 + 0.5 * (grain[m] - 0.5) + 0.5 * (blotch[m] - 0.5)
+        c = np.outer(rock, stone_c)
+        worn = np.clip((blotch[m] - 0.42) * 3.2, 0, 1)[..., None] * 0.6
+        stripe = np.mod(y[m] * 7.3, 2) < 1
+        c[stripe] = c[stripe] * (1 - worn[stripe]) + lapis * worn[stripe]
         alb[m] = c
-        spec[m] = 0.9
 
     m = ids == FACE
     if m.any():
-        alb[m] = gold_c
-        spec[m] = 1.0
+        alb[m] = np.outer(0.68 + 0.44 * (grain[m] - 0.5) + 0.3 * (blotch[m] - 0.5), [0.84, 0.66, 0.48])
 
     m = ids == SAND
     if m.any():
@@ -549,7 +582,7 @@ def shade(g, infected):
         fy = y[m] / COURSE - row
         cc = (0.52 + 0.34 * tone + 0.7 * (grain[m] - 0.5)) * (0.4 + 0.6 * smooth(0.0, 0.2, fy))
         a = np.outer(cc, [0.92, 0.78, 0.58])
-        cap = y[m] > PYR_H - 7
+        cap = y[m] > PYR_H - 13
         a[cap] = [1.0, 0.72, 0.3]
         alb[m] = a
         sp = spec[m]
@@ -620,6 +653,8 @@ def shade(g, infected):
         warm_c, gate_c = np.array([1.0, 0.7, 0.4]), np.array([1.0, 0.62, 0.26])
         moon_i, fill_i, warm_i, gate_i = 0.85, 0.16, 1.25, 2.6
     light = np.outer(ndl * shadow * moon_i, moon_c) + np.outer(sky * ao * 0.8, sky_c)
+    pyr = ids == PYRAMID
+    light[pyr] += np.outer(np.clip(nx[pyr] * 0.62 + ny[pyr] * 0.5 - nz[pyr] * 0.6, 0, 1) * 0.95, moon_c * np.array([1.0, 0.92, 0.74]))
     # a low light from behind the viewer: the columns keep their paint where nothing else reaches
     fill = np.clip(-(nx * view[:, 0] + ny * view[:, 1] + nz * view[:, 2]), 0, 1) ** 1.5 * np.exp(-t / 46.0)
     light += np.outer(fill * fill_i * ao, fill_c)
@@ -681,7 +716,7 @@ def compose(g, infected):
     return out
 
 
-def light_maps(g):
+def light_maps(g, name='temple'):
     """What the game needs to relight the picture: normals and depth in one image, the colours of the surfaces in the other."""
     w, h = g['w'], g['h']
 
@@ -693,13 +728,17 @@ def light_maps(g):
     n = plane(g['final_n'] * 0.5 + 0.5, 0.5)
     depth = plane(np.log(np.clip(g['t'], 1, 900)) / math.log(900), 1.0)
     a = np.dstack([n[..., 0], n[..., 1], depth])
+    # for the painter: near is white, the sky black
+    far = plane(g['t'], 1e6)
+    near = np.clip(14.0 / far, 0, 1) ** 0.42
+    Image.fromarray((near * 255 + 0.5).astype(np.uint8), 'L').save(f'tools/out/{name}_depth.png')
     # the floor and every far thing are dark in the picture: the colours are kept in the square root, to keep their steps
     b = np.sqrt(np.clip(plane(g['albedo'], 0.0), 0, 1))
     size = (1024, 576)
-    for name, data in (('a', a), ('b', b)):
+    for part, data in (('a', a), ('b', b)):
         im = Image.fromarray((np.clip(data, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB').resize(size, Image.BILINEAR)
         # the channels of a data map are not a picture: lossy coding would smear them into each other
-        im.save(f'src/game/art/egypt/temple_map_{name}.webp', 'WEBP', lossless=name == 'a', quality=100 if name == 'a' else 84, method=6)
+        im.save(f'src/game/art/egypt/{name}_map_{part}.webp', 'WEBP', lossless=part == 'a', quality=100 if part == 'a' else 84, method=6)
 
 
 def project(px, py, pz):
@@ -717,11 +756,9 @@ def main():
     # supersampled when final
     ss = 1.5 if scale >= 1 else 1
     g = gbuffer(scale * ss)
-    for infected, name in ((False, 'court_night'), (True, 'court_infected')):
-        img = compose(g, infected)
-        im = Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGBA')
-        im = im.resize((int(W * scale), int(H * scale)), Image.LANCZOS)
-        im.save(f'tools/out/{name}.png')
+    img = compose(g, False)
+    im = Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGBA')
+    im.resize((int(W * scale), int(H * scale)), Image.LANCZOS).save('tools/out/court_night.png')
     light_maps(g)
     print('apex', project(PYR[0], PYR_H, PYR[2]))
     print('gate', project(0, GATE_H / 2, PYLON_Z - 2.45))

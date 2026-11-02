@@ -30,6 +30,7 @@ uniform sampler2D uMapB;
 uniform vec3 uWarm;
 uniform vec3 uWarmAt;
 uniform vec3 uGate;
+uniform vec3 uGateAt;
 uniform vec3 uFlash;
 uniform vec3 uFlashDir;
 uniform vec3 uWave;
@@ -37,7 +38,6 @@ uniform vec2 uFront;
 uniform float uBody;
 
 const vec3 CAM = vec3(0.0, 2.4, 0.0);
-const vec3 GATE_AT = vec3(0.0, 7.0, 120.0);
 const float LOG_FAR = 6.8024;
 
 vec3 lit(vec3 n, vec3 v, vec3 l, vec3 alb, float shine) {
@@ -67,7 +67,7 @@ void main() {
   float d = length(w);
   vec3 c = uWarm * lit(n, v, w / d, alb, shine) / (1.0 + d * d / 680.0);
 
-  w = GATE_AT - p;
+  w = uGateAt - p;
   d = length(w);
   c += uGate * lit(n, v, w / d, alb, shine) / (1.0 + d * d / 1900.0);
 
@@ -81,8 +81,11 @@ void main() {
 
 const NIGHT = [1, 0.72, 0.42];
 const RED = [1, 0.14, 0.06];
-/** the hall, from the gate to the viewer */
-const GATE_T = 132;
+/** where the two scenes have their door, and how far a wave starts */
+const SCENES = {
+  hall: { at: [0, 7, 120], far: 132 },
+  pyramid: { at: [0, 5, 31], far: 150 },
+};
 
 const rgb = (hex: number) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
 
@@ -101,12 +104,21 @@ export class TempleLight extends Container {
   private t = 0;
   private flow: Wave | null = null;
   private nextWave = 7;
+  private shader: Shader;
+  private maps: Record<keyof typeof SCENES, [Texture, Texture]>;
+  private far = SCENES.hall.far;
+  /** the door of the scene is lit: 0 shut, 1 wide open */
+  doorLight = 0;
 
-  constructor(mapA: HTMLImageElement, mapB: HTMLImageElement) {
+  constructor(hall: HTMLImageElement[], pyramid: HTMLImageElement[]) {
     super();
-    const a = Texture.from(mapA);
-    const b = Texture.from(mapB);
-    a.source.autoGenerateMipmaps = b.source.autoGenerateMipmaps = false;
+    const load = (i: HTMLImageElement) => {
+      const t = Texture.from(i);
+      t.source.autoGenerateMipmaps = false;
+      return t;
+    };
+    this.maps = { hall: [load(hall[0]), load(hall[1])], pyramid: [load(pyramid[0]), load(pyramid[1])] };
+    const [a, b] = this.maps.hall;
     const geometry = new Geometry({
       attributes: {
         aPosition: [-W / 2, -H / 2, W / 2, -H / 2, W / 2, H / 2, -W / 2, H / 2],
@@ -124,6 +136,7 @@ export class TempleLight extends Container {
           uWarm: vec3(),
           uWarmAt: vec3(0, 9, 8),
           uGate: vec3(),
+          uGateAt: vec3(0, 7, 120),
           uFlash: vec3(),
           uFlashDir: vec3(0, 1, 0),
           uWave: vec3(),
@@ -132,15 +145,28 @@ export class TempleLight extends Container {
         },
       },
     });
+    this.shader = shader;
     this.u = shader.resources.lights.uniforms;
     const mesh = new Mesh({ geometry, shader });
     mesh.blendMode = 'add';
     this.addChild(mesh);
   }
 
-  /** A wave of light runs through the hall: from the gate to the viewer, or (from the slot) away down the nave. */
+  /** Which of the two rendered places is on screen. */
+  useScene(name: keyof typeof SCENES): void {
+    const [a, b] = this.maps[name];
+    this.shader.resources.uMapA = a.source;
+    this.shader.resources.uMapB = b.source;
+    this.set('uGateAt', ...(SCENES[name].at as [number, number, number]));
+    this.far = SCENES[name].far;
+    this.gateBase = name === 'hall' ? 0.24 : 0;
+  }
+
+  private gateBase = 0.24;
+
+  /** A wave of light runs through the hall: from the far end to the viewer, or (from the slot) away down the nave. */
   wave(colour: number, strength: number, away = false, speed = 90, body = 0.4): void {
-    this.flow = { at: away ? 4 : GATE_T, speed: away ? speed : -speed, width: 11, colour: rgb(colour), strength, body };
+    this.flow = { at: away ? 4 : this.far, speed: away ? speed : -speed, width: 11, colour: rgb(colour), strength, body };
   }
 
   private set(name: string, x: number, y: number, z: number): void {
@@ -160,8 +186,10 @@ export class TempleLight extends Container {
     this.set('uWarm', mix(0) * slot, mix(1) * slot, mix(2) * slot);
     this.set('uWarmAt', Math.sin(t * 0.23) * 3.4, 9 + Math.sin(t * 0.31) * 1.3, 8 + Math.sin(t * 0.17) * 2.2);
     const beat = Math.pow(Math.max(0, Math.sin(t * 2.2)), 8);
-    const gate = 0.24 + 0.05 * Math.sin(t * 1.3) + feature * beat * 0.5;
-    this.set('uGate', mix(0) * gate, mix(1) * gate, mix(2) * gate);
+    const gate = this.gateBase + 0.05 * Math.sin(t * 1.3) * (this.gateBase > 0 ? 1 : feature) + feature * (0.14 + beat * 0.22);
+    // what comes out of the pyramid is red, whatever the hour
+    const door = this.doorLight * 0.4;
+    this.set('uGate', mix(0) * gate + RED[0] * door, mix(1) * gate + RED[1] * door, mix(2) * gate + RED[2] * door);
     const boltC = feature > 0.5 ? [1, 0.3, 0.2] : [0.62, 0.72, 1];
     this.set('uFlash', boltC[0] * bolt * 0.55, boltC[1] * bolt * 0.55, boltC[2] * bolt * 0.55);
     this.set('uFlashDir', 0.46 * side, 0.82, -0.34);
@@ -169,19 +197,19 @@ export class TempleLight extends Container {
     this.nextWave -= dt;
     if (this.nextWave <= 0 && !this.flow) {
       this.nextWave = feature > 0.5 ? 2.6 : 11 + Math.random() * 6;
-      if (feature > 0.5) this.wave(0xff2a14, 0.6, false, 80, 0.5);
+      if (feature > 0.5) this.wave(0xff2a14, 0.45, false, 80, 0.25);
       else this.wave(0xffd890, 0.32, false, 46, 0.03);
     }
     const f = this.flow;
     if (f) {
       f.at += f.speed * dt;
-      const k = f.strength * Math.min(1, (GATE_T + 8 - Math.abs(f.at - (f.speed < 0 ? 0 : GATE_T))) / 30);
+      const k = f.strength * Math.min(1, (this.far + 8 - Math.abs(f.at - (f.speed < 0 ? 0 : this.far))) / 30);
       this.set('uWave', f.colour[0] * k, f.colour[1] * k, f.colour[2] * k);
       const front = this.u.uFront as Float32Array;
       front[0] = f.at;
       front[1] = f.width;
       this.u.uBody = f.body;
-      if (f.at < -10 || f.at > GATE_T + 10) {
+      if (f.at < -10 || f.at > this.far + 10) {
         this.flow = null;
         this.set('uWave', 0, 0, 0);
       }

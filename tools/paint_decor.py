@@ -1,7 +1,7 @@
 """
 Paints what the 3D render of tools/render_temple.py does not cover, into src/game/art/egypt/:
 
-  temple_night / temple_infected   sky and moon under the rendered court
+  temple_night, pyramid_night, pyramid_infected   sky and moon under the rendered scenes
   corridor_door                    a doorway of the corridor inside the pyramid
 
 Run from the root of the repository: python tools/paint_decor.py [sky|door]
@@ -96,8 +96,8 @@ def paint_sky(infected):
     return screen(img, add)
 
 
-def paint_moon(img, infected):
-    cx, cy, r = 1270 * K, 110 * K, 84
+def paint_moon(img, infected, at=(1270, 110)):
+    cx, cy, r = at[0] * K, at[1] * K, 84
     pad = 12
     x0, y0 = int(cx - r - pad), int(cy - r - pad)
     n = (r + pad) * 2 * 2
@@ -125,7 +125,7 @@ def paint_moon(img, infected):
         if s > 0.038:
             ang = np.arctan2(v - b, u - a)
             alb += 0.06 * np.exp(-dist / 5) * (0.5 + 0.5 * np.sin(ang * 13 + a * 40))
-    light = np.array([-0.66, -0.34, 0.67])
+    light = np.array([-0.66 if at[0] > 960 else 0.66, -0.34, 0.67])
     lit = np.clip(u * light[0] + v * light[1] + z * light[2], 0, 1) ** 0.8
     shade = 0.05 + 1.0 * lit
     colour = np.array([1.0, 0.27, 0.13]) if infected else np.array([1.0, 0.93, 0.78])
@@ -245,19 +245,22 @@ def grade(c, infected):
     return np.clip(c, 0, 1) * (1 - 0.62 * smooth(0.55, 1.15, d))[..., None]
 
 
+def compose_over_sky(court, out, infected, moon):
+    img = paint_moon(paint_sky(infected), infected, moon)
+    c = np.asarray(Image.open(f'tools/out/{court}.png').convert('RGBA').resize((W, H), Image.LANCZOS), dtype=np.float64) / 255
+    a = c[..., 3:4]
+    img = img * (1 - a) + grade(c[..., :3], infected) * a
+    im = Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB')
+    im.save(f'{OUT}{out}.webp', 'WEBP', quality=84, method=6)
+    im.resize((2048, 1152), Image.LANCZOS).save(f'{OUT}{out}_m.webp', 'WEBP', quality=72, method=6)
+    print(out)
+
+
 def run_temple():
-    """The sky and the moon, under the court that tools/render_temple.py has rendered."""
-    for which in ('night', 'infected'):
-        infected = which == 'infected'
-        img = paint_moon(paint_sky(infected), infected)
-        court = Image.open(f'tools/out/court_{which}.png').convert('RGBA').resize((W, H), Image.LANCZOS)
-        c = np.asarray(court, dtype=np.float64) / 255
-        a = c[..., 3:4]
-        img = img * (1 - a) + grade(c[..., :3], infected) * a
-        im = Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB')
-        im.save(f'{OUT}temple_{which}.webp', 'WEBP', quality=84, method=6)
-        im.resize((2048, 1152), Image.LANCZOS).save(f'{OUT}temple_{which}_m.webp', 'WEBP', quality=72, method=6)
-        print(which)
+    """The sky and the moon, under what the two render scripts have made."""
+    compose_over_sky('court_night', 'temple_night', False, (1270, 110))
+    compose_over_sky('out_night', 'pyramid_night', False, (560, 120))
+    compose_over_sky('out_infected', 'pyramid_infected', True, (560, 120))
 
 
 # ------------------------------------------------------------------------------------------ doorway

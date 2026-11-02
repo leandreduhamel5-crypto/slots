@@ -225,16 +225,15 @@ export class Game {
     codexCanvas: HTMLCanvasElement,
     assets: LoadedAssets,
     templeNight: HTMLImageElement,
-    templeInfected: HTMLImageElement,
+    sands: { outside: HTMLImageElement; infected: HTMLImageElement; door: HTMLImageElement; hallMaps: HTMLImageElement[]; pyramidMaps: HTMLImageElement[] },
     logoImage: HTMLImageElement,
     corridorDoor: HTMLImageElement,
-    templeMaps: [HTMLImageElement, HTMLImageElement],
   ) {
-    this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, templeMaps, assets.background);
+    this.bg = new Background(tex.spore, tex.glow, templeNight, sands, assets.background);
+    this.bg.onDoor = () => this.audio.stoneDoor(1.6);
     this.bg.onLightning = (power) => this.audio.lightning(power);
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
-    this.board.onIgnite = (r) => this.audio.ignite(r);
     const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo ?? logoImage);
     this.logo = new Logo(logoArt);
     this.logo.position.set(BOARD_W / 2, -18);
@@ -813,14 +812,15 @@ export class Game {
       this.audio.hush(true);
       // the pyramids on the reels wake the great one: a thread of gold from each to the capstone…
       await this.board.callTemple(this.board.toLocal(this.bg.apexOnScreen()), (i) => this.audio.templeCall(i));
-      // …the infection spreads over the temple…
-      this.bg.setFeature(true);
-      await this.sleep(1600);
-      // …and the camera dives down the nave, through the gate
-      this.audio.stoneDoor(1.6);
+      // …out of the sanctuary by its gate of gold…
+      this.audio.riser(1.6, 0.8);
       gsap.to(this.world, { alpha: 0, duration: 0.5, ease: 'power2.in' });
       gsap.to(this.hud.root, { opacity: 0, duration: 0.4 });
-      await this.bg.zoomTo(7, 1.3);
+      await this.bg.leaveHall(this.turbo);
+      // …the sands by night, and the great door opening by itself…
+      await this.bg.openPyramid(this.turbo);
+      // …and the camera goes in
+      await this.bg.zoomTo(9, this.turbo ? 0.5 : 0.8);
       await this.overlays.corridor(this.turbo ? 1.2 : 2.2);
       this.bg.camera.k = 1;
       this.layout();

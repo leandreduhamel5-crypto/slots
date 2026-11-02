@@ -114,8 +114,6 @@ export class ReelBoard extends Container {
   private rigs = new Map<string, Rig>();
   private hurried = false;
   /** camera hooks */
-  /** a winning symbol of this reel has just lit up */
-  onIgnite: ((reel: number) => void) | null = null;
   private ambientIn = 2.5;
 
   constructor(
@@ -915,10 +913,7 @@ export class ReelBoard extends Container {
       seen.add(k);
       return true;
     });
-    uniq.forEach(([r, row]) => {
-      this.performWin(this.rig(r, row), strong, r * stagger);
-      gsap.delayedCall(r * stagger, () => this.onIgnite?.(r));
-    });
+    uniq.forEach(([r, row]) => this.performWin(this.rig(r, row), strong, r * stagger));
   }
 
   /**

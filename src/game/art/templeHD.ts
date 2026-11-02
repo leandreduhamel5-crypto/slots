@@ -1,7 +1,7 @@
 /**
  * Layout of the backdrop, in the 1920×1080 logical space the game positions its live effects in.
- * The backdrop is a 3D scene ray marched offline (tools/render_temple.py) into egypt/temple_night.webp
- * and egypt/temple_infected.webp at RS×; these are the screen positions of its props, as it prints them.
+ * The backdrops are 3D scenes ray marched offline (tools/render_temple.py, tools/render_pyramid.py) at
+ * RS×, seen by one same camera; these are the screen positions of their props, as the scripts print them.
  */
 export const TW = 1920;
 export const TH = 1080;
@@ -15,3 +15,7 @@ export const HORIZON = 600;
 export const MOON: [number, number, number] = [1270, 110, 63];
 /** the gate of gold at the end of the avenue */
 export const GATE: [number, number] = [960, 605];
+/** the door of the pyramid, in the picture of the sands: left, top, width, height */
+export const DOOR: [number, number, number, number] = [903, 535, 114, 193];
+/** the moon, over the sands */
+export const MOON_OUT: [number, number] = [560, 120];

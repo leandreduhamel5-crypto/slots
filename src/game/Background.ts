@@ -3,7 +3,7 @@ import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import gsap from 'gsap';
 import { paintSoftRays } from './art/egyptFrame';
 import { makeCanvas, seeded } from './art/painters';
-import { APEX, GATE, HORIZON, MOON, PYRAMID_HALF, TH as H, TW as W } from './art/templeHD';
+import { APEX, DOOR, GATE, HORIZON, MOON, MOON_OUT, PYRAMID_HALF, TH as H, TW as W } from './art/templeHD';
 import { LITE, slim } from './device';
 import { TempleLight } from './TempleLight';
 import { TempleFx } from './TempleFx';
@@ -152,7 +152,9 @@ interface Spore {
 export class Background extends Container {
   private sceneC = new Container();
   private scene: Sprite;
-  /** the same temple, infected: crossfaded in for the free spins */
+  /** the sands before the pyramid, by night: only seen on the way into the bonus */
+  private outside: Sprite | null = null;
+  /** the pyramid split by the infection: the backdrop of the free spins */
   private infected: Sprite | null = null;
   /** additive copy of the infected art: makes its cracks throb with the beat */
   private infectedPulse: Sprite | null = null;
@@ -190,6 +192,14 @@ export class Background extends Container {
   private live: TempleLight | null = null;
   private gateGlow: Sprite | null = null;
   private boltSide = 1;
+  /** the two leaves of the door of the pyramid, in the picture of the sands */
+  private door = new Container();
+  private doorLeaves: Sprite[] = [];
+  private doorHeat: Sprite | null = null;
+  private doorInside = new Graphics();
+  private flashLayer = new Graphics();
+  /** the door has begun to open */
+  onDoor: (() => void) | null = null;
   private w = W;
   private h = H;
   /** called on every lightning strike with its power (0.3 distant … 1 direct hit) */
@@ -199,8 +209,7 @@ export class Background extends Container {
     private sporeTex: Texture,
     glowTex: Texture,
     night: HTMLImageElement,
-    infected: HTMLImageElement,
-    maps: [HTMLImageElement, HTMLImageElement],
+    art: { outside: HTMLImageElement; infected: HTMLImageElement; door: HTMLImageElement; hallMaps: HTMLImageElement[]; pyramidMaps: HTMLImageElement[] },
     custom: HTMLImageElement | null = null,
   ) {
     super();
@@ -212,9 +221,15 @@ export class Background extends Container {
     const fogTex = slim(paintFog());
     this.sceneC.addChild(this.scene);
     if (!custom) {
-      const tex = Texture.from(infected);
-      // the temple fills the screen, never smaller than its pixels on a phone: no need for mipmaps
-      if (LITE) tex.source.autoGenerateMipmaps = this.scene.texture.source.autoGenerateMipmaps = false;
+      const tex = Texture.from(art.infected);
+      const sands = Texture.from(art.outside);
+      // the pictures fill the screen, never smaller than their pixels on a phone: no need for mipmaps
+      if (LITE) tex.source.autoGenerateMipmaps = sands.source.autoGenerateMipmaps = this.scene.texture.source.autoGenerateMipmaps = false;
+      this.outside = new Sprite(sands);
+      this.outside.anchor.set(0.5);
+      this.outside.scale.set(artScale);
+      this.outside.visible = false;
+      this.sceneC.addChild(this.outside);
       this.infected = new Sprite(tex);
       this.infectedPulse = new Sprite(tex);
       for (const s of [this.infected, this.infectedPulse]) {
@@ -222,11 +237,10 @@ export class Background extends Container {
         s.scale.set(artScale);
         s.alpha = 0;
       }
-      // deep rather than loud: the red must not fight the reels
-      this.infected.tint = 0xb4a8a8;
       this.infectedPulse.blendMode = 'add';
       this.reveal = new Graphics().poly(blotOutline()).fill(0xffffff);
-      this.reveal.position.set(APEX[0] - W / 2, APEX[1] - H / 2);
+      // the infection comes out of the door of the pyramid
+      this.reveal.position.set(DOOR[0] + DOOR[2] / 2 - W / 2, DOOR[1] + DOOR[3] - H / 2);
       this.reveal.visible = false;
       this.revealFront = new Sprite(Texture.from(paintHaloRing()));
       this.revealFront.anchor.set(0.5);
@@ -235,12 +249,13 @@ export class Background extends Container {
       this.revealFront.tint = 0xff8a4a;
       this.revealFront.visible = false;
       this.sceneC.addChild(this.infected, this.infectedPulse, this.reveal, this.revealFront);
-      this.live = new TempleLight(...maps);
+      this.buildDoor(art.door, glowTex);
+      this.live = new TempleLight(art.hallMaps, art.pyramidMaps);
       this.gateGlow = new Sprite(glowTex);
       this.gateGlow.anchor.set(0.5);
       this.gateGlow.position.set(GATE[0] - W / 2, GATE[1] - H / 2);
       this.gateGlow.blendMode = 'add';
-      this.sceneC.addChild(this.live, this.gateGlow);
+      this.sceneC.addChild(this.door, this.live, this.gateGlow);
       // low mist drifting over the polished floor
       this.groundFog = new TilingSprite({ texture: fogTex, width: W * 1.2, height: 260 });
       this.groundFog.position.set(-W * 0.6, H / 2 - 330);
@@ -314,8 +329,39 @@ export class Background extends Container {
     this.rayLayer = new Sprite(Texture.from(paintSoftRays(LITE ? 512 : 1024)));
     this.rayLayer.anchor.set(0.5);
     this.rayLayer.blendMode = 'add';
-    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.sporeLayer, this.pulse);
+    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.sporeLayer, this.pulse, this.flashLayer);
     for (let i = 0; i < 22; i++) this.spores.push(this.spawn(true));
+  }
+
+  /** The door of the pyramid: shut over the dark of the opening, its leaves slide into the wall. */
+  private buildDoor(leaf: HTMLImageElement, glowTex: Texture): void {
+    const [x, y, w, h] = DOOR;
+    this.door.position.set(x - W / 2, y - H / 2);
+    this.door.visible = false;
+    const tex = Texture.from(leaf);
+    const heat = new Sprite(glowTex);
+    heat.anchor.set(0.5);
+    heat.position.set(w / 2, h * 0.6);
+    heat.width = w * 2.4;
+    heat.height = h * 1.5;
+    heat.tint = 0xff3a14;
+    heat.blendMode = 'add';
+    heat.alpha = 0;
+    this.doorHeat = heat;
+    const clip = new Graphics().rect(0, 0, w, h).fill(0xffffff);
+    this.doorInside.rect(0, 0, w, h).fill(0xff5a20);
+    this.doorInside.alpha = 0;
+    const leaves = new Container();
+    leaves.mask = clip;
+    const k = w / 2 / tex.width;
+    for (const right of [false, true]) {
+      const s = new Sprite(tex);
+      s.scale.set(right ? -k : k, h / tex.height);
+      s.x = right ? w : 0;
+      leaves.addChild(s);
+      this.doorLeaves.push(s);
+    }
+    this.door.addChild(this.doorInside, leaves, clip, heat);
   }
 
   private spawn(initial: boolean): Spore {
@@ -346,6 +392,59 @@ export class Background extends Container {
   /** camera dolly: k = zoom factor, focus = the art point that stays put while zooming in */
   readonly camera = { k: 1, fx: GATE[0], fy: GATE[1] };
 
+  /** Which of the two places is on screen: the sanctuary, or the sands before the pyramid. */
+  private place(outside: boolean): void {
+    this.scene.visible = !outside;
+    if (this.outside) this.outside.visible = outside;
+    this.live?.useScene(outside ? 'pyramid' : 'hall');
+    this.moonHalo?.position.set((outside ? MOON_OUT[0] : MOON[0]) - W / 2, (outside ? MOON_OUT[1] : MOON[1]) - H / 2);
+    this.gateGlow?.position.set(outside ? DOOR[0] + DOOR[2] / 2 - W / 2 : GATE[0] - W / 2, outside ? DOOR[1] + DOOR[3] / 2 - H / 2 : GATE[1] - H / 2);
+    this.camera.fx = outside ? DOOR[0] + DOOR[2] / 2 : GATE[0];
+    this.camera.fy = outside ? DOOR[1] + DOOR[3] / 2 : GATE[1];
+  }
+
+  /** A veil of light over the whole screen. */
+  private veil(colour: number, from: number, to: number, duration: number): Promise<void> {
+    const g = this.flashLayer;
+    g.clear().rect(0, 0, this.w, this.h).fill(colour);
+    return new Promise((r) => gsap.fromTo(g, { alpha: from }, { alpha: to, duration, ease: 'sine.inOut', onComplete: r }));
+  }
+
+  /** Out of the sanctuary: down the nave, into the light of its gate, and out on the sands by night. */
+  async leaveHall(fast: boolean): Promise<void> {
+    void this.zoomTo(7, fast ? 0.8 : 1.5);
+    await new Promise((r) => setTimeout(r, fast ? 500 : 1050));
+    await this.veil(0xffe2a8, 0, 1, fast ? 0.25 : 0.42);
+    // the light fades on the whole of it: the sands, the great pyramid, the moon
+    gsap.killTweensOf(this.camera);
+    this.place(true);
+    this.door.visible = true;
+    this.camera.k = 1;
+    this.applyCamera();
+    await this.veil(0xffe2a8, 1, 0, fast ? 0.3 : 0.7);
+  }
+
+  /** The great door opens by itself, and what was shut inside comes out. */
+  async openPyramid(fast: boolean): Promise<void> {
+    const open = fast ? 0.9 : 1.8;
+    const hold = fast ? 0.2 : 1.1;
+    gsap.to(this.camera, { k: 2.7, duration: hold + open + 0.5, ease: 'sine.inOut', onUpdate: () => this.applyCamera() });
+    await new Promise((r) => setTimeout(r, hold * 1000));
+    this.onDoor?.();
+    const w = DOOR[2];
+    gsap.to(this.doorInside, { alpha: 1, duration: 0.5 });
+    if (this.doorHeat) gsap.to(this.doorHeat, { alpha: 0.75, duration: open, ease: 'power2.in' });
+    gsap.to(this.doorLeaves[0], { x: -w / 2, duration: open, ease: 'sine.inOut' });
+    gsap.to(this.doorLeaves[1], { x: w * 1.5, duration: open, ease: 'sine.inOut' });
+    if (this.live) gsap.to(this.live, { doorLight: 1, duration: open, ease: 'power2.in' });
+    await new Promise((r) => setTimeout(r, open * 650));
+    this.setFeature(true);
+    await new Promise((r) => setTimeout(r, open * 350 + 500));
+  }
+
+  private shown = false;
+
+
   private applyCamera(): void {
     // a little larger than the screen, so the edge of the picture never shows
     const base = Math.max(this.w / W, this.h / H) * 1.06;
@@ -367,6 +466,25 @@ export class Background extends Container {
 
   /** Free spins: the pyramid turns red under a barrage of lightning. */
   setFeature(on: boolean): void {
+    if (on === this.shown) return;
+    this.shown = on;
+    if (on) {
+      if (this.outside) {
+        // straight here when a bonus is picked up after a reload
+        this.place(true);
+      }
+    } else {
+      this.place(false);
+      this.door.visible = false;
+      this.doorLeaves.forEach((s) => gsap.killTweensOf(s));
+      if (this.doorLeaves.length) {
+        this.doorLeaves[0].x = 0;
+        this.doorLeaves[1].x = DOOR[2];
+        this.doorInside.alpha = 0;
+        this.doorHeat!.alpha = 0;
+      }
+      if (this.live) this.live.doorLight = 0;
+    }
     gsap.to(this, { feature: on ? 1 : 0, duration: on ? 0.9 : 1.6, ease: 'power2.inOut' });
     // the infection spreads outward from the capstone (and recedes back into it)
     gsap.killTweensOf(this.spread);
@@ -375,7 +493,6 @@ export class Background extends Container {
       this.strike(1, APEX);
       this.templeFx?.surge(1);
       this.nextStrike = 6;
-      // the infection comes out of the gate and runs down the hall
       this.live?.wave(0xff3a1a, 1.5, false, 75, 1);
     }
   }
