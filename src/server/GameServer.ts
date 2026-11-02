@@ -13,7 +13,22 @@ export interface Session {
   pending: Round | null;
   /** How many free spins of the pending round the client has already shown */
   shownFreeSpins: number;
+  /** what the pending round cost */
+  cost?: number;
+  /** the last rounds played, the most recent first */
+  history?: PlayedRound[];
 }
+
+export interface PlayedRound {
+  at: number;
+  bet: number;
+  /** what the round cost: the bet, or the price of the bonus */
+  cost: number;
+  win: number;
+  bonus: boolean;
+}
+
+const HISTORY_LENGTH = 30;
 
 const KEY = 'codex-infecta:session:v1';
 
@@ -64,6 +79,7 @@ export class GameServer {
       this.force = null;
     }
     this.session.pending = round;
+    this.session.cost = cost;
     this.session.shownFreeSpins = 0;
     this.save();
     await delay(60);
@@ -75,11 +91,19 @@ export class GameServer {
     this.save();
   }
 
+  get history(): PlayedRound[] {
+    return this.session.history ?? [];
+  }
+
   /** Settles the pending round: credits the total win. Idempotent. */
   settle(): number {
     const r = this.session.pending;
     if (!r) return this.session.balance;
     this.session.balance = round2(this.session.balance + r.totalWin);
+    this.session.history = [
+      { at: Date.now(), bet: r.bet, cost: this.session.cost ?? r.bet, win: r.totalWin, bonus: !!r.feature },
+      ...this.history,
+    ].slice(0, HISTORY_LENGTH);
     this.session.pending = null;
     this.session.shownFreeSpins = 0;
     this.save();

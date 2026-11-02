@@ -1030,27 +1030,43 @@ export function paintBonusPlate(): HTMLCanvasElement {
   return c;
 }
 
-/** The band a win is read on: a soft dark strip with a thread of gold above and below, fading out at both ends. */
-export function paintWinBand(): HTMLCanvasElement {
-  const w = 1024;
-  const h = 200;
-  const [c, ctx] = makeCanvas(w, h);
-  const fade = (colour: string, a: number) => {
-    const g = ctx.createLinearGradient(0, 0, w, 0);
-    g.addColorStop(0, `rgba(${colour},0)`);
-    g.addColorStop(0.2, `rgba(${colour},${a})`);
-    g.addColorStop(0.8, `rgba(${colour},${a})`);
-    g.addColorStop(1, `rgba(${colour},0)`);
-    return g;
-  };
-  ctx.fillStyle = fade('6,4,10', 0.86);
-  ctx.fillRect(0, 12, w, h - 24);
-  ctx.fillStyle = fade('242,194,90', 1);
-  ctx.fillRect(0, 10, w, 2.5);
-  ctx.fillRect(0, h - 12.5, w, 2.5);
-  ctx.fillStyle = fade('242,194,90', 0.3);
-  ctx.fillRect(0, 17, w, 1);
-  ctx.fillRect(0, h - 18, w, 1);
+/** The gold line round a winning symbol: two threads, and a small gem at each corner. */
+export function paintCellFrame(w: number, h: number): HTMLCanvasElement {
+  const pad = 14;
+  const [c, ctx] = makeCanvas(w + pad * 2, h + pad * 2);
+  const gold = ctx.createLinearGradient(0, pad, 0, pad + h);
+  for (const [at, colour] of [[0, '#fff6cf'], [0.3, '#f6c95a'], [0.62, '#b87a1c'], [1, '#ffe08a']] as const) gold.addColorStop(at, colour);
+  const inset = 6;
+  ctx.shadowColor = 'rgba(255, 170, 60, 0.75)';
+  ctx.shadowBlur = 12;
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(pad + inset, pad + inset, w - inset * 2, h - inset * 2, 10);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 1.2;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.roundRect(pad + inset + 7, pad + inset + 7, w - (inset + 7) * 2, h - (inset + 7) * 2, 6);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  for (const x of [pad + inset + 2, pad + w - inset - 2]) {
+    for (const y of [pad + inset + 2, pad + h - inset - 2]) {
+      ctx.fillStyle = gold;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 11);
+      ctx.lineTo(x + 11, y);
+      ctx.lineTo(x, y + 11);
+      ctx.lineTo(x - 11, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#c8102a';
+      ctx.beginPath();
+      ctx.arc(x, y, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   return c;
 }
 

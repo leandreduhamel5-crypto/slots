@@ -97,7 +97,7 @@ def paint_sky(infected):
 
 
 def paint_moon(img, infected):
-    cx, cy, r = 610 * K, 165 * K, 104
+    cx, cy, r = 1270 * K, 110 * K, 84
     pad = 12
     x0, y0 = int(cx - r - pad), int(cy - r - pad)
     n = (r + pad) * 2 * 2
@@ -112,7 +112,7 @@ def paint_moon(img, infected):
     hi = fbm(n, n, 22, 4, 9)
     sampled = ndi.map_coordinates(sea, [sy, sx], order=1, mode='reflect')
     fine = ndi.map_coordinates(hi, [sy, sx], order=1, mode='reflect')
-    alb = 0.93 - 0.27 * smooth(0.42, 0.66, sampled) - 0.12 * (fine - 0.5)
+    alb = 0.86 - 0.4 * smooth(0.42, 0.66, sampled) - 0.14 * (fine - 0.5)
     # craters with bright rays
     rng = np.random.default_rng(14)
     for _ in range(46):
@@ -125,10 +125,10 @@ def paint_moon(img, infected):
         if s > 0.038:
             ang = np.arctan2(v - b, u - a)
             alb += 0.06 * np.exp(-dist / 5) * (0.5 + 0.5 * np.sin(ang * 13 + a * 40))
-    light = np.array([-0.42, -0.34, 0.84])
-    lit = np.clip(u * light[0] + v * light[1] + z * light[2], 0, 1) ** 0.75
-    shade = 0.16 + 0.95 * lit
-    colour = np.array([1.0, 0.27, 0.13]) if infected else np.array([1.0, 0.97, 0.88])
+    light = np.array([-0.66, -0.34, 0.67])
+    lit = np.clip(u * light[0] + v * light[1] + z * light[2], 0, 1) ** 0.8
+    shade = 0.05 + 1.0 * lit
+    colour = np.array([1.0, 0.27, 0.13]) if infected else np.array([1.0, 0.93, 0.78])
     rgb = alb[..., None] * shade[..., None] * colour
     if not infected:
         rgb = rgb + (1 - lit[..., None]) * np.array([0.03, 0.05, 0.11])
@@ -221,6 +221,30 @@ def glyph(d, kind, cx, cy, s):
 GLYPHS = ['eye', 'ankh', 'scarab', 'cobra', 'djed', 'sun', 'was', 'bird', 'lotus', 'water', 'feather', 'ankh', 'eye', 'djed', 'scarab', 'sun']
 
 
+def grade(c, infected):
+    """From the render to the picture: the haze comes off, the colours are pushed and the edges fall away from the reels."""
+    yy, xx = np.mgrid[0:c.shape[0], 0:c.shape[1]].astype(np.float64)
+    # down the open nave the moonlit air is thickest, and a phone sees nothing else
+    nave = np.exp(-(((xx / c.shape[1] - 0.5) / 0.2) ** 2))[..., None]
+    if infected:
+        # black shadows, and the glow kept for what burns
+        lift = np.array([0.03, 0.012, 0.012])
+        c = np.clip((c - lift) / (1 - lift), 0, 1) ** np.array([1.45, 1.7, 1.7])
+    else:
+        lift = np.array([0.05, 0.05, 0.075])
+        c = np.clip((c - lift - nave * 0.045) / (1 - lift), 0, 1) ** (1.28 + nave * 0.22)
+        luma = (c * [0.2126, 0.7152, 0.0722]).sum(-1, keepdims=True)
+        c = luma + (c - luma) * 1.42
+        # the blues to lapis, the highlights to gold
+        blue = smooth(0.0, 0.12, c[..., 2:3] - c[..., 0:1])
+        c = c * (1 + blue * (np.array([0.8, 0.9, 1.06]) - 1))
+        c = c * (1 + smooth(0.22, 0.75, luma) * (np.array([1.13, 1.05, 0.84]) - 1))
+        # the slot must stay the brightest thing on screen: the picture gives way around it
+        c = c * (0.72 + 0.18 * nave)
+    d = np.sqrt(((xx / c.shape[1] - 0.5) / 0.62) ** 2 + ((yy / c.shape[0] - 0.46) / 0.72) ** 2)
+    return np.clip(c, 0, 1) * (1 - 0.62 * smooth(0.55, 1.15, d))[..., None]
+
+
 def run_temple():
     """The sky and the moon, under the court that tools/render_temple.py has rendered."""
     for which in ('night', 'infected'):
@@ -229,7 +253,7 @@ def run_temple():
         court = Image.open(f'tools/out/court_{which}.png').convert('RGBA').resize((W, H), Image.LANCZOS)
         c = np.asarray(court, dtype=np.float64) / 255
         a = c[..., 3:4]
-        img = img * (1 - a) + c[..., :3] * a
+        img = img * (1 - a) + grade(c[..., :3], infected) * a
         im = Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB')
         im.save(f'{OUT}temple_{which}.webp', 'WEBP', quality=84, method=6)
         im.resize((2048, 1152), Image.LANCZOS).save(f'{OUT}temple_{which}_m.webp', 'WEBP', quality=72, method=6)
@@ -276,16 +300,16 @@ def paint_door(path):
     gy = ndi.sobel(height, axis=0) / 8
     nz = 1 / np.sqrt(1 + (gx * 9) ** 2 + (gy * 9) ** 2)
     nx, ny = -gx * 9 * nz, -gy * 9 * nz
-    # the light comes from the torches of the next chamber, through the opening
+    # the light comes from the next chamber, through the opening
     lx, ly, lz = 0.5 * n - xx, 0.56 * n - yy, np.full_like(xx, 0.26 * n)
     ln = np.sqrt(lx**2 + ly**2 + lz**2)
     dif = np.clip((nx * lx + ny * ly + nz * lz) / ln, 0, 1)
     fall = np.exp(-(((xx / n - 0.5) ** 2 + (yy / n - 0.56) ** 2) / 0.12))
-    alb = (0.62 + 0.3 * tone + 0.5 * (grain - 0.5))[..., None] * np.array([0.92, 0.72, 0.5]) * joint[..., None] ** 0.6
-    rgb = alb * (np.array([0.07, 0.04, 0.05]) + (dif * fall)[..., None] * np.array([1.3, 0.72, 0.36]))
+    alb = (0.62 + 0.3 * tone + 0.5 * (grain - 0.5))[..., None] * np.array([0.2, 0.3, 0.62]) * joint[..., None] ** 0.6
+    rgb = alb * (np.array([0.12, 0.13, 0.26]) + (dif * fall)[..., None] * np.array([1.5, 1.0, 1.0]))
     gold = np.clip(gl, 0, 1)[..., None]
-    rgb = rgb * (1 - gold) + np.array([1.0, 0.7, 0.26]) * (0.16 + (dif * fall)[..., None] * 1.05) * gold
-    # the thickness of the wall, dark round the opening, and a thread of firelight on its edge
+    rgb = rgb * (1 - gold) + np.array([1.0, 0.72, 0.3]) * (0.5 + (dif * fall)[..., None] * 1.05) * gold
+    # the thickness of the wall, dark round the opening, and a thread of light on its edge
     around = ndi.gaussian_filter(hole, 26)
     rgb = rgb * (1 - 0.8 * around[..., None])
     rim = np.clip(ndi.gaussian_filter(hole, 3) * (1 - hole) * 4, 0, 1)[..., None]

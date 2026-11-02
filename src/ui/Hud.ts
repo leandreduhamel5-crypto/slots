@@ -1,11 +1,11 @@
 import { fmt } from './format';
+import type { PlayedRound } from '../server/GameServer';
 
 const ICONS = {
+  gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>',
   menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
   // papyrus scroll: the rules and pays
   info: '<svg viewBox="0 0 24 24"><path d="M7 4h11a2 2 0 0 1 2 2v1h-4"/><path d="M16 7v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1h10v1a2 2 0 0 0 2 2"/><path d="M7 4a2 2 0 0 0-2 2v11"/><path d="M8.5 9.5h4.5M8.5 13h4.5"/></svg>',
-  sound: '<svg viewBox="0 0 24 24"><path d="M3.5 9.5v5h3.8l5.2 4.3V5.2L7.3 9.5z"/><path d="M15.8 9.2a4 4 0 0 1 0 5.6M18.4 6.6a7.6 7.6 0 0 1 0 10.8"/></svg>',
-  mute: '<svg viewBox="0 0 24 24"><path d="M3.5 9.5v5h3.8l5.2 4.3V5.2L7.3 9.5z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></svg>',
   turbo: '<svg viewBox="0 0 24 24"><path d="M13.5 2.5L5 13.5h6.2l-1.4 8 8.7-11.2h-6.3z"/></svg>',
   auto: '<svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 0 1-13.1 5"/><path d="M4.5 12a7.5 7.5 0 0 1 13.1-5"/><path d="M17.8 3.2v4.1h-4.1M6.2 20.8v-4.1h4.1"/></svg>',
   spin: '<svg viewBox="0 0 64 64"><path d="M49 34a17 17 0 1 1-5-13"/><path d="M47.5 10.5v11.2H36.3"/></svg>',
@@ -21,19 +21,43 @@ const DEFS = `<svg class="hud-defs" width="0" height="0" aria-hidden="true"><def
   </linearGradient>
 </defs></svg>`;
 
+/** What stops an automatic run, in times the bet; 0 means no limit. */
+export interface AutoLimits {
+  loss: number;
+  win: number;
+}
+
+export interface Settings {
+  sound: boolean;
+  music: boolean;
+  turbo: boolean;
+  intro: boolean;
+}
+
 export interface HudHandlers {
   spin(): void;
   betDelta(d: number): void;
   toggleTurbo(): void;
-  toggleSound(): void;
   openInfo(): void;
-  auto(count: number): void;
+  auto(count: number, limits?: AutoLimits): void;
+  /** a switch of the settings has moved */
+  setting(key: keyof Settings, on: boolean): void;
+  /** what the settings panel shows when it opens */
+  report(): { settings: Settings; history: PlayedRound[] };
   refill(): void;
   buy(): void;
   /** the spin button is being held down: rounds follow each other */
   hold(on: boolean): void;
   pickBet(index: number): void;
 }
+
+const LIMITS = [0, 20, 50, 100, 500];
+const SWITCHES: [keyof Settings, string, string][] = [
+  ['sound', 'Effets sonores', 'Rouleaux, gains et bonus'],
+  ['music', 'Musique', 'Morceaux du jeu et du bonus'],
+  ['turbo', 'Tours rapides', 'Les rouleaux s\'arrêtent plus vite'],
+  ['intro', 'Écran titre', 'Le montrer au lancement du jeu'],
+];
 
 export class Hud {
   readonly root: HTMLElement;
@@ -54,7 +78,7 @@ export class Hud {
       <div class="c-parts">
         <div class="c-sys" data-k="sys">
           <button class="c-btn" data-k="info" aria-label="Règles et paiements">${ICONS.info}</button>
-          <button class="c-btn" data-k="sound" aria-label="Son">${ICONS.sound}</button>
+          <button class="c-btn" data-k="gear" aria-label="Réglages">${ICONS.gear}</button>
         </div>
         <div class="c-meter" data-k="balanceBox"><label>Solde</label><span data-k="balance">0,00</span></div>
         <div class="c-meter c-win" data-k="winBox"><label data-k="winLabel">Gain</label><span data-k="win">0,00</span></div>
@@ -70,9 +94,30 @@ export class Hud {
           <button class="c-btn c-turbo" data-k="turbo" aria-label="Turbo">${ICONS.turbo}</button>
         </div>
       </div>
-      <div class="auto-menu" data-k="autoMenu">
+      <button class="side-buy" data-k="sideBuy" aria-label="Acheter le bonus">
+        <span class="sb-art" data-k="sideArt"></span>
+        <b>Achat bonus</b>
+        <small>10 tours gratuits</small>
+        <span class="sb-price" data-k="sidePrice">0,00</span>
+      </button>
+      <div class="auto-menu auto-panel" data-k="autoMenu">
         <p>Tours automatiques</p>
-        <div>${[10, 25, 50, 100].map((n) => `<button data-auto="${n}">${n}</button>`).join('')}</div>
+        <div class="ap-row" data-k="autoCounts">${[10, 25, 50, 100].map((n) => `<button data-count="${n}">${n}</button>`).join('')}</div>
+        <p>Arrêt si la perte atteint</p>
+        <div class="ap-row" data-k="autoLoss">${LIMITS.map((x, i) => `<button data-x="${x}"${i === 2 ? ' class="on"' : ''}>${x ? `${x}×` : 'Sans'}</button>`).join('')}</div>
+        <p>Arrêt dès un gain de</p>
+        <div class="ap-row" data-k="autoWin">${LIMITS.map((x, i) => `<button data-x="${x}"${i === 0 ? ' class="on"' : ''}>${x ? `${x}×` : 'Sans'}</button>`).join('')}</div>
+        <button class="ap-go" data-k="autoGo">Lancer</button>
+      </div>
+      <div class="settings" data-k="settings">
+        <div class="set-card">
+          <button class="pt-close" data-k="setClose" aria-label="Fermer">×</button>
+          <h3>Réglages</h3>
+          ${SWITCHES.map(([k, label, hint]) => `<label class="set-row"><span><b>${label}</b><small>${hint}</small></span><input type="checkbox" data-set="${k}"><i></i></label>`).join('')}
+          <h3>Dernières parties</h3>
+          <div class="set-sum" data-k="sum"></div>
+          <div class="set-log" data-k="log"></div>
+        </div>
       </div>
       <div class="auto-menu bet-menu" data-k="betMenu">
         <p>Mise</p>
@@ -123,10 +168,19 @@ export class Hud {
     this.el.betDec.addEventListener('click', () => h.betDelta(-1));
     this.el.betInc.addEventListener('click', () => h.betDelta(1));
     this.el.turbo.addEventListener('click', () => h.toggleTurbo());
-    this.el.sound.addEventListener('click', () => h.toggleSound());
+    this.el.gear.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.openSettings(h.report());
+    });
+    this.el.setClose.addEventListener('click', () => this.el.settings.classList.remove('open'));
+    this.el.settings.addEventListener('click', (e) => e.target === this.el.settings && this.el.settings.classList.remove('open'));
+    this.el.settings.querySelectorAll<HTMLInputElement>('[data-set]').forEach((b) =>
+      b.addEventListener('change', () => h.setting(b.dataset.set as keyof Settings, b.checked)),
+    );
     this.el.info.addEventListener('click', () => h.openInfo());
     this.el.refill.addEventListener('click', () => h.refill());
     this.el.buy.addEventListener('click', () => this.el.buyModal.classList.add('open'));
+    this.el.sideBuy.addEventListener('click', () => this.el.buyModal.classList.add('open'));
     this.el.buyNo.addEventListener('click', () => this.el.buyModal.classList.remove('open'));
     this.el.buyModal.addEventListener('click', (e) => e.target === this.el.buyModal && this.el.buyModal.classList.remove('open'));
     this.el.buyYes.addEventListener('click', () => {
@@ -138,13 +192,24 @@ export class Hud {
       if (this.root.classList.contains('autoplaying')) h.auto(0);
       else this.autoMenu.classList.toggle('open');
     });
-    this.autoMenu.querySelectorAll<HTMLButtonElement>('[data-auto]').forEach((b) =>
-      b.addEventListener('click', () => {
-        this.autoMenu.classList.remove('open');
-        h.auto(Number(b.dataset.auto));
-      }),
-    );
-    document.addEventListener('click', () => this.closeMenus());
+    // one choice per row; the limits are read when the run starts
+    this.autoMenu.addEventListener('click', (e) => e.stopPropagation());
+    const row = (k: string) => this.el[k].querySelectorAll<HTMLButtonElement>('button');
+    for (const k of ['autoCounts', 'autoLoss', 'autoWin']) {
+      row(k).forEach((b) =>
+        b.addEventListener('click', () => {
+          row(k).forEach((o) => o.classList.toggle('on', o === b));
+          this.el.autoGo.toggleAttribute('disabled', !this.el.autoCounts.querySelector('.on'));
+        }),
+      );
+    }
+    this.el.autoGo.toggleAttribute('disabled', true);
+    this.el.autoGo.addEventListener('click', () => {
+      const pick = (k: string) => this.el[k].querySelector<HTMLButtonElement>('.on');
+      this.autoMenu.classList.remove('open');
+      h.auto(Number(pick('autoCounts')?.dataset.count ?? 0), { loss: Number(pick('autoLoss')?.dataset.x ?? 0), win: Number(pick('autoWin')?.dataset.x ?? 0) });
+    });
+    document.addEventListener('click', () => this.closePopups());
     this.arrange();
     window.addEventListener('resize', () => this.arrange());
   }
@@ -168,12 +233,41 @@ export class Hud {
 
   setBuyArt(src: string): void {
     this.el.buyArt.innerHTML = `<img src="${src}" alt=""><img src="${src}" alt=""><img src="${src}" alt="">`;
+    this.el.sideArt.innerHTML = `<img src="${src}" alt="">`;
+  }
+
+  /** With room beside the reels, the bonus for sale stands there, at (x, y) on the screen; otherwise it stays in the console. */
+  placeBuy(at: { x: number; y: number; scale: number } | null): void {
+    this.root.classList.toggle('side', !!at);
+    if (!at) return;
+    const s = this.el.sideBuy.style;
+    s.left = `${at.x}px`;
+    s.top = `${at.y}px`;
+    s.transform = `translate(-50%, -50%) scale(${at.scale})`;
+  }
+
+  private openSettings(r: { settings: Settings; history: PlayedRound[] }): void {
+    this.el.settings.querySelectorAll<HTMLInputElement>('[data-set]').forEach((b) => (b.checked = r.settings[b.dataset.set as keyof Settings]));
+    const played = r.history;
+    const staked = played.reduce((a, p) => a + p.cost, 0);
+    const won = played.reduce((a, p) => a + p.win, 0);
+    this.el.sum.innerHTML = `<div><label>Parties</label><span>${played.length}</span></div><div><label>Misé</label><span>${fmt(staked)}</span></div><div><label>Gagné</label><span>${fmt(won)}</span></div>`;
+    const time = (t: number) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    this.el.log.innerHTML = played.length
+      ? played.map((p) => `<div class="${p.win > p.cost ? 'won' : ''}"><time>${time(p.at)}</time><span>${p.bonus ? 'Bonus' : 'Tour'}</span><span>${fmt(p.cost)}</span><b>${p.win > 0 ? fmt(p.win) : '—'}</b></div>`).join('')
+      : '<p>Aucune partie pour le moment.</p>';
+    this.el.settings.classList.add('open');
+  }
+
+  private closePopups(): void {
+    this.autoMenu.classList.remove('open');
+    this.el.betMenu.classList.remove('open');
   }
 
   closeMenus(): void {
     this.el.buyModal.classList.remove('open');
-    this.autoMenu.classList.remove('open');
-    this.el.betMenu.classList.remove('open');
+    this.el.settings.classList.remove('open');
+    this.closePopups();
   }
 
   private onPick: (index: number) => void = () => {};
@@ -188,11 +282,14 @@ export class Hud {
   setBuy(price: number, enabled: boolean): void {
     this.amount(this.el.buyPrice, price);
     this.el.buyCost.textContent = fmt(price);
+    this.el.sidePrice.textContent = fmt(price);
     (this.el.buy as HTMLButtonElement).disabled = !enabled;
+    (this.el.sideBuy as HTMLButtonElement).disabled = !enabled;
   }
 
-  get buyOpen(): boolean {
-    return this.el.buyModal.classList.contains('open');
+  /** A window is open over the game: the keys must not spin behind it. */
+  get modalOpen(): boolean {
+    return this.el.buyModal.classList.contains('open') || this.el.settings.classList.contains('open');
   }
 
   /** Writes an amount; a long one shrinks to stay inside its cartouche instead of pushing the console off screen. */
@@ -291,11 +388,6 @@ export class Hud {
 
   setTurbo(on: boolean): void {
     this.el.turbo.classList.toggle('active', on);
-  }
-
-  setSound(on: boolean): void {
-    this.el.sound.innerHTML = on ? ICONS.sound : ICONS.mute;
-    this.el.sound.classList.toggle('active', !on);
   }
 
   setAuto(remaining: number): void {

@@ -65,3 +65,12 @@ Suffixe commun à ajouter à chaque prompt :
 | `background.jpg` | (sans le suffixe) wide 16:9 painting of an abandoned infected asylum corridor in one-point perspective, tiled walls, metal doors with glowing red portholes, hanging lamps casting light cones, red veins crawling from a sealed door at the far end, checkered floor, toxic barrels in the foreground, cartoon horror style, cinematic lighting |
 
 Pour changer la peinture de Cléopâtre, remplacez `src/game/art/egypt/cleopatra.webp` puis relancez `scripts/cleopatra_art.py`.
+
+## Musique
+
+Déposez vos enregistrements dans `audio/` :
+
+- `audio/music.mp3` : la musique du jeu, jouée en boucle
+- `audio/bonus.mp3` : la musique des tours gratuits
+
+Sans ces fichiers, le jeu n'a que son ambiance : le vent, un bourdon grave et de temps en temps un gong lointain.

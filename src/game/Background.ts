@@ -3,9 +3,9 @@ import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import gsap from 'gsap';
 import { paintSoftRays } from './art/egyptFrame';
 import { makeCanvas, seeded } from './art/painters';
-import { APEX, BRAZIERS, HORIZON, MOON, OBELISKS, OBELISK_TIP_Y, PYRAMID_HALF, TH as H, TW as W } from './art/templeHD';
+import { APEX, GATE, HORIZON, MOON, PYRAMID_HALF, TH as H, TW as W } from './art/templeHD';
 import { LITE, slim } from './device';
-import { Fire, paintFlameBlob } from './Fire';
+import { TempleLight } from './TempleLight';
 import { TempleFx } from './TempleFx';
 import { COLORS } from './layout';
 
@@ -116,8 +116,8 @@ function openSky(x: number, y: number): boolean {
   if (y > HORIZON - 120) return false;
   const slope = APEX[1] + ((HORIZON - APEX[1]) * Math.abs(x - APEX[0])) / PYRAMID_HALF;
   if (y > slope - 24) return false;
-  // the great beams of the two colonnades close the sky on both sides
-  if (Math.min(x, W - x) < 170 + y * 1.28) return false;
+  // the roofs of the two aisles close the sky on both sides
+  if (Math.min(x, W - x) < 530 + y * 0.69) return false;
   return Math.hypot(x - MOON[0], y - MOON[1]) > MOON[2] + 30;
 }
 
@@ -156,8 +156,6 @@ export class Background extends Container {
   private infected: Sprite | null = null;
   /** additive copy of the infected art: makes its cracks throb with the beat */
   private infectedPulse: Sprite | null = null;
-  private lampGlows: Sprite[] = [];
-  private tips: Sprite[] = [];
   private heart: Sprite | null = null;
   private flareV = 0;
   private bolts = new Graphics();
@@ -183,12 +181,15 @@ export class Background extends Container {
   private revealing = false;
   private spread = { r: 0 };
   private groundFog: TilingSprite | null = null;
-  private fires: Fire[] = [];
   private stars: { s: Sprite; f: number; p: number; a: number }[] = [];
   private clouds: TilingSprite | null = null;
   private moonHalo: Sprite | null = null;
   private meteor: Sprite;
   private nextMeteor = 6;
+  /** live light through the hall */
+  private live: TempleLight | null = null;
+  private gateGlow: Sprite | null = null;
+  private boltSide = 1;
   private w = W;
   private h = H;
   /** called on every lightning strike with its power (0.3 distant … 1 direct hit) */
@@ -199,6 +200,7 @@ export class Background extends Container {
     glowTex: Texture,
     night: HTMLImageElement,
     infected: HTMLImageElement,
+    maps: [HTMLImageElement, HTMLImageElement],
     custom: HTMLImageElement | null = null,
   ) {
     super();
@@ -209,7 +211,6 @@ export class Background extends Container {
     if (!custom) this.scene.scale.set(artScale);
     const fogTex = slim(paintFog());
     this.sceneC.addChild(this.scene);
-    const flameTex = Texture.from(paintFlameBlob());
     if (!custom) {
       const tex = Texture.from(infected);
       // the temple fills the screen, never smaller than its pixels on a phone: no need for mipmaps
@@ -234,6 +235,12 @@ export class Background extends Container {
       this.revealFront.tint = 0xff8a4a;
       this.revealFront.visible = false;
       this.sceneC.addChild(this.infected, this.infectedPulse, this.reveal, this.revealFront);
+      this.live = new TempleLight(...maps);
+      this.gateGlow = new Sprite(glowTex);
+      this.gateGlow.anchor.set(0.5);
+      this.gateGlow.position.set(GATE[0] - W / 2, GATE[1] - H / 2);
+      this.gateGlow.blendMode = 'add';
+      this.sceneC.addChild(this.live, this.gateGlow);
       // low mist drifting over the polished floor
       this.groundFog = new TilingSprite({ texture: fogTex, width: W * 1.2, height: 260 });
       this.groundFog.position.set(-W * 0.6, H / 2 - 330);
@@ -275,29 +282,6 @@ export class Background extends Container {
       this.clouds.position.set(-W / 2, -H / 2 - 40);
       this.clouds.tileScale.set(2.2, 2.2);
       this.sceneC.addChild(this.clouds);
-      for (const [lx, ly] of BRAZIERS) {
-        const g = new Sprite(glowTex);
-        g.anchor.set(0.5);
-        g.position.set(lx - W / 2, ly - 60 - H / 2);
-        g.width = g.height = 300;
-        g.tint = 0xff8a2a;
-        g.blendMode = 'add';
-        this.lampGlows.push(g);
-        const fire = new Fire(flameTex, glowTex, 150);
-        fire.position.set(lx - W / 2, ly - H / 2);
-        this.fires.push(fire);
-        this.sceneC.addChild(g, fire);
-      }
-      // the obelisks' gold pyramidions catch the light
-      for (const x of OBELISKS) {
-        const g = new Sprite(glowTex);
-        g.anchor.set(0.5);
-        g.position.set(x - W / 2, OBELISK_TIP_Y + 24 - H / 2);
-        g.width = g.height = 180;
-        g.blendMode = 'add';
-        this.tips.push(g);
-        this.sceneC.addChild(g);
-      }
     }
     if (this.groundFog) this.sceneC.addChild(this.groundFog);
     if (!custom) {
@@ -323,7 +307,7 @@ export class Background extends Container {
     this.redWash.alpha = 0;
     this.fog = new TilingSprite({ texture: fogTex, width: W, height: H });
     this.fog.tint = 0x6a5070;
-    this.fog.alpha = 0.07;
+    this.fog.alpha = 0.025;
 
     // sky rays are painted once and turned slowly: a filter on the scene costs either the
     // frame rate or, at low resolution, the sharpness of the whole picture
@@ -360,7 +344,7 @@ export class Background extends Container {
   }
 
   /** camera dolly: k = zoom factor, focus = the art point that stays put while zooming in */
-  readonly camera = { k: 1, fx: APEX[0], fy: 430 };
+  readonly camera = { k: 1, fx: GATE[0], fy: GATE[1] };
 
   private applyCamera(): void {
     // a little larger than the screen, so the edge of the picture never shows
@@ -376,7 +360,7 @@ export class Background extends Container {
     return this.sceneC.toGlobal({ x: APEX[0] - W / 2, y: APEX[1] - H / 2 });
   }
 
-  /** Dolly the camera into (k > 1) or back out of the pyramid. */
+  /** Dolly the camera down the nave, into the gate. */
   zoomTo(k: number, duration: number, ease = 'power3.in'): Promise<void> {
     return new Promise((r) => gsap.to(this.camera, { k, duration, ease, onUpdate: () => this.applyCamera(), onComplete: r }));
   }
@@ -391,26 +375,26 @@ export class Background extends Container {
       this.strike(1, APEX);
       this.templeFx?.surge(1);
       this.nextStrike = 6;
+      // the infection comes out of the gate and runs down the hall
+      this.live?.wave(0xff3a1a, 1.5, false, 75, 1);
     }
+  }
+
+  /** A win leaves the reels and runs away down the nave. */
+  wave(power: number): void {
+    this.live?.wave(this.feature > 0.5 ? 0xff5a30 : 0xffc870, power, true, 110, 0.3);
+  }
+
+  setLive(on: boolean): void {
+    if (this.live) this.live.visible = on;
   }
 
   /** A lightning strike; without a target it hits the pyramid somewhere along its slopes. */
   strike(power = 1, target?: Pt): void {
     const [ax, ay] = APEX;
-    let to: Pt;
-    const r = Math.random();
-    if (target) to = target;
-    else if (r < 0.3) to = [ax, ay + 10];
-    else if (r < 0.55) {
-      // the obelisks' gold tips act as lightning rods
-      to = [OBELISKS[Math.random() < 0.5 ? 0 : 1], OBELISK_TIP_Y];
-    } else {
-      // somewhere on the slopes left visible beside the reels
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const x = ax + side * (540 + Math.random() * 360);
-      to = [x, ay + ((HORIZON - ay) * Math.abs(x - ax)) / PYRAMID_HALF];
-    }
+    const to: Pt = target ?? [ax, ay + 10];
     const from: Pt = [to[0] + (Math.random() - 0.5) * 500, -40];
+    this.boltSide = to[0] < W / 2 ? -1 : 1;
     const infected = this.feature > 0.5;
     const glow = infected ? 0xff3020 : 0x5a7cff;
     const mid = infected ? 0xffa890 : 0xc4d6ff;
@@ -491,7 +475,6 @@ export class Background extends Container {
   flare(power = 0.6): void {
     if (power >= 0.6 && this.flareV < 0.5) this.templeFx?.surge(power);
     this.flareV = Math.max(this.flareV, power);
-    for (const fire of this.fires) fire.roar(power);
   }
 
   thump(strength = 0.35): void {
@@ -516,7 +499,7 @@ export class Background extends Container {
     this.fog.tilePosition.x += dt * 12;
     this.fog.tilePosition.y += dt * 3;
     this.fog.tint = f > 0.5 ? 0xa02030 : 0x6a5070;
-    this.fog.alpha = 0.07 + f * 0.05;
+    this.fog.alpha = 0.025 + f * 0.025;
     this.redWash.alpha = f * 0.05;
     if (this.infected && this.infectedPulse) {
       const r = this.spread.r;
@@ -541,20 +524,18 @@ export class Background extends Container {
       this.infectedPulse.alpha = f * (beat * 0.03 + this.boltLight * 0.14 + this.flareV * 0.06);
     }
     this.flareV *= Math.pow(0.25, dt);
-    this.lampGlows.forEach((g, i) => {
-      const flick = 0.75 + 0.25 * Math.sin(this.t * (11 + i * 2.3)) * Math.sin(this.t * (4.7 + i));
-      g.alpha = Math.min(0.7, 0.34 * flick + this.flareV * 0.25);
-      g.tint = f > 0.5 ? 0xff3a2a : 0xff8a2a;
-      g.scale.y = g.scale.x * (1 + 0.1 * Math.sin(this.t * 9 + i));
-    });
-    this.tips.forEach((g, i) => {
-      g.alpha = 0.12 + 0.05 * Math.sin(this.t * 1.3 + i * 2) + this.flareV * 0.2 + this.boltLight * 0.3;
-      g.tint = f > 0.5 ? 0xff3030 : 0xffc870;
-    });
     if (this.heart) {
       this.heart.alpha = Math.min(0.7, 0.08 + beat * 0.1 * f + f * 0.14 + this.flareV * 0.3 + this.boltLight * 0.4);
       this.heart.tint = f > 0.5 ? COLORS.infection : 0xffd890;
       this.heart.scale.set(((300 + f * 260) / this.heart.texture.width) * (1 + this.flareV * 0.6 + beat * 0.15 * f));
+    }
+    if (this.live?.visible) this.live.update(dt, f, this.flareV, this.boltLight, this.boltSide);
+    if (this.gateGlow) {
+      this.gateGlow.tint = f > 0.5 ? 0xff2a10 : 0xffb050;
+      // the nearer the camera comes, the more the gate fills the air
+      this.gateGlow.alpha = Math.min(1, 0.34 + 0.06 * Math.sin(this.t * 1.3) + beat * f * 0.3 + this.flareV * 0.3 + (this.camera.k - 1) * 0.3);
+      this.gateGlow.width = 150;
+      this.gateGlow.height = 260;
     }
     if (this.templeFx) {
       this.templeFx.feature = f;
@@ -563,11 +544,7 @@ export class Background extends Container {
     if (this.groundFog) {
       this.groundFog.tilePosition.x += dt * 18;
       this.groundFog.tint = f > 0.5 ? 0xa02020 : 0x8a7a9a;
-      this.groundFog.alpha = 0.14 + f * 0.08;
-    }
-    for (const fire of this.fires) {
-      fire.hot = f;
-      fire.update(dt);
+      this.groundFog.alpha = 0.05 + f * 0.03;
     }
     for (const st of this.stars) st.s.alpha = st.a * (0.55 + 0.45 * Math.sin(this.t * st.f + st.p)) * (1 - f * 0.6);
     if (this.clouds) {

@@ -4,18 +4,29 @@ import { TEMPLE_NIGHT_URL as temple } from '../game/art/egypt';
 
 const SKIP_KEY = 'codex-infecta:skip-intro';
 
+export function showsIntro(): boolean {
+  try {
+    return localStorage.getItem(SKIP_KEY) !== '1';
+  } catch {
+    return true;
+  }
+}
+
+export function setShowIntro(on: boolean): void {
+  try {
+    if (on) localStorage.removeItem(SKIP_KEY);
+    else localStorage.setItem(SKIP_KEY, '1');
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /**
  * Title screen shown once the assets are ready: the queen before her temple, the logo, the three
  * things a player needs to know, and a button whose click also unlocks Web Audio.
  */
 export function showIntro(logo: string, images: string[], onStart: () => void): void {
-  let skip = false;
-  try {
-    skip = localStorage.getItem(SKIP_KEY) === '1';
-  } catch {
-    /* storage unavailable */
-  }
-  if (skip) {
+  if (!showsIntro()) {
     onStart();
     return;
   }
@@ -59,12 +70,7 @@ export function showIntro(logo: string, images: string[], onStart: () => void): 
   requestAnimationFrame(() => el.classList.add('show'));
   const start = () => {
     window.removeEventListener('keydown', onKey);
-    const box = el.querySelector<HTMLInputElement>('.ti-skip input')!;
-    try {
-      if (box.checked) localStorage.setItem(SKIP_KEY, '1');
-    } catch {
-      /* storage unavailable */
-    }
+    if (el.querySelector<HTMLInputElement>('.ti-skip input')!.checked) setShowIntro(false);
     el.classList.remove('show');
     el.classList.add('leave');
     setTimeout(() => el.remove(), 900);

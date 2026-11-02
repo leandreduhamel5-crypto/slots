@@ -22,6 +22,9 @@ export const WIN_TIERS = [
   { x: 500, name: 'EXTINCTION', material: 'gold', ray: 0x6a400e },
 ];
 
+/** coins per second of the jet, tier by tier */
+const JET_RATE = LITE ? [12, 20, 28, 36] : [20, 34, 50, 70];
+
 /** Widest a tier title and an amount may be, in overlay units: they stay inside their plates. */
 const BIG_TITLE_W = 850;
 const AMOUNT_W = 820;
@@ -49,6 +52,8 @@ const body = (size: number, fill = 0xffffff): TextStyleOptions => ({
 
 export interface FxHooks {
   thump(power: number): void;
+  /** a wave of light leaves the reels and runs down the hall */
+  wave(power: number): void;
 }
 
 export class Overlays extends Container {
@@ -223,18 +228,18 @@ export class Overlays extends Container {
     base.anchor.set(0.5);
     base.width = base.height = 2400;
     base.blendMode = 'add';
-    base.alpha = 0.07;
+    base.alpha = 0.13;
     const counter = new Sprite(this.raysTex());
     counter.anchor.set(0.5);
     counter.width = counter.height = 2000;
     counter.blendMode = 'add';
-    counter.alpha = 0.03;
+    counter.alpha = 0.06;
     counter.rotation = 0.08;
     const core = new Sprite(this.tex.glow);
     core.anchor.set(0.5);
     core.width = core.height = 900;
     core.blendMode = 'add';
-    core.alpha = 0.2;
+    core.alpha = 0.3;
     c.addChild(base, counter, core);
     const lighten = (col: number, k: number) => {
       const ch = (sh: number) => Math.min(255, Math.round(((col >> sh) & 255) * k + 18));
@@ -395,6 +400,9 @@ export class Overlays extends Container {
     const top = winTier(win, bet);
     if (top < 0) return;
     this.open();
+    gsap.killTweensOf(this.dim);
+    gsap.to(this.dim, { alpha: 0.72, duration: 0.25 });
+    this.fx.wave(1);
     const t0 = WIN_TIERS[0];
     const rays = this.sunburst(t0.ray);
     this.burstRays = rays;
@@ -433,6 +441,7 @@ export class Overlays extends Container {
       this.audio.tierUp(0);
       this.titleSweep(heading);
     });
+    this.particles.startFountain(this.w / 2, this.h + 50, JET_RATE[0], Math.sqrt(this.h / 850));
     this.particles.startRain([this.tex.coin], this.w, 3);
 
     const duration = 2.1 * (top + 1);
@@ -474,6 +483,10 @@ export class Overlays extends Container {
     }
     this.titleSweep(heading);
     this.audio.bigWinEnd(top);
+    // the count is over: the sum lands, in one burst of coins
+    const landed = amount.scale.x;
+    gsap.fromTo(amount.scale, { x: landed * 1.16, y: landed * 1.16 }, { x: landed, y: landed, duration: 0.5, ease: 'power2.out' });
+    this.particles.coins(this.w / 2, this.h * 0.46, LITE ? 24 : 46, 1.1);
     if (record) this.recordStamp(0, 286);
     await this.waitOrSkip(2400);
     await this.close();
@@ -538,6 +551,11 @@ export class Overlays extends Container {
     this.audio.tierUp(tier);
     this.titleSweep(heading);
     this.particles.setRainRate(3 + tier * 2);
+    this.particles.setFountainRate(JET_RATE[tier]);
+    this.fx.wave(1.2);
+    this.particles.coins(this.w / 2, this.h * 0.3, LITE ? 12 : 26, 0.9);
+    const k2 = 0.13 + tier * 0.035;
+    if (this.burstRays) gsap.to(this.burstRays.children[0], { alpha: k2, duration: 0.4 });
   }
 
   /**
@@ -720,8 +738,8 @@ export class Overlays extends Container {
   }
 
   /**
-   * Inside the pyramid: doorways rush toward the camera down a torch-lit corridor toward a red
-   * glow that grows until it swallows the screen.
+   * Beyond the gate: doorways rush toward the camera down a corridor of lapis and gold, toward a
+   * red glow that grows until it swallows the screen.
    */
   async corridor(duration = 2.2): Promise<void> {
     this.open();
@@ -743,15 +761,6 @@ export class Overlays extends Container {
       layer.addChildAt(s, 0);
       doors.push({ s, z: 1 + (i / N) * 8 });
     }
-    const torches: { s: Sprite; z: number; side: number }[] = [];
-    for (let i = 0; i < 12; i++) {
-      const s = new Sprite(this.tex.glow);
-      s.anchor.set(0.5);
-      s.blendMode = 'add';
-      s.tint = i % 3 ? 0xff8a30 : 0xffc060;
-      layer.addChild(s);
-      torches.push({ s, z: 1 + (i / 12) * 8, side: i % 2 ? 1 : -1 });
-    }
     this.audio.riser(duration, 1);
     const st = { t: 0 };
     await new Promise<void>((resolve) => {
@@ -771,18 +780,10 @@ export class Overlays extends Container {
             const k = 1 / d.z;
             d.s.scale.set(k * 4.2);
             const v = Math.round(Math.min(255, 60 + 195 * Math.min(1, k * 1.2)));
-            d.s.tint = (v << 16) | (Math.round(v * 0.75) << 8) | Math.round(v * 0.55);
+            d.s.tint = (v << 16) | (Math.round(v * 0.82) << 8) | Math.round(v * 0.74);
             d.s.alpha = Math.min(1, (8 - d.z) * 0.6);
           }
           doors.sort((a, b) => b.z - a.z).forEach((d, i) => layer.setChildIndex(d.s, i));
-          for (const tch of torches) {
-            tch.z -= dt * speed;
-            if (tch.z < 0.25) tch.z += 8;
-            const k = 1 / tch.z;
-            tch.s.position.set(tch.side * 470 * k, 150 * k);
-            tch.s.width = tch.s.height = 140 * k;
-            tch.s.alpha = Math.min(1, (8 - tch.z) * 0.4) * (0.26 + Math.random() * 0.08);
-          }
           core.width = core.height = 160 + Math.pow(st.t, 3) * 1500;
           core.alpha = (0.4 + st.t * 0.3) * Math.min(1, (1 - st.t) * 8);
           layer.alpha = Math.min(1, (1 - st.t) * 6);
@@ -894,7 +895,10 @@ export class Overlays extends Container {
     this.popIn(head, 0.12);
     this.popIn(amount, 0.2);
     this.popIn(sub, 0.26);
-    if (total > 0) this.particles.startRain([this.tex.coin], this.w, 3);
+    if (total > 0) {
+      this.particles.startRain([this.tex.coin], this.w, 4);
+      this.particles.startFountain(this.w / 2, this.h + 50, JET_RATE[Math.max(0, winTier(total, bet))], Math.sqrt(this.h / 850));
+    }
     const counter = { v: 0 };
     const tween = gsap.to(counter, {
       v: total,

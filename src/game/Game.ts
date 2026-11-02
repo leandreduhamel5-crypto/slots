@@ -13,7 +13,7 @@ import { Digits } from './Digits';
 import { BOARD_H, BOARD_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y } from './layout';
 import { Logo, eyeFromCodex, logoCanvas } from './Logo';
 import type { LoadedAssets } from './assets';
-import { showIntro } from '../ui/Intro';
+import { setShowIntro, showIntro, showsIntro } from '../ui/Intro';
 import { Overlays, winTier } from './Overlays';
 import { ReelBoard } from './ReelBoard';
 import { STRAIN_BAR_H, STRAIN_BAR_W, StrainBar, makePlate, sizePlate } from './StrainBar';
@@ -25,6 +25,8 @@ const FRAME_OUTER_W = 1490;
 const FRAME_OUTER_H = 847;
 const FRAME_TOP = 65;
 const UPRIGHT_LOGO_H = 420;
+/** room beside the frame from which the bonus for sale stands there and not in the console */
+const SIDE_BUY_ROOM = 190;
 const BOARD_Y = 186;
 const WORLD_TOP = -172;
 /** just under the frame: everything on screen stays clear of the console */
@@ -209,21 +211,26 @@ export class Game {
   private busy = false;
   private turbo = false;
   private sound = true;
+  private music = true;
   private autoLeft = 0;
+  /** an automatic run stops under this balance, or on a single win of this much */
+  private autoFloor = -Infinity;
+  private autoCeiling = Infinity;
   private viewW = 0;
   private viewH = 0;
 
   constructor(
     private app: Application,
-    tex: SymbolTextures,
+    private tex: SymbolTextures,
     codexCanvas: HTMLCanvasElement,
     assets: LoadedAssets,
     templeNight: HTMLImageElement,
     templeInfected: HTMLImageElement,
     logoImage: HTMLImageElement,
     corridorDoor: HTMLImageElement,
+    templeMaps: [HTMLImageElement, HTMLImageElement],
   ) {
-    this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, assets.background);
+    this.bg = new Background(tex.spore, tex.glow, templeNight, templeInfected, templeMaps, assets.background);
     this.bg.onLightning = (power) => this.audio.lightning(power);
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
@@ -240,10 +247,12 @@ export class Game {
     this.logoShade.anchor.set(0.5);
     this.logoShade.tint = 0x050208;
     this.logoShade.alpha = 0.7;
-    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.teaser);
+    this.strainShow.visible = false;
+    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.teaser, this.strainShow);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       thump: (p) => this.bg.thump(p),
+      wave: (p) => this.bg.wave(p),
     }, corridorDoor);
     // bloom: emissive bits (eyes, veins, orb, neon, glows) radiate
     if (!LITE) {
@@ -261,19 +270,33 @@ export class Game {
         this.audio.click();
         this.savePrefs();
       },
-      toggleSound: () => {
-        this.sound = !this.sound;
-        this.audio.setMuted(!this.sound);
-        this.hud.setSound(this.sound);
+      setting: (key, on) => {
+        if (key === 'sound') {
+          this.sound = on;
+          this.audio.setMuted(!on);
+        } else if (key === 'music') {
+          this.music = on;
+          this.audio.setMusic(on);
+        } else if (key === 'turbo') {
+          this.turbo = on;
+          this.hud.setTurbo(on);
+        } else setShowIntro(on);
+        this.audio.click();
         this.savePrefs();
       },
+      report: () => ({
+        settings: { sound: this.sound, music: this.music, turbo: this.turbo, intro: showsIntro() },
+        history: this.server.history,
+      }),
       openInfo: () => {
         this.audio.click();
         this.paytable.open(this.server.bet, this.best);
       },
-      auto: (n) => {
+      auto: (n, limits) => {
         this.audio.click();
         this.autoLeft = n;
+        this.autoFloor = limits?.loss ? this.server.state.balance - limits.loss * this.server.bet : -Infinity;
+        this.autoCeiling = limits?.win ? limits.win * this.server.bet : Infinity;
         this.hud.setAuto(n);
         if (n > 0 && !this.busy) void this.play();
       },
@@ -313,7 +336,7 @@ export class Game {
         if (e.repeat && this.spinGate === null && !this.overlays.busy && this.busy) return;
         if (e.repeat && (this.spinGate || this.overlays.busy)) return;
         if (this.paytable.isOpen) this.paytable.close();
-        else if (!this.hud.buyOpen) this.onSpinPressed();
+        else if (!this.hud.modalOpen) this.onSpinPressed();
       }
     });
     window.addEventListener('keydown', (e) => {
@@ -362,6 +385,29 @@ export class Game {
   }
 
   private teaser: Container;
+  /** the strains at work, large, in the room an upright screen has under the reels */
+  private strainShow = new Container();
+
+  private showStrains(specials: Sym[]): void {
+    const c = this.strainShow;
+    c.removeChildren().forEach((o) => o.destroy());
+    const size = specials.length > 1 ? 250 : 340;
+    specials.forEach((s, i) => {
+      const sp = new Sprite(this.tex.normal[s]);
+      sp.anchor.set(0.5);
+      sp.width = sp.height = size;
+      sp.position.set((i - (specials.length - 1) / 2) * size, -80);
+      c.addChild(sp);
+    });
+    const line = (text: string, size: number, y: number, fill: number) => {
+      const t = new Text({ text, style: { fontFamily: 'Cinzel, serif', fontWeight: '900', fontSize: size, fill, letterSpacing: size * 0.08, stroke: { color: COLORS.ink, width: size * 0.16, join: 'round' } } });
+      t.anchor.set(0.5);
+      t.y = y;
+      c.addChild(t);
+    };
+    line(specials.length > 1 ? 'SOUCHES ACTIVES' : 'SOUCHE ACTIVE', 62, 130, 0xffd98a);
+    line('ENVAHIT TOUT LE ROULEAU', 40, 204, 0xfff0d0);
+  }
 
   /** Portrait-only reminder of the feature, filling the space under the reels. */
   private buildTeaser(tex: SymbolTextures): Container {
@@ -416,7 +462,7 @@ export class Game {
   /** Wide screens: the reels in the very middle, the queen on their left. */
   private layoutWide(w: number, availH: number): void {
     const scale = Math.min((w * 0.98) / WORLD_W, (availH * 0.985) / (WORLD_BOTTOM - WORLD_TOP));
-    this.teaser.visible = false;
+    this.teaser.visible = this.strainShow.visible = false;
     this.logo.scale.set(0.8);
     this.logo.y = -68;
     this.logoShade.position.set(this.logo.x, this.logo.y + 20);
@@ -428,6 +474,12 @@ export class Game {
     this.world.scale.set(scale);
     this.world.pivot.set(BOARD_W / 2, (WORLD_TOP + WORLD_BOTTOM) / 2);
     this.world.position.set(w / 2, availH / 2);
+    const beside = (w - FRAME_OUTER_W * scale) / 2;
+    this.hud.placeBuy(
+      beside >= SIDE_BUY_ROOM
+        ? { x: beside / 2 + 8, y: availH / 2 - 10, scale: Math.min(1.2, beside / 240, availH / 400) }
+        : null,
+    );
   }
 
   /**
@@ -435,6 +487,7 @@ export class Game {
    * whatever room is left above the console, the decor and the reminder of the feature.
    */
   private layoutUpright(w: number, availH: number): void {
+    this.hud.placeBuy(null);
     const inset = 16;
     const scale = Math.min((w * 0.985) / FRAME_OUTER_W, (availH - inset) / (UPRIGHT_LOGO_H + FRAME_OUTER_H));
     let room = (availH - inset) / scale - UPRIGHT_LOGO_H - FRAME_OUTER_H;
@@ -455,8 +508,11 @@ export class Game {
     this.banner.arrange(true);
     const frameBottom = FRAME_TOP + FRAME_OUTER_H;
     this.teaser.visible = room > 300 && !this.inFeature;
-    this.teaser.scale.set(Math.max(0.62, Math.min(1.15, room / 620)));
-    this.teaser.position.set(BOARD_W / 2, frameBottom + room / 2 - 4);
+    this.teaser.scale.set(Math.max(0.5, Math.min(1, room / 860)));
+    this.teaser.position.set(BOARD_W / 2, frameBottom + room * 0.72);
+    this.strainShow.visible = room > 300 && this.inFeature;
+    this.strainShow.scale.copyFrom(this.teaser.scale);
+    this.strainShow.position.copyFrom(this.teaser.position);
   }
 
   /** Time warp for hit-stops (1 = normal). */
@@ -494,8 +550,11 @@ export class Game {
     this.frameAvg = 16;
     this.quality++;
     if (this.quality === 1) this.bg.setRays(false);
-    else if (LITE) this.app.renderer.resize(this.viewW, this.viewH, 1);
-    else this.scene.filters = [];
+    else {
+      this.bg.setLive(false);
+      if (LITE) this.app.renderer.resize(this.viewW, this.viewH, 1);
+      else this.scene.filters = [];
+    }
   }
 
   /** wins in a row: each one sings a little higher */
@@ -521,21 +580,22 @@ export class Game {
   /** Sound, turbo and the record stay as the player left them. */
   private loadPrefs(): void {
     try {
-      const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as { sound?: boolean; turbo?: boolean; best?: number };
+      const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as { sound?: boolean; music?: boolean; turbo?: boolean; best?: number };
       this.sound = p.sound ?? true;
+      this.music = p.music ?? true;
       this.turbo = p.turbo ?? false;
       this.best = p.best ?? 0;
     } catch {
       /* storage unavailable */
     }
     this.audio.setMuted(!this.sound);
-    this.hud.setSound(this.sound);
+    this.audio.setMusic(this.music);
     this.hud.setTurbo(this.turbo);
   }
 
   private savePrefs(): void {
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ sound: this.sound, turbo: this.turbo, best: this.best }));
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ sound: this.sound, music: this.music, turbo: this.turbo, best: this.best }));
     } catch {
       /* storage unavailable */
     }
@@ -546,7 +606,7 @@ export class Game {
     this.hud.setBalance(this.server.state.balance);
     this.hud.setBet(BET_LEVELS[i], i > 0 && !this.busy, i < BET_LEVELS.length - 1 && !this.busy);
     this.hud.setRefill(!this.busy && this.server.state.balance < this.server.bet);
-    this.hud.setBuy(this.server.bonusPrice, !this.busy && this.server.state.balance >= this.server.bonusPrice);
+    this.hud.setBuy(this.server.bonusPrice, this.server.state.balance >= this.server.bonusPrice);
   }
 
   private changeBet(d: number): void {
@@ -649,7 +709,8 @@ export class Game {
     this.hud.setSpinning(false);
     this.refreshHud();
     if (this.autoLeft > 0) {
-      this.autoLeft--;
+      const limit = this.server.state.balance < this.autoFloor || round.totalWin >= this.autoCeiling;
+      this.autoLeft = limit ? 0 : this.autoLeft - 1;
       this.hud.setAuto(this.autoLeft);
       if (this.autoLeft > 0) setTimeout(() => void this.play(), round.totalWin > 0 ? 550 : 120);
     } else if (this.holding) {
@@ -710,6 +771,7 @@ export class Game {
         this.streak++;
         this.audio.win(size, this.streak);
         this.bg.flare(0.2 + size * 0.1);
+        this.bg.wave(0.5 + size * 0.2);
         if (size >= 1) this.audio.coins(size * 5);
       }
       else this.audio.tick();
@@ -754,11 +816,11 @@ export class Game {
       // …the infection spreads over the temple…
       this.bg.setFeature(true);
       await this.sleep(1600);
-      // …and the camera dives into the pyramid
+      // …and the camera dives down the nave, through the gate
       this.audio.stoneDoor(1.6);
       gsap.to(this.world, { alpha: 0, duration: 0.5, ease: 'power2.in' });
       gsap.to(this.hud.root, { opacity: 0, duration: 0.4 });
-      await this.bg.zoomTo(4.2, 1.1);
+      await this.bg.zoomTo(7, 1.3);
       await this.overlays.corridor(this.turbo ? 1.2 : 2.2);
       this.bg.camera.k = 1;
       this.layout();
@@ -772,6 +834,7 @@ export class Game {
     this.board.reels.forEach((r) => r.setStrip(FREE_STRIPS[this.board.reels.indexOf(r)]));
     const resumeSpin = f.spins[startAt - 1];
     this.banner.set(startAt, resumeSpin?.total ?? 10, resumeSpin?.specials ?? firstSpecials);
+    this.showStrains(resumeSpin?.specials ?? firstSpecials);
     let featureWin = resumeSpin?.featureWin ?? 0;
     this.hud.setWin(featureWin, 'Gain bonus');
     this.banner.setGain(featureWin, round.bet);
@@ -796,6 +859,7 @@ export class Game {
       if (s.retrigger) {
         await this.overlays.retrigger(s.retrigger.spins, s.retrigger.mutation, before);
         this.banner.set(s.index, s.total, s.specials);
+        this.showStrains(s.specials);
       }
       this.server.markFreeSpinShown(i + 1);
     }

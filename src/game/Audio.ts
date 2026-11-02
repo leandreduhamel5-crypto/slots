@@ -3,11 +3,12 @@ import { LITE } from './device';
  * Procedural sound design with the Web Audio API: no audio files. The strings are physical models
  * (Karplus-Strong), so what rewards the player is a plucked string, not an oscillator.
  *
+ * The score is not composed here: real recordings dropped in public/assets/audio/ (music.mp3 for the
+ * game, bonus.mp3 for the free spins) play in a loop under the sound effects. Without them the game
+ * only has its night: a low drone, wind, and now and then a gong far away.
+ *
  * Mix: sfx / ui / music buses → glue compressor → limiter, with a shared stone-hall reverb
  * (generated impulse response) and a dark echo for the plucked and blown instruments.
- * The band is an Egyptian takht: oud, ney, mizmar, darbuka, riq and finger cymbals. The music has no
- * chords: one line in maqam Hijaz on E, played by all, over a drone, with a passage in Bayati whose
- * quarter tone no other tradition has. Big wins run their own loop.
  */
 
 type Pan = number;
@@ -17,44 +18,10 @@ const midi = (n: number) => A4 * Math.pow(2, (n - 69) / 12);
 /** semitones of the hijaz scale, for coin counts */
 const TICK_SCALE = [0, 1, 4, 5, 7, 8, 10, 12, 13, 16];
 /* Everything sits on E Hijaz (phrygian dominant): the augmented second F → G# is the Egyptian colour. */
-/** Maqsum, the heartbeat of Egyptian music: D T . T D . T . */
-const MAQSUM = ['D', 'T', '', 'T', 'D', '', 'T', ''];
 /** Saidi, the horse-dance of Upper Egypt: D T . D D . T . */
 const SAIDI = ['D', 'T', '', 'D', 'D', '', 'T', ''];
-type Note = [step: number, midi: number, len: number];
-const score = (bars: number, notes: Note[]) => ({ steps: bars * 8, notes: new Map(notes.map((n) => [n[0], n])) });
-/**
- * The game's theme, 16 bars of eighths. The line turns round the F–G# step and always falls back to E;
- * bars 9 to 12 pass through Bayati on A, whose B half-flat (70.5) sits between two piano keys.
- */
-const NEY_THEME = score(16, [
-  [0, 64, 2], [2, 65, 1], [3, 68, 1], [4, 69, 2], [6, 68, 1], [7, 65, 1], [8, 64, 3], [11, 65, 1], [12, 64, 4],
-  [16, 68, 2], [18, 69, 1], [19, 71, 1], [20, 72, 2], [22, 71, 1], [23, 69, 1], [24, 68, 2], [26, 65, 1], [27, 68, 1], [28, 65, 1], [29, 64, 3],
-  [32, 71, 3], [35, 72, 1], [36, 74, 2], [38, 72, 1], [39, 71, 1], [40, 69, 2], [42, 71, 1], [43, 69, 1], [44, 68, 4],
-  [48, 69, 1], [49, 68, 1], [50, 65, 1], [51, 68, 1], [52, 65, 2], [54, 64, 1], [55, 62, 1], [56, 64, 6],
-  [64, 69, 2], [66, 70.5, 1], [67, 72, 1], [68, 74, 3], [71, 72, 1], [72, 70.5, 2], [74, 69, 2], [76, 67, 1], [77, 69, 1], [78, 70.5, 1], [79, 69, 1],
-  [80, 68, 2], [82, 69, 1], [83, 68, 1], [84, 65, 2], [86, 68, 1], [87, 65, 1], [88, 64, 8],
-]);
-/** The mizmar's cry in the bonus, 16 bars: two lines, the first again, and four bars left to the drums. */
-const MIZMAR_THEME = score(16, [
-  [0, 76, 1], [1, 76, 1], [2, 77, 1], [3, 76, 1], [4, 80, 2], [6, 77, 1], [7, 76, 1],
-  [8, 74, 1], [9, 76, 1], [10, 77, 2], [12, 76, 4],
-  [16, 76, 1], [17, 76, 1], [18, 77, 1], [19, 80, 1], [20, 81, 2], [22, 80, 1], [23, 77, 1],
-  [24, 80, 2], [26, 77, 2], [28, 76, 4],
-  [32, 81, 2], [34, 80, 1], [35, 81, 1], [36, 83, 2], [38, 81, 1], [39, 80, 1],
-  [40, 81, 1], [41, 80, 1], [42, 77, 2], [44, 76, 2], [46, 77, 1], [47, 80, 1],
-  [48, 83, 2], [50, 84, 2], [52, 83, 2], [54, 81, 2], [56, 80, 1], [57, 77, 1], [58, 76, 1], [59, 74, 1], [60, 76, 4],
-  [64, 76, 1], [65, 76, 1], [66, 77, 1], [67, 76, 1], [68, 80, 2], [70, 77, 1], [71, 76, 1],
-  [72, 74, 1], [73, 76, 1], [74, 77, 2], [76, 76, 4],
-  [80, 76, 1], [81, 76, 1], [82, 77, 1], [83, 80, 1], [84, 81, 2], [86, 80, 1], [87, 77, 1],
-  [88, 80, 2], [90, 77, 2], [92, 76, 4],
-]);
 /** the walking bass under the bonus: root, fifth, octave */
 const BASS_WALK = [0, 0, 0, 7, 12, 0, 7, 1];
-/** In Hijaz the G# is played a little low and the F a little high: the step between them is not a piano's. */
-const maqam = (n: number) => (n % 12 === 8 ? n - 0.2 : n % 12 === 5 ? n + 0.1 : n);
-/** the formants keep only a sliver of the reed's energy: this gives it back */
-const REED_MAKEUP = 1.6;
 const SPIN_LEVEL = 0.07;
 const MUSIC_LEVEL = 0.5;
 /** a string carries more than the bowls it replaced, for the same nominal volume */
@@ -83,10 +50,10 @@ export class Audio {
   private spinLoop: { stop: (at: number) => void } | null = null;
   private feature = false;
   private seqTimer = 0;
-  private nextStep = 0;
-  private step = 0;
   private ambTimer = 0;
   private musicDuck!: GainNode;
+  private musicSwitch!: GainNode;
+  private musicOn = true;
   muted = false;
 
   /** Must be called from a user gesture. */
@@ -184,8 +151,11 @@ export class Audio {
     this.sfx = bus(0.9, 0.2);
     this.ui = bus(0.6, 0.05);
     const music = bus(MUSIC_LEVEL, 0.42);
+    this.musicSwitch = ctx.createGain();
+    this.musicSwitch.gain.value = this.musicOn ? 1 : 0;
+    this.musicSwitch.connect(music);
     this.musicDuck = ctx.createGain();
-    this.musicDuck.connect(music);
+    this.musicDuck.connect(this.musicSwitch);
     this.music = this.musicDuck;
   }
 
@@ -196,14 +166,20 @@ export class Audio {
     void (hidden ? live.suspend() : live.resume());
   }
 
+  /** The music has its own switch: the sounds of the game go on without it. */
+  setMusic(on: boolean): void {
+    this.musicOn = on;
+    if (this.ctx) this.musicSwitch.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.05);
+  }
+
   setMuted(m: boolean): void {
     this.muted = m;
     if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : MASTER_LEVEL, this.ctx.currentTime, 0.05);
   }
 
   setFeature(on: boolean): void {
-    if (on !== this.feature) this.step = 0; // each world starts its theme from the top
     this.feature = on;
+    if (this.ctx) this.playScore();
   }
 
   /** "Now", nudged 10 ms ahead so an envelope never starts in the past and loses its attack. */
@@ -421,75 +397,6 @@ export class Audio {
     this.pluck(at, note, vol, pan, 0.45 + ring * 0.55, 340, 5, 3400, dest, 0.08);
   }
 
-  /** The oud: a big round belly and a dark, woody string. */
-  private oud(at: number, note: number, vol: number, pan = 0): void {
-    this.pluck(at, note, vol, pan, 0.8, 230, 7, 2300, this.music, 0.05);
-  }
-
-  /** The line on the oud. A long note is not held but shaken with the plectrum, the Arab tremolo. */
-  private oudLine(at: number, note: number, len: number, dur: number, vol: number): void {
-    if (len < 3) {
-      this.oud(at, note, vol);
-      return;
-    }
-    for (let k = 0; k < len * 2; k++) this.oud(at + (k * dur) / 2, note, vol * (k % 2 ? 0.5 : 0.8));
-  }
-
-  /**
-   * Mizmar, the double-reed oboe of Egyptian processions: a nasal buzz through vocal-like formants,
-   * a scoop into the note and a wide vibrato. Kept low in the mix: a little of it says Egypt at once.
-   */
-  private reed(at: number, note: number, len: number, vol: number, pan: Pan = 0): void {
-    const ctx = this.ctx!;
-    const f = midi(note);
-    // the two reeds of the pipe never quite agree: that beating is its bite
-    const pipes = [-7, 7].map((detune) => {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.detune.value = detune;
-      o.frequency.setValueAtTime(f * 0.94, at);
-      o.frequency.exponentialRampToValueAtTime(f, at + 0.05);
-      return o;
-    });
-    const vib = ctx.createOscillator();
-    vib.frequency.value = 5.6 + Math.random();
-    const vg = ctx.createGain();
-    vg.gain.setValueAtTime(0, at);
-    vg.gain.linearRampToValueAtTime(f * 0.016, at + Math.min(0.2, len * 0.7));
-    vib.connect(vg);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, at);
-    g.gain.exponentialRampToValueAtTime(vol, at + 0.025);
-    g.gain.setValueAtTime(vol * 0.85, at + len * 0.75);
-    g.gain.exponentialRampToValueAtTime(0.0001, at + len + 0.06);
-    const sum = ctx.createGain();
-    sum.gain.value = 0.7;
-    for (const o of pipes) {
-      vg.connect(o.frequency);
-      o.connect(sum);
-    }
-    for (const [ff, q, k] of [[820, 5, 1], [1500, 6, 0.6], [2900, 7, 0.12]]) {
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = ff;
-      bp.Q.value = q;
-      const bg = ctx.createGain();
-      bg.gain.value = k * REED_MAKEUP;
-      sum.connect(bp).connect(bg).connect(g);
-    }
-    g.connect(this.pan(pan, this.music));
-    for (const n of [...pipes, vib]) {
-      n.start(at);
-      n.stop(at + len + 0.1);
-    }
-  }
-
-  /** Riq: the jingles of the Egyptian tambourine. */
-  private riq(at: number, vol: number, pan: Pan = 0): void {
-    this.hiss({ at, dur: 0.05, type: 'bandpass', f0: 7400, q: 3, vol, a: 0.0015, dest: this.music, pan });
-    this.hiss({ at, dur: 0.03, type: 'bandpass', f0: 10400, q: 4, vol: vol * 0.6, a: 0.001, dest: this.music, pan });
-  }
-
   /** A chord of bowls rolled from the bottom up, on a soft drum. */
   private fanfare(at: number, notes: number[], len: number, vol: number): void {
     notes.forEach((n, i) => this.mallet(at + i * 0.035, n, vol * 2.2, (i - (notes.length - 1) / 2) * 0.25, 1 + len));
@@ -533,51 +440,6 @@ export class Audio {
     this.hiss({ at, dur: 0.25, type: 'lowpass', f0: 2600, f1: 120, vol: vol * 0.45, a: 0.002, pan });
   }
 
-  /** the note the ney is coming from: it slides from one to the next */
-  private neyFrom = 0;
-
-  /** Ney: the reed flute of Egypt, more breath than tone, in the low register, sliding between its notes. */
-  private ney(at: number, f: number, len: number, vol = 0.05): void {
-    const ctx = this.ctx!;
-    const from = this.neyFrom && Math.abs(Math.log2(f / this.neyFrom)) < 0.6 ? this.neyFrom : f * 0.96;
-    this.neyFrom = f;
-    const glide = Math.min(0.11, len * 0.3);
-    const o = ctx.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(from, at);
-    o.frequency.exponentialRampToValueAtTime(f, at + glide);
-    const vib = ctx.createOscillator();
-    vib.frequency.value = 4.4;
-    const vg = ctx.createGain();
-    vg.gain.setValueAtTime(0, at + Math.min(0.25, len * 0.5));
-    vg.gain.linearRampToValueAtTime(f * 0.009, at + len * 0.8);
-    vib.connect(vg).connect(o.frequency);
-    // its tube gives it a hollow voice: odd partials, and few of them
-    const h = ctx.createOscillator();
-    h.type = 'triangle';
-    h.frequency.setValueAtTime(from * 3, at);
-    h.frequency.exponentialRampToValueAtTime(f * 3, at + glide);
-    const hg = ctx.createGain();
-    hg.gain.value = 0.1;
-    h.connect(hg);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, at);
-    g.gain.exponentialRampToValueAtTime(vol, at + 0.09);
-    g.gain.setValueAtTime(vol * 0.85, at + len * 0.7);
-    g.gain.exponentialRampToValueAtTime(0.0001, at + len + 0.16);
-    o.connect(g);
-    hg.connect(g);
-    g.connect(this.music);
-    const e = ctx.createGain();
-    e.gain.value = 0.35;
-    g.connect(e).connect(this.echoIn);
-    for (const n of [o, vib, h]) {
-      n.start(at);
-      n.stop(at + len + 0.2);
-    }
-    this.hiss({ at, dur: len, type: 'bandpass', f0: f * 2, q: 1.6, vol: vol * 0.95, a: 0.06, dest: this.music }); // the breath
-  }
-
   /** Darbuka: the round "doum" in the middle of the skin, its pitch dropping as the skin relaxes. */
   private doum(at: number, vol = 1, dest: AudioNode = this.music): void {
     this.voice({ at, f: 168, to: 86, glide: 0.05, vol: 0.5 * vol, r: 0.34, a: 0.002, dest });
@@ -603,8 +465,8 @@ export class Audio {
   private startMusic(): void {
     this.startDrone();
     this.scheduleAmbience();
-    this.nextStep = this.t + 0.3;
-    this.step = 0;
+    void this.loadTrack('music');
+    void this.loadTrack('bonus');
     clearInterval(this.seqTimer);
     this.seqTimer = window.setInterval(() => this.sequence(), 50);
   }
@@ -630,7 +492,9 @@ export class Audio {
       o.connect(lp);
       o.start();
     }
-    lp.connect(g).connect(this.music);
+    this.droneOut = ctx.createGain();
+    this.droneOut.connect(this.music);
+    lp.connect(g).connect(this.droneOut);
     const n = ctx.createBufferSource();
     n.buffer = this.noise;
     n.loop = true;
@@ -650,58 +514,49 @@ export class Audio {
     n.start();
   }
 
-  /** Step sequencer (eighth notes), scheduled ahead of time for sample-accurate timing. */
-  private sequence(): void {
-    if (!this.ctx) return;
-    const bpm = this.feature ? 118 : 94;
-    const stepDur = 60 / bpm / 2;
-    // a stalled page must not play every step it missed all at once
-    if (this.nextStep < this.t - 0.1) {
-      const missed = Math.ceil((this.t - this.nextStep) / stepDur);
-      this.nextStep += missed * stepDur;
-      this.step += missed;
+  private tracks = new Map<string, AudioBuffer>();
+  private track: { name: string; out: GainNode; src: AudioBufferSourceNode } | null = null;
+  private droneOut: GainNode | null = null;
+
+  /** Fetches a recording of the score, if there is one, and starts it if its moment has come. */
+  private async loadTrack(name: string): Promise<void> {
+    try {
+      const res = await fetch(`assets/audio/${name}.mp3`);
+      if (!res.ok || !res.headers.get('content-type')?.includes('audio')) return;
+      this.tracks.set(name, await this.ctx!.decodeAudioData(await res.arrayBuffer()));
+      if (name === 'music' || this.feature) this.playScore();
+    } catch {
+      /* no recording: the game keeps its night sounds */
     }
-    while (this.nextStep < this.t + 0.25) {
-      if (!this.muted) this.playStep(this.step, this.nextStep, stepDur);
-      this.nextStep += stepDur;
-      this.step++;
-    }
-    this.bigWinSequence();
   }
 
-  private playStep(step: number, at: number, dur: number): void {
-    const bar = Math.floor(step / 8);
-    const s = step % 8;
-    if (!this.feature) {
-      // the night: ney and oud on one line, over the maqsum
-      const n = NEY_THEME.notes.get(step % NEY_THEME.steps);
-      if (n) {
-        const note = maqam(n[1]);
-        this.ney(at, midi(note), dur * n[2] * 0.95, 0.085);
-        this.oudLine(at, note - 12, n[2], dur, 0.13);
-      }
-      const hit = MAQSUM[s];
-      if (hit === 'D') this.doum(at, s === 0 ? 0.42 : 0.32);
-      else if (hit === 'T') this.tek(at, s === 6 ? 0.8 : 0.62);
-      if (bar % 4 === 3 && s === 7) this.tek(at + dur / 2, 0.45);
-      this.riq(at, s % 2 ? 0.055 : 0.028, s % 2 ? 0.3 : -0.3);
-    } else {
-      // the infected temple: the saidi, the reed and the oud on one line, the dancers' finger cymbals
-      const n = MIZMAR_THEME.notes.get(step % MIZMAR_THEME.steps);
-      if (n) {
-        const note = maqam(n[1] - 12);
-        this.ney(at, midi(note), dur * n[2] * 0.92, 0.06);
-        this.reed(at, note, dur * n[2] * 0.92, 0.075, 0.1);
-        this.oudLine(at, note - 12, n[2], dur, 0.13);
-      }
-      const hit = SAIDI[s];
-      if (hit === 'D') this.doum(at, s === 0 ? 0.56 : 0.44);
-      else if (hit === 'T') this.tek(at, 0.8);
-      if (bar % 8 === 7 && s >= 4) this.tek(at + dur / 2, 0.55);
-      this.riq(at, s % 2 ? 0.07 : 0.035, s % 2 ? 0.35 : -0.35);
-      if (s % 4 === 0) this.sagat(at, 2100, 0.012, s ? 0.4 : -0.4, this.music);
-      if (s === 0 || s === 3) this.oud(at, 40, 0.16);
+  /** Crossfades to the recording of the moment. */
+  private playScore(): void {
+    const ctx = this.ctx!;
+    const name = this.feature && this.tracks.has('bonus') ? 'bonus' : 'music';
+    const buffer = this.tracks.get(name);
+    if (!buffer || this.track?.name === name) return;
+    const at = this.t;
+    if (this.track) {
+      this.track.out.gain.setTargetAtTime(0.0001, at, 0.4);
+      this.track.src.stop(at + 2.5);
     }
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, at);
+    out.gain.setTargetAtTime(1.4, at, 0.4);
+    out.connect(this.music);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    src.connect(out);
+    src.start(at);
+    this.track = { name, out, src };
+    this.droneOut?.gain.setTargetAtTime(0.0001, at, 0.5);
+  }
+
+  /** Runs every 50 ms: the loop of the big wins is scheduled ahead of time. */
+  private sequence(): void {
+    if (this.ctx) this.bigWinSequence();
   }
 
   /** Now and then, far away in the temple: a gong, or a sistrum in another chamber. */
@@ -953,8 +808,6 @@ export class Audio {
       else if (hit === 'T') this.tek(at, 0.5, b.out);
       if (s % 2 === 1) this.sistrum(at, 0.01, s < 4 ? -0.4 : 0.4, 2);
       const up = [0, 3, 5, 7][Math.min(3, b.tier)];
-      const n = MIZMAR_THEME.notes.get(b.step % 64);
-      if (n) this.mallet(at, n[1] - 12 + up, 0.12, 0.1, 0.7, b.out);
       this.voice({ at, f: midi(40 + up + BASS_WALK[s]), vol: 0.16, r: stepDur * 0.85, a: 0.005, type: 'triangle', dest: b.out });
       b.next += stepDur;
       b.step++;

@@ -12,23 +12,6 @@ export const APEX: [number, number] = [960, 59];
 export const PYRAMID_HALF = 667;
 /** a line low in the sky, where heat lightning lands and stars stop */
 export const HORIZON = 600;
-/** gold braziers: the top of the coals, where the live fire burns */
-export const BRAZIERS: [number, number][] = [
-  [149, 566],
-  [1771, 566],
-];
-/** the nearest guardians: x of each and y of the top of his head */
-export const OBELISKS = [203, 1717];
-export const OBELISK_TIP_Y = 248;
-export const MOON: [number, number, number] = [610, 165, 78];
-/** the pyramid's visible edges, base corner → apex (screen) */
-export const PYRAMID_EDGES: [[number, number], [number, number]][] = [
-  [[644, 691], APEX],
-  [[350, 670], APEX],
-  [[1716, 672], APEX],
-];
-/** the nearest guardians: [foot, head] */
-export const OBELISK_SHAFTS: [[number, number], [number, number]][] = [
-  [[203, 750], [203, 248]],
-  [[1717, 750], [1717, 248]],
-];
+export const MOON: [number, number, number] = [1270, 110, 63];
+/** the gate of gold at the end of the avenue */
+export const GATE: [number, number] = [960, 605];

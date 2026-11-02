@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Texture } from 'pixi.js';
+import { Container, Graphics, Mesh, PlaneGeometry, Sprite, Text, Texture, type NineSliceSprite } from 'pixi.js';
 import gsap from 'gsap';
 import { REELS, ROWS, Sym } from '../math/config';
 import type { Expansion, Grid, LineWin, ScatterWin } from '../math/engine';
@@ -6,9 +6,9 @@ import { Digits } from './Digits';
 import { Particles } from './Particles';
 import { Reel } from './Reel';
 import { BOARD_H, BOARD_W, CELL_H, CELL_W, COLORS, FRAME_MARGIN_X, FRAME_MARGIN_Y, REEL_GAP, SYMBOL_SIZE, TILE_H, TILE_W, cellCenter, reelX } from './layout';
-import { paintWinBand } from './art/egyptFrame';
+import { paintCellFrame } from './art/egyptFrame';
+import { makePlate } from './StrainBar';
 import { FRAME_ART, FRAME_BLEED, FRAME_PAD, TEX_SIZE, TEX_UNIT, type SymbolTextures } from './textures';
-import { fmt } from '../ui/format';
 
 export interface SpinPlan {
   grid: Grid;
@@ -34,9 +34,23 @@ interface Rig {
   shine: Sprite;
   src: Sprite;
   tweens: gsap.core.Animation[];
+  /** the vertices of the symbol, when it can turn on itself; shared by its picture and its glow */
+  geo: PlaneGeometry | null;
+  /** lights set on the symbol, which must follow it when it turns */
+  pins: { o: Container; x: number; y: number }[];
+  /** part of a win: the short flash of its landing must not take it away */
+  won: boolean;
 }
 
-/** Tint of the star-burst behind each winning symbol. */
+/** The plaque under the reels: what a win pays is read there, and nothing is ever written over the symbols. */
+interface WinPlate {
+  root: Container;
+  plate: NineSliceSprite;
+  caption: Text;
+  value: Digits;
+  shown: { v: number };
+}
+
 /** Glowing eyes / gems on the painted symbols: [x, y, radius, tint] in texture px from the centre. */
 const EYES: Partial<Record<Sym, [number, number, number, number][]>> = {
   [Sym.CODEX]: [[1, -80, 15, 0xffb040]],
@@ -49,19 +63,24 @@ const EYES: Partial<Record<Sym, [number, number, number, number][]>> = {
 /** seconds between one winning symbol lighting up and the next */
 const IGNITE_STAGGER = 0.13;
 
-const SYMBOL_GLOW: Record<number, number> = {
-  [Sym.CODEX]: 0xff3347,
-  [Sym.ZERO]: 0xffb03a,
-  [Sym.MASK]: 0xff3347,
-  [Sym.ANTIDOTE]: 0x38dcff,
-  [Sym.BLOOD]: 0xff3347,
-  [Sym.A]: 0xff3347,
-  [Sym.K]: 0x38dcff,
-  [Sym.Q]: 0xb46bff,
-  [Sym.J]: 0x7be05a,
-  [Sym.TEN]: 0xffa23a,
+/** vertices per side of a symbol that turns: at 10 × 10 it still goes through the batcher */
+const TURN_GRID = 10;
+/** how far the middle of each symbol stands out of its plane, in half widths */
+const RELIEF: Partial<Record<Sym, number>> = {
+  [Sym.ZERO]: 0.55,
+  [Sym.MASK]: 0.5,
+  [Sym.ANTIDOTE]: 0.45,
+  [Sym.BLOOD]: 0.4,
+  [Sym.A]: 0.24,
+  [Sym.K]: 0.24,
+  [Sym.Q]: 0.24,
+  [Sym.J]: 0.24,
+  [Sym.TEN]: 0.24,
 };
-
+const PLATE_W = 430;
+const PLATE_H = 94;
+/** from the bottom of the reels: the plaque lies over the foot of the frame */
+const PLATE_Y = 50;
 
 export class ReelBoard extends Container {
   readonly reels: Reel[] = [];
@@ -84,7 +103,10 @@ export class ReelBoard extends Container {
   private rubyFlares: Sprite[] = [];
   private edgeLights: Sprite[] = [];
   private accent = 0xffc860;
-  private bandTex = Texture.from(paintWinBand());
+  private plateLayer = new Container();
+  private plate: WinPlate | null = null;
+  private cellFrame = Texture.from(paintCellFrame(CELL_W, CELL_H));
+  private spareGeometry: PlaneGeometry[] = [];
   /** in the bonus, winning symbols light up without moving */
   private still = false;
   private anticipationFx: { glow: Sprite; veins: Sprite; border: Graphics; comets: Sprite[] }[] = [];
@@ -278,6 +300,7 @@ export class ReelBoard extends Container {
       ...this.edgeLights,
       this.fx,
       this.labelLayer,
+      this.plateLayer,
     );
   }
 
@@ -466,7 +489,7 @@ export class ReelBoard extends Container {
     halo.width = CELL_W * 1.5;
     halo.height = CELL_H * 1.5;
     halo.blendMode = 'add';
-    halo.tint = SYMBOL_GLOW[sym] ?? COLORS.yellow;
+    halo.tint = this.accent;
     halo.alpha = 0;
     const body = new Container();
     body.scale.set(SYMBOL_SIZE / TEX_SIZE);
@@ -483,12 +506,19 @@ export class ReelBoard extends Container {
       body.addChild(s);
       return s;
     };
+    const relief = !r && RELIEF[sym] ? this.takeGeometry() : null;
+    const onGrid = (t: Texture) => {
+      const m = new Mesh({ geometry: relief!, texture: t });
+      body.addChild(m);
+      return m;
+    };
     if (r) {
       add(r.base);
       for (const [name, t] of Object.entries(r.parts)) parts[name] = add(t);
       if (parts.lid) parts.lid.scale.y = 0;
-    } else add(this.tex.normal[sym]);
-    const glow = add(this.tex.glowMaps[sym]);
+    } else if (relief) onGrid(this.tex.normal[sym]);
+    else add(this.tex.normal[sym]);
+    const glow = relief ? (onGrid(this.tex.glowMaps[sym]) as unknown as Sprite) : add(this.tex.glowMaps[sym]);
     glow.blendMode = 'add';
     glow.alpha = 0;
     const shineMask = add(this.tex.normal[sym]);
@@ -501,7 +531,7 @@ export class ReelBoard extends Container {
     shine.mask = shineMask;
     src.alpha = 0;
     this.rigLayer.addChild(root);
-    const rig: Rig = { key, reel, row, sym, root, body, parts, glow, halo, shine, src, tweens: [] };
+    const rig: Rig = { key, reel, row, sym, root, body, parts, glow, halo, shine, src, tweens: [], geo: relief, pins: [], won: false };
     this.rigs.set(key, rig);
     return rig;
   }
@@ -511,7 +541,50 @@ export class ReelBoard extends Container {
     gsap.killTweensOf([rig.body, rig.body.scale, rig.glow, rig.halo, rig.halo.scale, rig.shine, ...Object.values(rig.parts), ...Object.values(rig.parts).map((p) => p.scale)]);
     rig.src.alpha = 1;
     rig.root.destroy({ children: true });
+    if (rig.geo) {
+      this.turn(rig, 0);
+      this.spareGeometry.push(rig.geo);
+    }
     this.rigs.delete(rig.key);
+  }
+
+  /** A flat grid the size of a symbol, centred; they are kept and reused, rigs come and go all the time. */
+  private takeGeometry(): PlaneGeometry {
+    const spare = this.spareGeometry.pop();
+    if (spare) return spare;
+    const g = new PlaneGeometry({ width: TEX_SIZE, height: TEX_SIZE, verticesX: TURN_GRID, verticesY: TURN_GRID });
+    const p = g.positions;
+    for (let i = 0; i < p.length; i++) p[i] -= TEX_SIZE / 2;
+    g.getBuffer('aPosition').update();
+    return g;
+  }
+
+  /** Where a point of a symbol goes when the symbol is turned by `a` radians: its middle stands proud, like a head. */
+  private turned(x: number, y: number, a: number, relief: number): [number, number] {
+    const R = TEX_SIZE / 2;
+    const r2 = (x * x + y * y) / (R * R);
+    const z = r2 < 1 ? relief * R * Math.sqrt(1 - r2) : 0;
+    const k = 2.8 * TEX_SIZE;
+    const depth = -x * Math.sin(a) + z * (Math.cos(a) - 1);
+    const p = k / (k - depth);
+    return [(x * Math.cos(a) + z * Math.sin(a)) * p, y * p];
+  }
+
+  /** Turns a symbol on itself. Only its light and its volume change: it stays in its cell. */
+  private turn(rig: Rig, a: number): void {
+    const relief = RELIEF[rig.sym] ?? 0;
+    const pos = rig.geo!.positions;
+    const step = TEX_SIZE / (TURN_GRID - 1);
+    let i = 0;
+    for (let v = 0; v < TURN_GRID; v++) {
+      for (let u = 0; u < TURN_GRID; u++) {
+        const [x, y] = this.turned(u * step - TEX_SIZE / 2, v * step - TEX_SIZE / 2, a, relief);
+        pos[i++] = x;
+        pos[i++] = y;
+      }
+    }
+    rig.geo!.getBuffer('aPosition').update();
+    for (const pin of rig.pins) if (!pin.o.destroyed) pin.o.position.set(...this.turned(pin.x, pin.y, a, relief));
   }
 
   private clearRigs(): void {
@@ -559,12 +632,13 @@ export class ReelBoard extends Container {
         cross.addChild(ray);
       }
       rig.body.addChild(glow, cross);
+      rig.pins.push({ o: glow, x, y }, { o: cross, x, y });
       return { glow, cross };
     });
   }
 
   /** Win signature for the painted Egyptian symbols (and the royals). */
-  private egyptWin(rig: Rig, tl: gsap.core.Timeline, amp: number, once: (fn: () => void) => void, pos: { x: number; y: number }): void {
+  private egyptWin(rig: Rig, tl: gsap.core.Timeline, amp: number): void {
     const b = rig.body;
     for (const f of this.eyeFlares(rig)) {
       tl.fromTo(f.glow, { alpha: 0 }, { alpha: 1, duration: 0.18 }, 0.12)
@@ -573,7 +647,6 @@ export class ReelBoard extends Container {
         .to(f.cross, { alpha: 0, duration: 0.35 }, 0.62)
         .to(f.glow, { alpha: 0.55, duration: 0.4 }, 0.6);
     }
-    once(() => this.fx.sparks(pos.x, pos.y, amp > 0.8 ? 12 : 6, 0.55));
     switch (rig.sym) {
       case Sym.ZERO: // Pharaoh: a slow, regal rise
         tl.to(b, { y: -10 * amp, duration: 0.35, ease: 'power2.out' }, 0.15).to(b, { y: 0, duration: 0.5, ease: 'sine.inOut' }, 0.75);
@@ -672,6 +745,7 @@ export class ReelBoard extends Container {
    * light crosses it and stars of light twinkle on its edges, like sun on polished metal.
    */
   private performWin(rig: Rig, strong: boolean, delay: number): void {
+    rig.won = true;
     const b = rig.body;
     const s = SYMBOL_SIZE / TEX_SIZE;
     const amp = strong ? 1 : 0.65;
@@ -679,6 +753,21 @@ export class ReelBoard extends Container {
     const hs = rig.halo.scale.x;
     const up = s * (1 + 0.13 * amp);
     const tl = gsap.timeline({ delay });
+    const line = new Sprite(this.cellFrame);
+    line.anchor.set(0.5);
+    rig.root.addChildAt(line, 1);
+    tl.fromTo(line, { alpha: 0 }, { alpha: strong ? 1 : 0.8, duration: 0.22, ease: 'sine.out' }, 0);
+    if (rig.geo) {
+      const o = { a: 0 };
+      const amp = strong ? 0.36 : 0.26;
+      rig.tweens.push(
+        gsap
+          .timeline({ delay: delay + 0.08, repeat: -1, repeatDelay: 0.5, onUpdate: () => this.turn(rig, o.a) })
+          .to(o, { a: amp, duration: 0.5, ease: 'sine.inOut' })
+          .to(o, { a: -amp, duration: 1, ease: 'sine.inOut' })
+          .to(o, { a: 0, duration: 0.5, ease: 'sine.inOut' }),
+      );
+    }
     tl.fromTo(rig.halo, { alpha: 0 }, { alpha: strong ? 0.36 : 0.26, duration: 0.2, ease: 'sine.out' }, 0)
       .to(rig.halo, { alpha: strong ? 0.18 : 0.12, duration: 0.7, ease: 'sine.out' }, 0.2)
       .fromTo(rig.halo.scale, { x: hs * 0.7, y: hs * 0.7 }, { x: hs, y: hs, duration: 0.45, ease: 'power2.out' }, 0)
@@ -694,8 +783,8 @@ export class ReelBoard extends Container {
     if (strong) this.twinkle(rig, delay + 0.2);
     // one-shot particle effects, so a looping win cycle doesn't flood the screen
     const once = (fn: () => void) => rig.tweens.push(gsap.delayedCall(delay + 0.3, fn));
-    once(() => this.fx.sand(pos.x, pos.y + CELL_H * 0.2, CELL_W * 0.7, strong ? 8 : 4, 1));
-    if (!this.tex.rigs.has(rig.sym) && !this.still) this.egyptWin(rig, tl, amp, once, pos);
+    once(() => this.fx.sand(pos.x, pos.y + CELL_H * 0.2, CELL_W * 0.7, strong ? 5 : 3, 1));
+    if (!this.tex.rigs.has(rig.sym) && !this.still) this.egyptWin(rig, tl, amp);
     rig.tweens.push(tl);
   }
 
@@ -712,7 +801,7 @@ export class ReelBoard extends Container {
     gsap.fromTo(flash, { alpha: 0.22 }, { alpha: 0, duration: 0.5, onComplete: () => flash.destroy() });
     this.fx.sand(c.x, c.y + CELL_H * 0.3, CELL_W * 0.7, 8, 1);
     const rig = this.rig(reel, row);
-    const tl = gsap.timeline({ onComplete: () => this.dropRig(rig) }).fromTo(rig.glow, { alpha: 0.5 }, { alpha: 0, duration: 0.6, ease: 'sine.out' });
+    const tl = gsap.timeline({ onComplete: () => void (rig.won || this.dropRig(rig)) }).fromTo(rig.glow, { alpha: 0.5 }, { alpha: 0, duration: 0.6, ease: 'sine.out' });
     rig.tweens.push(tl);
   }
 
@@ -722,6 +811,7 @@ export class ReelBoard extends Container {
     this.dimLayer.clear();
     this.clearRigs();
     this.columns.clear();
+    this.hidePlate(true);
     for (const layer of [this.lineLayer, this.ribbonLayer, this.labelLayer, this.expandLayer]) {
       for (const c of layer.removeChildren()) {
         gsap.killTweensOf(c);
@@ -782,12 +872,15 @@ export class ReelBoard extends Container {
 
   private dimExcept(cells: Cell[]): void {
     const keep = new Set(cells.map(([r, row]) => `${r}:${row}`));
+    const dark = { color: 0x07030a, alpha: 0.62 };
     this.dimLayer.clear();
     for (let r = 0; r < REELS; r++) {
       for (let row = 0; row < ROWS; row++) {
-        if (!keep.has(`${r}:${row}`)) this.dimLayer.rect(reelX(r), row * CELL_H, CELL_W + REEL_GAP, CELL_H).fill({ color: 0x07030a, alpha: 0.8 });
+        if (!keep.has(`${r}:${row}`)) this.dimLayer.rect(reelX(r), row * CELL_H, CELL_W, CELL_H).fill(dark);
       }
+      this.dimLayer.rect(reelX(r) - REEL_GAP, 0, REEL_GAP, BOARD_H).fill(dark);
     }
+    this.dimLayer.rect(BOARD_W, 0, REEL_GAP, BOARD_H).fill(dark);
     gsap.killTweensOf(this.dimLayer);
     gsap.fromTo(this.dimLayer, { alpha: 0 }, { alpha: 1, duration: 0.3, ease: 'sine.out' });
   }
@@ -828,17 +921,6 @@ export class ReelBoard extends Container {
     });
   }
 
-  private addLabel(text: string, x: number, y: number, _color = 0xffffff, scale = 1): Digits {
-    const t = new Digits(54);
-    t.text = text;
-    t.addChildAt(this.winBand(t.inkWidth + 240, 100), 0);
-    t.position.set(x, y);
-    t.scale.set(scale);
-    this.labelLayer.addChild(t);
-    gsap.fromTo(t, { alpha: 0 }, { alpha: 1, duration: 0.25 });
-    return t;
-  }
-
   /**
    * Shows every winning line at once, then cycles through them one by one.
    * Resolves after the first full overview (the cycling keeps running until the next spin).
@@ -850,11 +932,6 @@ export class ReelBoard extends Container {
     if (lineWins.length === 1 && !scatter) this.linkCells(lineWins[0].cells, IGNITE_STAGGER);
     this.highlightCells(all, celebrate, IGNITE_STAGGER);
     this.celebrateFrame(all.map(([r]) => r), celebrate);
-    if (scatter) {
-      const mid = scatter.cells[Math.floor(scatter.cells.length / 2)];
-      const c = cellCenter(mid[0], mid[1]);
-      this.addLabel(fmt(scatter.win), c.x, c.y + CELL_H * 0.36, COLORS.yellow);
-    }
     await wait(celebrate ? 1150 : 750);
 
     // each win is shown once, then the board goes quiet until the next spin
@@ -866,6 +943,7 @@ export class ReelBoard extends Container {
       onComplete: () => {
         this.cycleTl = null;
         this.clearHighlights();
+        this.hidePlate();
       },
     });
     if (items.length > 1) {
@@ -874,9 +952,7 @@ export class ReelBoard extends Container {
           this.clearHighlights();
           this.dimExcept(it.cells);
           if (it.line !== undefined) this.linkCells(it.cells, 0.09);
-          const last = it.cells[it.cells.length - 1];
-          const c = cellCenter(last[0], last[1]);
-          this.addLabel(fmt(it.win), c.x, c.y + CELL_H * 0.36, COLORS.yellow);
+          this.showPlate(it.win, it.line !== undefined ? `LIGNE ${it.line + 1}` : 'PYRAMIDES');
           this.highlightCells(it.cells, false, 0.09);
           onLine?.(i);
         });
@@ -886,28 +962,54 @@ export class ReelBoard extends Container {
     this.cycleTl = tl;
   }
 
-  /** The amount, read on a dark band across the reels: it counts up quickly and stays a moment. size 0..2. */
+  /** The total of a win comes up on the plaque. size 0..2. */
   showWinBurst(amount: number, size: number): void {
-    const c = new Container();
-    c.position.set(BOARD_W / 2, BOARD_H / 2);
-    const val = new Digits(118);
-    val.value = amount;
-    val.scale.set((size >= 2 ? 1 : 0.84) * Math.min(1, (BOARD_W * 0.7) / Math.max(1, val.inkWidth)));
-    c.addChild(this.winBand(BOARD_W * 1.1, 200), val);
-    this.labelLayer.addChild(c);
-    const o = { v: 0 };
-    val.value = 0;
-    gsap.to(o, { v: amount, duration: 0.5, ease: 'power2.out', onUpdate: () => void (!val.destroyed && (val.value = o.v)) });
-    gsap.fromTo(c, { alpha: 0 }, { alpha: 1, duration: 0.2 });
-    gsap.to(c, { alpha: 0, duration: 0.35, delay: 1.4, onComplete: () => !c.destroyed && c.destroy({ children: true }) });
+    this.showPlate(amount, 'GAIN', 0.5, size >= 2 ? 1.14 : 1);
   }
 
-  private winBand(w: number, h: number): Sprite {
-    const s = new Sprite(this.bandTex);
-    s.anchor.set(0.5);
-    s.width = w;
-    s.height = h;
-    return s;
+  private winPlate(): WinPlate {
+    if (this.plate) return this.plate;
+    const root = new Container();
+    root.position.set(BOARD_W / 2, BOARD_H + PLATE_Y);
+    root.visible = false;
+    const plate = makePlate(PLATE_W, PLATE_H);
+    const caption = new Text({
+      text: '',
+      style: { fontFamily: 'Cinzel, serif', fontWeight: '900', fontSize: 17, fill: 0xe8c878, letterSpacing: 3, dropShadow: { color: 0x000000, blur: 3, distance: 2, angle: Math.PI / 2, alpha: 0.9 } },
+    });
+    caption.anchor.set(0.5);
+    caption.y = -29;
+    const value = new Digits(54);
+    value.y = 9;
+    root.addChild(plate, caption, value);
+    this.plateLayer.addChild(root);
+    this.plate = { root, plate, caption, value, shown: { v: 0 } };
+    return this.plate;
+  }
+
+  private showPlate(amount: number, caption: string, count = 0, scale = 1): void {
+    const p = this.winPlate();
+    const write = (v: number) => {
+      p.value.value = v;
+      p.value.scale.set(Math.min(1, (PLATE_W - 60) / Math.max(1, p.value.inkWidth)));
+    };
+    gsap.killTweensOf([p.root, p.root.scale, p.shown]);
+    p.caption.text = caption;
+    p.shown.v = count > 0 ? 0 : amount;
+    write(p.shown.v);
+    if (count > 0) gsap.to(p.shown, { v: amount, duration: count, ease: 'power2.out', onUpdate: () => write(p.shown.v) });
+    if (!p.root.visible) p.root.alpha = 0;
+    p.root.visible = true;
+    p.root.scale.set(scale);
+    gsap.to(p.root, { alpha: 1, duration: 0.2 });
+  }
+
+  private hidePlate(now = false): void {
+    const p = this.plate;
+    if (!p) return;
+    gsap.killTweensOf([p.root, p.shown]);
+    if (now) p.root.visible = false;
+    else gsap.to(p.root, { alpha: 0, duration: 0.3, onComplete: () => void (p.root.visible = false) });
   }
 
   /** A stream of gold from the middle of the reels to a point of the board, along a curve. */
@@ -976,6 +1078,7 @@ export class ReelBoard extends Container {
   async callTemple(to: { x: number; y: number }, onThread: (i: number) => void): Promise<void> {
     await this.settleWins();
     this.clearHighlights();
+    this.hidePlate();
     const cells: Cell[] = [];
     for (let r = 0; r < REELS; r++) for (let row = 0; row < ROWS; row++) if (this.symbolAt(r, row) === Sym.CODEX) cells.push([r, row]);
     await Promise.all(
@@ -1136,7 +1239,7 @@ export class ReelBoard extends Container {
     }
     this.clearRigs();
     await wait(250);
-    this.addLabel(fmt(exp.win), BOARD_W / 2, BOARD_H / 2, COLORS.yellow, 1.7);
+    this.showPlate(exp.win, 'LA SOUCHE PAIE', 0.6, 1.14);
     await wait(1400);
   }
 }

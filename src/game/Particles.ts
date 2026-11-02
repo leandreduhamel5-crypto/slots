@@ -142,6 +142,17 @@ export class Particles extends Container {
     }
   }
 
+  private fountainState: { x: number; y: number; rate: number; power: number; acc: number } | null = null;
+
+  /** A big win: a jet of coins from a point, falling back across the screen. */
+  startFountain(x: number, y: number, rate: number, power: number): void {
+    this.fountainState = { x, y, rate, power, acc: 0 };
+  }
+
+  setFountainRate(rate: number): void {
+    if (this.fountainState) this.fountainState.rate = rate;
+  }
+
   private rainState: { textures: Texture[]; width: number; rate: number; acc: number } | null = null;
 
   /** Big-win shower: themed mini symbols tumbling from the top of the screen (the slot "coin rain"). */
@@ -156,6 +167,7 @@ export class Particles extends Container {
 
   stopRain(): void {
     this.rainState = null;
+    this.fountainState = null;
   }
 
   update(dtMs: number): void {
@@ -171,6 +183,16 @@ export class Particles extends Container {
         }
         const t = r.textures[Math.floor(Math.random() * r.textures.length)];
         this.add('tex', Math.random() * r.width, -60, (Math.random() - 0.5) * 120, 100 + Math.random() * 200, 2.6, 60 + Math.random() * 50, t);
+      }
+    }
+    const jet = this.fountainState;
+    if (jet) {
+      jet.acc += jet.rate * dt;
+      while (jet.acc >= 1) {
+        jet.acc--;
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 0.95;
+        const v = (1000 + Math.random() * 620) * jet.power;
+        this.add('coin', jet.x + (Math.random() - 0.5) * 120, jet.y, Math.cos(a) * v, Math.sin(a) * v, 2.2 + Math.random() * 0.5, 40 + Math.random() * 44);
       }
     }
     for (let i = this.ps.length - 1; i >= 0; i--) {

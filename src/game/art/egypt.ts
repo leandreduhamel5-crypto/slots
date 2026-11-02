@@ -19,6 +19,8 @@ import templeInfected from './egypt/temple_infected.webp';
 import templeNightLite from './egypt/temple_night_m.webp';
 import templeInfectedLite from './egypt/temple_infected_m.webp';
 import corridorDoor from './egypt/corridor_door.webp';
+import templeMapA from './egypt/temple_map_a.webp';
+import templeMapB from './egypt/temple_map_b.webp';
 import { LITE } from '../device';
 
 /** the sky of the title screen and of the game */
@@ -38,7 +40,7 @@ export const SYMBOL_ART_URLS: Record<string, string> = {
   ten,
 };
 
-export const EXTRA_ART_URLS = { pyramid, templeNight: TEMPLE_NIGHT_URL, templeInfected: LITE ? templeInfectedLite : templeInfected, frame, logo, corridorDoor };
+export const EXTRA_ART_URLS = { pyramid, templeNight: TEMPLE_NIGHT_URL, templeInfected: LITE ? templeInfectedLite : templeInfected, frame, logo, corridorDoor, templeMapA, templeMapB };
 
 
 function load(url: string): Promise<HTMLImageElement> {
