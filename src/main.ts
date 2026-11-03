@@ -13,6 +13,7 @@ import { bookCanvas, buildSymbolTextures } from './game/textures';
 import { warmDigits } from './game/Digits';
 import { loadAssets } from './game/assets';
 import { loadEgyptArt } from './game/art/egypt';
+import { watchForUpdates } from './update';
 
 // large art shown small must be filtered through mipmaps, or it shimmers and looks pixelated
 TextureSource.defaultOptions.autoGenerateMipmaps = true;
@@ -69,6 +70,7 @@ async function boot(): Promise<void> {
   const sands = { outside: x.pyramidNight, infected: x.pyramidInfected, door: x.pyramidDoor, hallMaps: [x.templeMapA, x.templeMapB], pyramidMaps: [x.pyramidMapA, x.pyramidMapB] };
   const game = new Game(app, tex, bookCanvas(), assets, x.templeNight, sands, x.logo, x.corridorDoor);
   if (import.meta.env.DEV) Object.assign(window, { game, app, gsap });
+  else watchForUpdates(() => game.playing);
 
   if (loader) {
     loader.classList.add('done');

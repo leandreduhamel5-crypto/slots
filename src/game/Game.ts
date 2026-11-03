@@ -655,6 +655,11 @@ export class Game {
   /** the spin button is held down */
   private holding = false;
 
+  /** a round is under way */
+  get playing(): boolean {
+    return this.busy;
+  }
+
   private async play(bought = false): Promise<void> {
     if (this.busy) return;
     if (this.server.state.balance < (bought ? this.server.bonusPrice : this.server.bet)) {
