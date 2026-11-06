@@ -35,8 +35,9 @@ DOOR_H = 6.8
 OBELISK_X = 25.0
 OBELISK_Z = 37.0
 OBELISK_H = 22.0
-SPHINX_X = 17.0
-SPHINX_Z = 20.0
+# beside the reels, a wide screen only shows a band of the picture on each side: the guardians stand in it
+SPHINX_X = 18.0
+SPHINX_Z = 26.0
 SPHINX_K = 1.45
 ROAD = 15.0
 MOON_DIR = np.array([-0.62, 0.6, -0.42], np.float32)
@@ -289,6 +290,19 @@ def shade(g, infected):
     return rgb * (1 - haze[:, None]) + haze_c * haze[:, None]
 
 
+def eyes():
+    """Where the eyes of the left sphinx fall in the 1920 × 1080 picture: from the sockets of its sculpture."""
+    k, q = SPHINX_K, 0.86
+    a = ((2.2 - 2.85) * q + 2.85 - 0.07) * k
+    y = (((3.24 - 2.7) * q + 2.7) + 0.94) * k
+    out = []
+    for side in (-0.155, 0.155):
+        x = -(SPHINX_X + side * k)
+        sx, sy = rt.project(x, y, SPHINX_Z + a)
+        out.append([round(sx, 1), round(sy, 1)])
+    return out
+
+
 def save_layers(g):
     """For tools/finish_ai.py: what each pixel is, and how much of it burns."""
     w, h = g['w'], g['h']
@@ -300,6 +314,8 @@ def save_layers(g):
 
     Image.fromarray(plane(g['ids'], 0, np.uint8) * 20).save('tools/out/pyramid_ids.png')
     Image.fromarray((np.clip(plane(g['burn'], 0, np.float32), 0, 1) * 255).astype(np.uint8)).save('tools/out/pyramid_burn.png')
+    import json
+    json.dump({'eyes': eyes()}, open('tools/out/pyramid_eyes.json', 'w'))
 
 
 def paint_leaf(path):
@@ -351,7 +367,9 @@ def main():
         im = im.resize((int(rt.W * scale), int(rt.H * scale)), Image.LANCZOS)
         im.save(f'tools/out/{name}.png')
     rt.light_maps(g, 'pyramid')
+    save_layers(g)
     paint_leaf('src/game/art/egypt/pyramid_door.webp')
+    print('eyes', eyes())
     print('apex', rt.project(PYR[0], PYR_H, PYR[2]))
     print('door top-left', rt.project(-DOOR_W, DOOR_H, PORCH_Z - 0.1))
     print('door bottom-right', rt.project(DOOR_W, 0, PORCH_Z - 0.1))

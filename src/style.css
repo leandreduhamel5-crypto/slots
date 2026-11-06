@@ -2008,6 +2008,65 @@ button {
   to { opacity: 0; transform: scale(1.5); }
 }
 
+/* ---- the console's finish: lapis with its gold dust, dark at both ends, light gathering round
+   the ruby; in the bonus the same stone soaked in blood ---- */
+#hud.console {
+  background:
+    radial-gradient(ellipse 20% 120% at 50% 105%, rgba(255, 150, 70, 0.24), transparent 70%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.45), transparent 20%, transparent 80%, rgba(0, 0, 0, 0.45)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.82 0 0 0 0 0.45 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #172a5e 0%, #0d1838 48%, #050a1c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 150, 0.35),
+    inset 0 2px 0 rgba(0, 0, 0, 0.6),
+    inset 0 -24px 36px rgba(0, 0, 0, 0.55),
+    0 -10px 30px rgba(0, 0, 0, 0.55);
+  transition: background 0.8s;
+}
+#hud.console.feature {
+  background:
+    radial-gradient(ellipse 24% 130% at 50% 105%, rgba(255, 70, 30, 0.34), transparent 70%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.5), transparent 20%, transparent 80%, rgba(0, 0, 0, 0.5)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.82 0 0 0 0 0.45 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #2c0d16 0%, #170610 48%, #08020a 100%);
+}
+#hud.console .c-meter {
+  box-shadow:
+    0 0 0 2px #0a0405,
+    0 6px 14px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 3px #050a1c,
+    inset 0 0 0 4px rgba(242, 194, 90, 0.45),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.6);
+}
+#hud.console.feature .c-meter {
+  background: linear-gradient(180deg, #1a050a, #2e0a12) padding-box, var(--gold-metal) border-box;
+}
+#hud.console .c-meter label::before,
+#hud.console .c-meter label::after {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin: 0 7px 2px 5px;
+  vertical-align: middle;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #fff1b8, #c28a2a);
+}
+#hud.console .c-meter label::before {
+  margin: 0 5px 2px 0;
+}
+#hud.console.mobile .c-meter label::before,
+#hud.console.mobile .c-meter label::after {
+  display: none;
+}
+.c-buy:not(:disabled) {
+  animation: buy-glow 2.8s ease-in-out infinite;
+}
+@keyframes buy-glow {
+  0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), 0 0 0 rgba(255, 60, 40, 0); }
+  50% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), 0 0 22px rgba(255, 70, 40, 0.55); }
+}
+
 /* ---------- title screen ---------- */
 #intro {
   position: fixed;
@@ -2916,4 +2975,90 @@ body {
   margin: 8px 0;
   text-align: center;
   color: #b8ac9a;
+}
+
+/* ---- portrait phones: the three amounts on top; below, the spin in the very middle between the
+   bet steps, the menus on the left and automatic play on the right ---- */
+#hud.console.mobile .c-row2 {
+  display: grid;
+  grid-template-columns: 1fr 44px 92px 44px 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 8px 6px;
+}
+#hud.console.mobile .c-row2 .c-bet,
+#hud.console.mobile .c-row2 .c-play {
+  display: contents;
+}
+#hud.console.mobile .c-row2 .c-sys {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  justify-self: start;
+}
+#hud.console.mobile .c-row2 .c-step {
+  grid-row: 1 / 3;
+  width: 42px;
+  height: 42px;
+}
+#hud.console.mobile .c-row2 [data-k='betDec'] {
+  grid-column: 2;
+}
+#hud.console.mobile .c-row2 [data-k='betInc'] {
+  grid-column: 4;
+}
+#hud.console.mobile .c-row2 .spin {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  justify-self: center;
+  width: 84px;
+  height: 84px;
+}
+#hud.console.mobile .c-row2 .c-auto {
+  grid-column: 5;
+  grid-row: 1;
+  justify-self: end;
+}
+#hud.console.mobile .c-row2 .c-turbo {
+  grid-column: 5;
+  grid-row: 2;
+  justify-self: end;
+}
+#hud.console.mobile {
+  padding-bottom: calc(14px + var(--safe-b));
+}
+#hud.console.mobile .c-row1 .c-betmeter {
+  flex: 0.8;
+}
+/* the bonus for sale, standing above the console */
+#hud.console.mobile .c-buy {
+  display: none;
+}
+#hud.console.mobile .side-buy {
+  display: flex;
+  position: absolute;
+  left: 10px !important;
+  top: auto !important;
+  bottom: calc(100% + 34px);
+  transform: none !important;
+  width: 98px;
+  padding: 7px 6px 7px;
+  border-radius: 12px;
+}
+#hud.console.mobile .sb-art {
+  width: 66px;
+  height: 60px;
+  border-radius: 6px;
+}
+#hud.console.mobile .side-buy b {
+  margin-top: 5px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+#hud.console.mobile .side-buy small {
+  display: none;
+}
+#hud.console.mobile .sb-price {
+  margin-top: 5px;
+  padding: 3px 2px;
+  font-size: 15px;
 }

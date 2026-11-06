@@ -134,6 +134,22 @@ export class Particles extends Container {
     }
   }
 
+  /** A reel seats: gold sand pours from the seam, a little of it thrown up, and dust rolls out along the rail. */
+  seat(x: number, y: number, width: number, heavy: boolean): void {
+    for (let i = 0; i < (heavy ? 22 : 14); i++) {
+      this.add('sand', x + (Math.random() - 0.5) * width, y - 4, (Math.random() - 0.5) * 70, 30 + Math.random() * 200, 0.5 + Math.random() * 0.45, 7 + Math.random() * 8);
+    }
+    for (let i = 0; i < (heavy ? 14 : 8); i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.3;
+      const v = 200 + Math.random() * 360;
+      this.add('sand', x + (Math.random() - 0.5) * width, y, Math.cos(a) * v, Math.sin(a) * v, 0.4 + Math.random() * 0.35, 6 + Math.random() * 8);
+    }
+    for (const dir of [-1, 1]) {
+      this.add('puff', x + (dir * width) / 3, y + 2, dir * (110 + Math.random() * 120), -(8 + Math.random() * 20), 0.5, 70 + Math.random() * 36);
+      this.ps[this.ps.length - 1].s.tint = 0xc89848;
+    }
+  }
+
   /** Dust rolling sideways out of a seam. */
   dust(x: number, y: number, width: number, n: number): void {
     for (let i = 0; i < n; i++) {

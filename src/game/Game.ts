@@ -225,7 +225,7 @@ export class Game {
     codexCanvas: HTMLCanvasElement,
     assets: LoadedAssets,
     templeNight: HTMLImageElement,
-    sands: { outside: HTMLImageElement; infected: HTMLImageElement; door: HTMLImageElement; hallMaps: HTMLImageElement[]; pyramidMaps: HTMLImageElement[] },
+    sands: { outside: HTMLImageElement; infected: HTMLImageElement; door: HTMLImageElement; lava: HTMLImageElement; hallMaps: HTMLImageElement[]; pyramidMaps: HTMLImageElement[] },
     logoImage: HTMLImageElement,
     corridorDoor: HTMLImageElement,
   ) {
@@ -234,6 +234,7 @@ export class Game {
     this.bg.onLightning = (power) => this.audio.lightning(power);
     this.board = new ReelBoard(tex, BASE_STRIPS);
     this.board.position.set(0, BOARD_Y);
+    this.board.onIgnite = (r) => this.audio.ignite(r);
     const logoArt = logoCanvas(eyeFromCodex(codexCanvas, codexCanvas.width), assets.logo ?? logoImage);
     this.logo = new Logo(logoArt);
     this.logo.position.set(BOARD_W / 2, -18);
@@ -241,13 +242,12 @@ export class Game {
     this.banner = new FeatureBanner(tex);
     this.banner.onIgnite = () => this.audio.strainIgnite();
     this.banner.position.set(BOARD_W / 2, 0);
-    this.teaser = this.buildTeaser(tex);
     this.logoShade = new Sprite(tex.glow);
     this.logoShade.anchor.set(0.5);
     this.logoShade.tint = 0x050208;
     this.logoShade.alpha = 0.7;
     this.strainShow.visible = false;
-    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.teaser, this.strainShow);
+    this.world.addChild(this.logoShade, this.logo, this.banner, this.board, this.strainShow);
     this.scene.addChild(this.bg, this.world);
     this.overlays = new Overlays(tex, this.audio, {
       thump: (p) => this.bg.thump(p),
@@ -258,7 +258,7 @@ export class Game {
       this.bloom.resolution = app.renderer.resolution;
       this.scene.filters = [this.bloom];
     }
-    app.stage.addChild(this.scene, this.overlays);
+    app.stage.addChild(this.scene, this.overlays, this.bars);
 
     this.hud = new Hud({
       spin: () => this.onSpinPressed(),
@@ -383,7 +383,6 @@ export class Game {
     void this.play();
   }
 
-  private teaser: Container;
   /** the strains at work, large, in the room an upright screen has under the reels */
   private strainShow = new Container();
 
@@ -405,43 +404,21 @@ export class Game {
       c.addChild(t);
     };
     line(specials.length > 1 ? 'SOUCHES ACTIVES' : 'SOUCHE ACTIVE', 62, 130, 0xffd98a);
-    line('ENVAHIT TOUT LE ROULEAU', 40, 204, 0xfff0d0);
   }
 
   /** Portrait-only reminder of the feature, filling the space under the reels. */
-  private buildTeaser(tex: SymbolTextures): Container {
-    const c = new Container();
-    for (let i = 0; i < 3; i++) {
-      const s = new Sprite(tex.normal[Sym.CODEX]);
-      s.anchor.set(0.5);
-      s.width = s.height = 164;
-      s.position.set((i - 1) * 142, -158);
-      s.rotation = (i - 1) * 0.12;
-      c.addChild(s);
-    }
-    const t = new Text({
-      text: '10 TOURS\nGRATUITS',
-      style: {
-        fontFamily: 'Cinzel, "Luckiest Guy", serif', fontWeight: '900' as const,
-        fontSize: 92,
-        lineHeight: 100,
-        align: 'center',
-        fill: COLORS.yellow,
-        stroke: { color: COLORS.ink, width: 14, join: 'round' },
-        dropShadow: { color: COLORS.ink, blur: 0, distance: 7, angle: Math.PI / 2, alpha: 1 },
-      },
-    });
-    t.anchor.set(0.5);
-    t.position.set(0, 20);
-    const sub = new Text({
-      text: 'LA SOUCHE ENVAHIT\nTOUT LE ROULEAU',
-      style: { fontFamily: 'Nunito, sans-serif', fontWeight: '900' as const, fontSize: 44, lineHeight: 52, align: 'center', fill: 0xfff0d0, stroke: { color: COLORS.ink, width: 9, join: 'round' } },
-    });
-    sub.anchor.set(0.5);
-    sub.position.set(0, 180);
-    c.addChild(t, sub);
-    c.visible = false;
-    return c;
+  /** the black bands of the cinema, top and bottom, while the way into the bonus plays */
+  private bars = new Graphics();
+  private barsOn = { v: 0 };
+
+  private drawBars(): void {
+    const band = Math.round(Math.min(this.viewH * 0.11, this.viewW * 0.09) * this.barsOn.v);
+    this.bars.clear();
+    if (band > 0) this.bars.rect(0, 0, this.viewW, band).rect(0, this.viewH - band, this.viewW, band).fill(0x000000);
+  }
+
+  private cinema(on: boolean, duration: number): void {
+    gsap.to(this.barsOn, { v: on ? 1 : 0, duration, ease: on ? 'power2.out' : 'power2.in', onUpdate: () => this.drawBars() });
   }
 
   private layout(): void {
@@ -449,6 +426,7 @@ export class Game {
     const h = window.innerHeight;
     this.viewW = w;
     this.viewH = h;
+    this.drawBars();
     // the console's gold rail stands 24 px above it
     const hudH = (this.hud.root.getBoundingClientRect().height || 120) + 24;
     const availH = h - hudH;
@@ -461,7 +439,7 @@ export class Game {
   /** Wide screens: the reels in the very middle, the queen on their left. */
   private layoutWide(w: number, availH: number): void {
     const scale = Math.min((w * 0.98) / WORLD_W, (availH * 0.985) / (WORLD_BOTTOM - WORLD_TOP));
-    this.teaser.visible = this.strainShow.visible = false;
+    this.strainShow.visible = false;
     this.logo.scale.set(0.8);
     this.logo.y = -68;
     this.logoShade.position.set(this.logo.x, this.logo.y + 20);
@@ -506,12 +484,9 @@ export class Game {
     this.banner.scale.set(1.8);
     this.banner.arrange(true);
     const frameBottom = FRAME_TOP + FRAME_OUTER_H;
-    this.teaser.visible = room > 300 && !this.inFeature;
-    this.teaser.scale.set(Math.max(0.5, Math.min(1, room / 860)));
-    this.teaser.position.set(BOARD_W / 2, frameBottom + room * 0.72);
     this.strainShow.visible = room > 300 && this.inFeature;
-    this.strainShow.scale.copyFrom(this.teaser.scale);
-    this.strainShow.position.copyFrom(this.teaser.position);
+    this.strainShow.scale.set(Math.max(0.5, Math.min(1, room / 860)));
+    this.strainShow.position.set(BOARD_W / 2, frameBottom + room * 0.72);
   }
 
   /** Time warp for hit-stops (1 = normal). */
@@ -774,6 +749,8 @@ export class Game {
       if (celebrate) {
         this.streak++;
         this.audio.win(size, this.streak);
+        // each great symbol answers its win in its own voice
+        if (size >= 1 && o.lineWins.length) this.audio.signature(o.lineWins.reduce((a, w) => (w.win > a.win ? w : a)).symbol);
         this.bg.flare(0.2 + size * 0.1);
         this.bg.wave(0.5 + size * 0.2);
         if (size >= 1) this.audio.coins(size * 5);
@@ -821,14 +798,18 @@ export class Game {
       this.audio.riser(1.6, 0.8);
       gsap.to(this.world, { alpha: 0, duration: 0.5, ease: 'power2.in' });
       gsap.to(this.hud.root, { opacity: 0, duration: 0.4 });
+      this.cinema(true, 0.6);
       await this.bg.leaveHall(this.turbo);
       // …the sands by night, and the great door opening by itself…
       await this.bg.openPyramid(this.turbo);
       // …and the camera goes in
       await this.bg.zoomTo(9, this.turbo ? 0.5 : 0.8);
       await this.overlays.corridor(this.turbo ? 1.2 : 2.2);
-      this.bg.camera.k = 1;
+      this.bg.resetCamera();
       this.layout();
+      this.cinema(false, 0.5);
+      // the console comes back already in the colours of the bonus, with nothing left for sale
+      this.hud.setFeature(true);
       gsap.to(this.world, { alpha: 1, duration: 0.6 });
       gsap.to(this.hud.root, { opacity: 1, duration: 0.6 });
       await this.overlays.featureIntro(f.special, 10, true);

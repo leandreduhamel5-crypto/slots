@@ -26,6 +26,7 @@ import templeMapB from './egypt/temple_map_b.webp';
 import pyramidMapA from './egypt/pyramid_map_a.webp';
 import pyramidMapB from './egypt/pyramid_map_b.webp';
 import pyramidDoor from './egypt/pyramid_door.webp';
+import pyramidLava from './egypt/pyramid_lava.webp';
 import { LITE } from '../device';
 
 /** the sky of the title screen and of the game */
@@ -58,6 +59,7 @@ export const EXTRA_ART_URLS = {
   pyramidMapA,
   pyramidMapB,
   pyramidDoor,
+  pyramidLava,
 };
 
 

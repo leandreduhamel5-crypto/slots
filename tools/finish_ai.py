@@ -25,8 +25,9 @@ MOON_OUT = np.array([570, 114]) * K
 OBELISK = 8
 PYRAMID = 6
 STATUE = (9, 10, 11)
-# the eyes of the left sphinx, in this picture; the right one is its mirror
-EYES = [(189, 552), (221, 552)]
+# the eyes of the left sphinx, read on its painted face (the painter turned the head a little, so the
+# sockets projected by tools/render_pyramid.py fell on the nose); the right one is its mirror
+EYES = [(329.0, 557.5), (347.0, 556.5)]
 
 
 def load(path, size=(W, H)):
@@ -43,14 +44,23 @@ def blur(a, s):
 
 
 def save(img, name):
+    """The phone gets the 2048 picture; a wide screen the 4K one, painted by `paint_ai.py upscale`."""
     im = Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB')
-    # the fine detail survives the last enlargement
-    big = np.asarray(im.resize((2560, 1440), Image.LANCZOS), dtype=np.float32) / 255
-    big = np.clip(big + (big - blur(big, 1.6)) * 0.55, 0, 1)
-    Image.fromarray((big * 255 + 0.5).astype(np.uint8), 'RGB').save(f'{OUT}{name}.webp', 'WEBP', quality=86, method=6)
-    im.save(f'{OUT}{name}_m.webp', 'WEBP', quality=76, method=6)
+    im.save(f'tools/out/{name}_2k.png')
+    im.save(f'{OUT}{name}_m.webp', 'WEBP', quality=78, method=6)
     im.resize((1520, 855), Image.LANCZOS).save(f'tools/out/final_{name}.jpg', quality=90)
     print(name)
+
+
+def publish(name):
+    """Sets the 4K picture of a backdrop in the game."""
+    from PIL import ImageFilter
+    # the tiles keep the softness of the enlargement: a fine unsharp mask gives the stone its grain back
+    im = Image.open(f'tools/out/{name}_2k_4k.png').convert('RGB').filter(ImageFilter.UnsharpMask(radius=1.6, percent=70, threshold=2))
+    im.save(f'{OUT}{name}.webp', 'WEBP', quality=84, method=6)
+    im.resize((2048, 1152), Image.LANCZOS).save(f'{OUT}{name}_m.webp', 'WEBP', quality=78, method=6)
+    im.resize((1520, 855), Image.LANCZOS).save(f'tools/out/final_{name}.jpg', quality=90)
+    print('published', name)
 
 
 def ids():
@@ -77,6 +87,9 @@ def night():
     flipped = img[:, ::-1]
     right = soft[:, ::-1][..., None]
     img = img * (1 - right) + flipped * np.array([1.08, 1.03, 0.96]) * right
+    # the ruins, in moonlight; where they stand is kept for the red repaint, as the statues are
+    img, where = furnish(img, NIGHT_OBJECTS, 704, np.array([0.72, 0.7, 0.76], np.float32), mirror=0.2)
+    Image.fromarray((where * 255).astype(np.uint8)).save('tools/out/night_objects.png')
     vig = 1 - 0.34 * smooth(0.5, 1.15, np.hypot((np.arange(W)[None, :] / W - 0.5) / 0.62, (np.arange(H)[:, None] / H - 0.48) / 0.72))
     return np.clip(img, 0, 1) * vig[..., None]
 
@@ -117,13 +130,9 @@ def red(base):
     inside = smooth(x - 6, x + 6, xx) * smooth(x + w + 6, x + w - 6, xx) * smooth(y - 6, y + 6, yy) * smooth(y + h + 4, y + h - 4, yy)
     door = inside * (0.45 + 0.55 * smooth(y, y + h, yy))
     fire = np.maximum(burn, door)
-    # the signs cut in the obelisks catch
-    fine = np.clip((blur(lum, 1) - blur(lum, 9)) * 7, 0, 1) * blur((m == OBELISK).astype(np.float32), 2)
-    fire = np.maximum(fire, fine * 0.85)
-    # and the eyes of the sphinxes
-    for ex, ey in EYES:
-        for px in (ex, W - ex):
-            fire = np.maximum(fire, np.exp(-(((xx - px) / 7) ** 2 + ((yy - ey) / 5) ** 2)))
+    # only the deepest cuts of the obelisks catch: thin lines of fire in dark stone
+    fine = np.clip((blur(lum, 0.8) - blur(lum, 5)) * 9 - 0.25, 0, 1) * blur((m == OBELISK).astype(np.float32), 2)
+    fire = np.maximum(fire, fine * 0.55)
     hot = ramp(np.clip(fire, 0, 1), [(0, (0, 0, 0)), (0.3, (0.8, 0.1, 0.02)), (0.65, (1, 0.45, 0.08)), (1, (1, 0.9, 0.55))])
     img = img * (1 - np.clip(fire * 1.6, 0, 1)[..., None]) + hot
 
@@ -133,74 +142,127 @@ def red(base):
     y0 = int(y + h)
     mirror = np.zeros_like(hot)
     rows = np.clip(2 * y0 - np.arange(H), 0, H - 1)
-    mirror[y0:] = blur(hot + glow[..., None] * np.array([1.0, 0.16, 0.05]) * 0.5, 2.2)[rows[y0:]]
+    # a wet floor stretches what it reflects downwards: long soft streaks, no sharp lines
+    mirror[y0:] = ndi.gaussian_filter(hot * 0.7 + glow[..., None] * np.array([1.0, 0.16, 0.05]) * 0.5, (9, 2.5, 0))[rows[y0:]]
     floor = blur((yy > y0 - 4).astype(np.float32) * (1 - np.isin(m, STATUE)), 2)
     fade = np.clip(1 - (yy - y0) / (H - y0) * 0.75, 0, 1)
     img = img + mirror * (floor * fade)[..., None] * 0.62
 
+    img = img + eyes(xx, yy)
     img = np.clip(img, 0, 1)
     img = img ** 1.06
     vig = 1 - 0.5 * smooth(0.5, 1.2, np.hypot((xx / W - 0.5) / 0.6, (yy / H - 0.46) / 0.72))
     return img * vig[..., None]
 
 
-def place(img, statue, alpha, x, base, height, flip, warm):
-    """Sets a statue in the picture with its foot on `base`, its reflection under it in the floor."""
-    k = height / statue.shape[0]
-    size = (max(2, int(statue.shape[1] * k)), max(2, int(height)))
-    s = np.asarray(Image.fromarray((statue * 255).astype(np.uint8)).resize(size, Image.LANCZOS), dtype=np.float32) / 255
-    a = np.asarray(Image.fromarray((alpha * 255).astype(np.uint8)).resize(size, Image.LANCZOS), dtype=np.float32) / 255
-    if flip:
-        s, a = s[:, ::-1], a[:, ::-1]
-    s = s * warm
-    h, w = a.shape
-    x0, y0 = int(x - w / 2), int(base - h)
-    # contact shadow on the floor
-    sh = np.zeros(img.shape[:2], np.float32)
-    x1, x2 = max(0, x0), min(img.shape[1], x0 + w)
-    sh[int(base) - 2 : int(base) + max(3, h // 14), x1:x2] = 1
-    sh = blur(sh, max(2, h / 22))[..., None]
-    img *= 1 - sh * 0.55
-    # the reflection
-    ry0 = int(base)
-    rh = min(h, img.shape[0] - ry0)
-    if rh > 0:
-        fade = np.linspace(0.42, 0.04, rh, dtype=np.float32)[:, None]
-        ra = a[::-1][:rh] * fade
-        rs = blur(s[::-1][:rh], 1.2)
+def eyes(xx, yy):
+    """The sphinxes' eyes: almond slits along the line of the eyes, deep red with a small hot core and a
+    tight glow, not lamps. The far eye of a turned head is narrower."""
+    slit = np.zeros(xx.shape, np.float32)
+    for (ex, ey), half in zip(EYES, (3.6, 5.2)):
+        for px, tilt in ((ex, -0.12), (W - ex, 0.12)):
+            u = (xx - px) * np.cos(tilt) + (yy - ey) * np.sin(tilt)
+            v = -(xx - px) * np.sin(tilt) + (yy - ey) * np.cos(tilt)
+            # pointed at both corners: the height shrinks towards the ends
+            h = 2.0 * np.clip(1 - (u / half) ** 2, 0, 1) + 0.05
+            slit = np.maximum(slit, np.exp(-((u / half) ** 6)) * np.exp(-((v / h) ** 2)))
+    core = np.clip(slit * 1.6 - 0.75, 0, 1)
+    return (
+        slit[..., None] * np.array([1.0, 0.12, 0.04])
+        + core[..., None] * np.array([0.5, 0.3, 0.06])
+        + blur(slit, 2.5)[..., None] * np.array([1.0, 0.08, 0.03])
+        + blur(slit, 9)[..., None] * np.array([0.9, 0.05, 0.02])
+    )
+
+
+# Objects painted alone on black by tools/paint_ai.py (objects mode), set into the sanctuary:
+# file, the row of its base in the 1024 picture, where its foot stands in the scene, its height in
+# metres, mirrored or not. The render's camera (2.4 m high, horizon at 704 here) gives each its size.
+HALL_OBJECTS = [
+    ('obj_chest_12', 820, (290, 1100), 2.1, False),
+    ('obj_hoard_31', 840, (520, 1070), 1.2, False),
+    ('obj_chest_13', 852, (1770, 1105), 2.0, False),
+    ('obj_urn_32', 900, (752, 850), 2.6, False),
+    ('obj_urn_32', 900, (1296, 850), 2.6, True),
+]
+
+
+# before the pyramid: nothing yet. Stone painted alone on black cannot be cut out (its shadows are as
+# dark as the background) and small gold urns read as canisters at this distance
+NIGHT_OBJECTS = []
+
+
+def cutout(name, base):
+    """The object without its black background and without the floor of its own picture."""
+    im = load(f'tools/out/{name}.png', (1024, 1024))[:base]
+    lum = im.max(axis=2)
+    # its background is a lit dark grey: the threshold comes from the picture's own edges
+    edges = np.concatenate([lum[0], lum[:, 0], lum[:, -1]])
+    dark = lum < np.median(edges) * 1.8 + 0.02
+    # the background is the dark that reaches the border; the dark inside the object stays
+    labels, _ = ndi.label(dark)
+    edge = np.unique(np.concatenate([labels[0], labels[:, 0], labels[:, -1]]))
+    bg = np.isin(labels, edge[edge > 0])
+    solid = ndi.binary_closing(~bg, iterations=3)
+    # only the object itself: the largest piece, without the scraps of its picture's floor
+    parts, n = ndi.label(solid)
+    if n > 1:
+        solid = parts == 1 + int(np.argmax(ndi.sum(solid, parts, range(1, n + 1))))
+    solid = ndi.binary_fill_holes(solid)
+    alpha = blur(solid.astype(np.float32), 0.8)
+    rows, cols = np.nonzero(alpha > 0.05)
+    y0, x0, x1 = rows.min(), cols.min(), cols.max() + 1
+    return im[y0:, x0:x1], alpha[y0:, x0:x1]
+
+
+def furnish(img, objects, horizon, grade, mirror=0.38):
+    """Sets objects on a floor: graded to its light, a contact shadow and a reflection under each (as
+    strong as the floor is polished). Returns the picture and where the objects stand."""
+    img = img.copy()
+    where = np.zeros(img.shape[:2], np.float32)
+    # the far ones first, so the near ones stand in front
+    for name, base, (fx, fy), metres, flip in sorted(objects, key=lambda o: o[2][1]):
+        obj, a = cutout(name, base)
+        height = metres * (fy - horizon) / 2.4
+        k = height / obj.shape[0]
+        size = (max(2, int(obj.shape[1] * k)), max(2, int(height)))
+        o = np.asarray(Image.fromarray((obj * 255).astype(np.uint8)).resize(size, Image.LANCZOS), dtype=np.float32) / 255
+        a = np.asarray(Image.fromarray((a * 255).astype(np.uint8)).resize(size, Image.LANCZOS), dtype=np.float32) / 255
+        if flip:
+            o, a = o[:, ::-1], a[:, ::-1]
+        lum = o @ np.array([0.3, 0.59, 0.11], np.float32)
+        o = o * grade + (1 - lum)[..., None] * np.array([0, 0.01, 0.035])
+        # the further away, the softer and the more of the air in front of it
+        far = np.clip((1100 - fy) / 400, 0, 1)
+        if far > 0.2:
+            o = blur(o, 0.6 * far)
+        h, w = a.shape
+        x0, y0 = int(fx - w / 2), int(fy - h)
         xa, xb = max(0, x0), min(img.shape[1], x0 + w)
-        ra = ra[:, xa - x0 : xb - x0, None]
-        rs = rs[:, xa - x0 : xb - x0]
-        region = img[ry0 : ry0 + rh, xa:xb]
-        img[ry0 : ry0 + rh, xa:xb] = region * (1 - ra) + rs * ra
-    xa, xb = max(0, x0), min(img.shape[1], x0 + w)
-    aa = a[:, xa - x0 : xb - x0, None]
-    ss = s[:, xa - x0 : xb - x0]
-    region = img[y0 : y0 + h, xa:xb]
-    img[y0 : y0 + h, xa:xb] = region * (1 - aa) + ss * aa
+        # contact shadow
+        sh = np.zeros(img.shape[:2], np.float32)
+        sh[int(fy) - 3 : int(fy) + max(3, h // 16), xa:xb] = 1
+        sh = blur(sh, max(2, w / 14))[..., None]
+        img *= 1 - sh * 0.6
+        # reflection in the polished floor, fading with distance from the foot
+        rh = min(int(h * 0.6), img.shape[0] - int(fy))
+        if rh > 2:
+            fade = (np.linspace(mirror, 0.0, rh, dtype=np.float32) ** 1.4)[:, None]
+            ra = a[::-1][:rh] * fade
+            rs = blur(o[::-1][:rh], 1.6)
+            region = img[int(fy) : int(fy) + rh, xa:xb]
+            ra = ra[:, xa - x0 : xb - x0, None]
+            img[int(fy) : int(fy) + rh, xa:xb] = region * (1 - ra) + rs[:, xa - x0 : xb - x0] * ra
+        region = img[y0 : y0 + h, xa:xb]
+        aa = a[:, xa - x0 : xb - x0, None]
+        img[y0 : y0 + h, xa:xb] = region * (1 - aa) + o[:, xa - x0 : xb - x0] * aa
+        where[y0 : y0 + h, xa:xb] = np.maximum(where[y0 : y0 + h, xa:xb], aa[..., 0])
+    return img, where
 
 
 def hall():
-    """The avenue of the sanctuary is lined with the left sphinx of the pyramid picture, in perspective."""
-    img = load('tools/out/ai_hall.png').copy()
-    source = load('tools/out/ai_night.png')
-    m = ids()
-    mask = np.isin(m, STATUE)
-    mask[:, W // 2:] = False
-    a = blur(ndi.binary_erosion(mask, iterations=1).astype(np.float32), 0.8)
-    rows, cols = np.nonzero(a > 0.02)
-    y0, y1, x0, x1 = rows.min(), rows.max() + 1, cols.min(), cols.max() + 1
-    s, a = source[y0:y1, x0:x1], a[y0:y1, x0:x1]
-    cam_y, focal, horizon = 2.4, 1400 * (W / 2560), 880 * (W / 2560)
-    aspect = s.shape[1] / s.shape[0]
-    for z in (82.0, 66.0, 53.0, 42.0):
-        foot = horizon + focal * cam_y / z
-        height = focal * 6.0 / z
-        offset = focal * 3.4 / z + aspect * height / 2
-        # from the moonlight of its picture to the warm light of the gate, dimmer far from the viewer
-        warm = np.array([1.3, 1.02, 0.72], np.float32) * (0.72 + 0.3 * (42.0 / z))
-        place(img, s, a, W / 2 - offset, foot, height, False, warm)
-        place(img, s, a, W / 2 + offset, foot, height, True, warm)
+    """The sanctuary as painted, its nave clear to the gate, furnished with the temple's treasure."""
+    img, _ = furnish(load('tools/out/ai_hall.png'), HALL_OBJECTS, 704, np.array([0.76, 0.7, 0.64], np.float32))
     vig = 1 - 0.3 * smooth(0.55, 1.2, np.hypot((np.arange(W)[None, :] / W - 0.5) / 0.62, (np.arange(H)[:, None] / H - 0.48) / 0.72))
     return np.clip(img, 0, 1) * vig[..., None]
 
@@ -213,7 +275,31 @@ def main():
     if 'night' in jobs:
         save(base, 'pyramid_night')
     if 'red' in jobs:
-        save(red(base), 'pyramid_infected')
+        img = red(base)
+        Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB').save('tools/out/red_base.png')
+        save(img, 'pyramid_infected')
+    if 'eyes' in jobs:
+        # the repainted bonus keeps its fire and its sky; the guardians come back from the render, with
+        # their pharaoh faces and their burning eyes where the sculpture has them
+        img = load(sys.argv[sys.argv.index('eyes') + 1])
+        base = load('tools/out/red_base.png')
+        # the repaint left a stray spark of fire against the left head: a wider margin on that side
+        guard = np.isin(ids(), STATUE) | (load('tools/out/night_objects.png')[..., 0] > 0.3)
+        wide = ndi.binary_dilation(guard, iterations=12)
+        wide[:, W // 2:] = False
+        statue = blur((ndi.binary_dilation(guard, iterations=3) | wide).astype(np.float32), 3)[..., None]
+        save(img * (1 - statue) + base * statue, 'pyramid_infected')
+    if 'lava' in jobs:
+        # where the painted bonus burns: its yellow veins and its door. The game breathes light into them
+        img = load('tools/out/pyramid_infected_2k.png')
+        r, g = img[..., 0], img[..., 1]
+        lava = np.clip((g - 0.22) * 3.2, 0, 1) * np.clip((r - 0.55) * 4, 0, 1)
+        lava = np.maximum(lava, blur(lava, 1.2))
+        Image.fromarray((lava * 255).astype(np.uint8)).resize((1024, 576), Image.LANCZOS).convert('RGB').save(f'{OUT}pyramid_lava.webp', 'WEBP', quality=80, method=6)
+        print('pyramid_lava')
+    for name in ('temple_night', 'pyramid_night', 'pyramid_infected'):
+        if f'publish:{name}' in jobs:
+            publish(name)
     if 'hall' in jobs:
         save(hall(), 'temple_night')
 

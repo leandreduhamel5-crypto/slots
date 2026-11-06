@@ -111,6 +111,20 @@ function paintHaloRing(): HTMLCanvasElement {
   return c;
 }
 
+/** The light of the sanctuary's gate, filling the eyes: white gold at the heart, deep amber at the edges, opaque all over. */
+function paintGateLight(): HTMLCanvasElement {
+  const [c, ctx] = makeCanvas(256, 256);
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, '#fff4dc');
+  g.addColorStop(0.3, '#ffdb98');
+  g.addColorStop(0.55, '#f0b868');
+  g.addColorStop(0.8, '#c47e36');
+  g.addColorStop(1, '#8a4a16');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  return c;
+}
+
 /** Is this point open sky (not behind the pyramid, an obelisk or the moon)? */
 function openSky(x: number, y: number): boolean {
   if (y > HORIZON - 120) return false;
@@ -158,6 +172,8 @@ export class Background extends Container {
   private infected: Sprite | null = null;
   /** additive copy of the infected art: makes its cracks throb with the beat */
   private infectedPulse: Sprite | null = null;
+  /** the painted veins of lava and the burning door, breathing light once the curse has spread */
+  private lava: Sprite | null = null;
   private heart: Sprite | null = null;
   private flareV = 0;
   private bolts = new Graphics();
@@ -197,8 +213,15 @@ export class Background extends Container {
   private door = new Container();
   private doorLeaves: Sprite[] = [];
   private doorHeat: Sprite | null = null;
+  /** embers spilling out of the gap of the door while it opens */
+  private embers: { s: Sprite; vx: number; vy: number; age: number; life: number }[] = [];
+  private emberRate = 0;
+  private emberDue = 0;
+  private emberTex: Texture | null = null;
+  /** light bursting out of the gap as the leaves part, in two sets turning against each other */
+  private doorRays: Sprite[] = [];
   private doorInside = new Graphics();
-  private flashLayer = new Graphics();
+  private gateLight = new Sprite(Texture.from(paintGateLight()));
   /** the door has begun to open */
   onDoor: (() => void) | null = null;
   private w = W;
@@ -210,7 +233,7 @@ export class Background extends Container {
     private sporeTex: Texture,
     glowTex: Texture,
     night: HTMLImageElement,
-    art: { outside: HTMLImageElement; infected: HTMLImageElement; door: HTMLImageElement; hallMaps: HTMLImageElement[]; pyramidMaps: HTMLImageElement[] },
+    art: { outside: HTMLImageElement; infected: HTMLImageElement; door: HTMLImageElement; lava: HTMLImageElement; hallMaps: HTMLImageElement[]; pyramidMaps: HTMLImageElement[] },
     custom: HTMLImageElement | null = null,
   ) {
     super();
@@ -240,8 +263,8 @@ export class Background extends Container {
       }
       this.infectedPulse.blendMode = 'add';
       this.reveal = new Graphics().poly(blotOutline()).fill(0xffffff);
-      // the infection comes out of the door of the pyramid
-      this.reveal.position.set(DOOR[0] + DOOR[2] / 2 - W / 2, DOOR[1] + DOOR[3] - H / 2);
+      // the infection runs down from the capstone, where the lightning struck
+      this.reveal.position.set(APEX[0] - W / 2, APEX[1] - H / 2);
       this.reveal.visible = false;
       this.revealFront = new Sprite(Texture.from(paintHaloRing()));
       this.revealFront.anchor.set(0.5);
@@ -249,8 +272,16 @@ export class Background extends Container {
       this.revealFront.blendMode = 'add';
       this.revealFront.tint = 0xff8a4a;
       this.revealFront.visible = false;
-      this.sceneC.addChild(this.infected, this.infectedPulse, this.reveal, this.revealFront);
+      this.lava = new Sprite(Texture.from(art.lava));
+      this.lava.anchor.set(0.5);
+      this.lava.width = W;
+      this.lava.height = H;
+      this.lava.blendMode = 'add';
+      this.lava.tint = 0xff7a2a;
+      this.lava.alpha = 0;
+      this.sceneC.addChild(this.infected, this.infectedPulse, this.lava, this.reveal, this.revealFront);
       this.buildDoor(art.door, glowTex);
+      this.emberTex = glowTex;
       this.live = new TempleLight(art.hallMaps, art.pyramidMaps);
       this.gateGlow = new Sprite(glowTex);
       this.gateGlow.anchor.set(0.5);
@@ -330,7 +361,9 @@ export class Background extends Container {
     this.rayLayer = new Sprite(Texture.from(paintSoftRays(LITE ? 512 : 1024)));
     this.rayLayer.anchor.set(0.5);
     this.rayLayer.blendMode = 'add';
-    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.sporeLayer, this.pulse, this.flashLayer);
+    this.addChild(this.sceneC, this.rayLayer, this.redWash, this.fog, this.sporeLayer, this.pulse, this.gateLight);
+    this.gateLight.anchor.set(0.5);
+    this.gateLight.alpha = 0;
     for (let i = 0; i < 22; i++) this.spores.push(this.spawn(true));
   }
 
@@ -362,7 +395,17 @@ export class Background extends Container {
       leaves.addChild(s);
       this.doorLeaves.push(s);
     }
-    this.door.addChild(this.doorInside, leaves, clip, heat);
+    const raysTex = Texture.from(paintSoftRays(512));
+    this.doorRays = [0xffe2b0, 0xffb060].map((tint) => {
+      const rays = new Sprite(raysTex);
+      rays.anchor.set(0.5);
+      rays.position.set(w / 2, h * 0.55);
+      rays.tint = tint;
+      rays.blendMode = 'add';
+      rays.alpha = 0;
+      return rays;
+    });
+    this.door.addChild(this.doorInside, leaves, clip, heat, ...this.doorRays);
   }
 
   private spawn(initial: boolean): Spore {
@@ -390,8 +433,28 @@ export class Background extends Container {
     this.fog.height = h;
   }
 
-  /** camera dolly: k = zoom factor, focus = the art point that stays put while zooming in */
-  readonly camera = { k: 1, fx: GATE[0], fy: GATE[1] };
+  /**
+   * The camera of the cinematics: k = zoom factor, focus = the art point that stays put while zooming
+   * in, x/y = how far the eye has moved from it (art units), roll = the tilt of the frame. Outside
+   * the cinematics it rests at k 1 and never moves: the slot stays still.
+   */
+  readonly camera = { k: 1, fx: GATE[0], fy: GATE[1], x: 0, y: 0, roll: 0 };
+  /** a shudder of the camera, decaying (cinematics only), and a rumble held under it */
+  private shakeV = 0;
+  private rumble = 0;
+
+  /** The camera back at rest, as the game is played. */
+  resetCamera(): void {
+    gsap.killTweensOf(this.camera);
+    Object.assign(this.camera, { k: 1, x: 0, y: 0, roll: 0 });
+    this.shakeV = this.rumble = 0;
+    this.applyCamera();
+  }
+
+  /** The ground answers a blow: the camera shudders, then settles. */
+  private shake(power: number): void {
+    this.shakeV = Math.max(this.shakeV, power);
+  }
 
   /** Which of the two places is on screen: the sanctuary, or the sands before the pyramid. */
   private place(outside: boolean): void {
@@ -405,56 +468,141 @@ export class Background extends Container {
     this.camera.fy = outside ? DOOR[1] + DOOR[3] / 2 : GATE[1];
   }
 
-  /** A veil of light over the whole screen. */
-  private veil(colour: number, from: number, to: number, duration: number): Promise<void> {
-    const g = this.flashLayer;
-    g.clear().rect(0, 0, this.w, this.h).fill(colour);
-    return new Promise((r) => gsap.fromTo(g, { alpha: from }, { alpha: to, duration, ease: 'sine.inOut', onComplete: r }));
+  /** Embers out of the opening door: thrown sideways from the gap, rising and dying in the night air. */
+  private updateEmbers(dt: number): void {
+    this.emberDue += dt * this.emberRate;
+    const [, , w, h] = DOOR;
+    while (this.emberDue >= 1 && this.emberTex) {
+      this.emberDue -= 1;
+      const s = new Sprite(this.emberTex);
+      s.anchor.set(0.5);
+      s.blendMode = 'add';
+      s.tint = [0xffe0a0, 0xffa040, 0xff6020][Math.floor(Math.random() * 3)];
+      s.width = s.height = 5 + Math.random() * 9;
+      s.position.set(w / 2 + (Math.random() - 0.5) * w * 0.3, h * (0.2 + Math.random() * 0.75));
+      this.door.addChild(s);
+      const side = Math.random() < 0.5 ? -1 : 1;
+      this.embers.push({ s, vx: side * (30 + Math.random() * 170), vy: -(10 + Math.random() * 90), age: 0, life: 0.9 + Math.random() * 0.9 });
+    }
+    if (!this.emberRate) this.emberDue = 0;
+    for (let i = this.embers.length - 1; i >= 0; i--) {
+      const e = this.embers[i];
+      e.age += dt;
+      e.vy -= 40 * dt;
+      e.vx *= Math.pow(0.6, dt);
+      e.s.x += e.vx * dt;
+      e.s.y += e.vy * dt;
+      e.s.alpha = Math.min(1, e.age * 8) * Math.max(0, 1 - e.age / e.life);
+      if (e.age >= e.life) {
+        e.s.destroy();
+        this.embers.splice(i, 1);
+      }
+    }
+  }
+
+  /** The gate's light fills the screen, brightest where the eye was going, and lets go of it. */
+  private blind(from: number, to: number, duration: number): Promise<void> {
+    const s = this.gateLight;
+    s.position.set(this.w / 2, this.h / 2);
+    s.scale.set(Math.hypot(this.w, this.h) / 256);
+    return new Promise((r) => gsap.fromTo(s, { alpha: from }, { alpha: to, duration, ease: 'sine.inOut', onComplete: r }));
   }
 
   /** Out of the sanctuary: down the nave, into the light of its gate, and out on the sands by night. */
   async leaveHall(fast: boolean): Promise<void> {
+    const cam = () => this.applyCamera();
+    // down the nave: the frame leans a little as the run gathers speed towards the light
+    gsap.to(this.camera, { roll: -0.03, y: -12, duration: fast ? 0.8 : 1.5, ease: 'sine.in', onUpdate: cam });
     void this.zoomTo(7, fast ? 0.8 : 1.5);
     await new Promise((r) => setTimeout(r, fast ? 500 : 1050));
-    await this.veil(0xffe2a8, 0, 1, fast ? 0.25 : 0.42);
-    // the light fades on the whole of it: the sands, the great pyramid, the moon
+    await this.blind(0, 1, fast ? 0.25 : 0.42);
+    // the light fades on the whole of it: the sands, the great pyramid, the moon. The camera finds
+    // them from high up and to the side, and comes down to the door as a crane does
     gsap.killTweensOf(this.camera);
     this.place(true);
     this.door.visible = true;
-    this.camera.k = 1;
+    Object.assign(this.camera, { k: 1.22, x: -90, y: -170, roll: 0.035 });
     this.applyCamera();
-    await this.veil(0xffe2a8, 1, 0, fast ? 0.3 : 0.7);
+    gsap.to(this.camera, { k: 1, x: 0, y: 0, roll: 0, duration: fast ? 1 : 2.4, ease: 'power2.inOut', onUpdate: cam });
+    await this.blind(1, 0, fast ? 0.3 : 0.7);
   }
 
-  /** The great door opens by itself, and what was shut inside comes out. */
+  /**
+   * Before the pyramid by night: the lightning finds the capstone, the curse runs down the stone and
+   * turns the whole place red, and only then does the great door open by itself.
+   */
   async openPyramid(fast: boolean): Promise<void> {
-    const open = fast ? 0.9 : 1.8;
-    const hold = fast ? 0.2 : 1.1;
-    gsap.to(this.camera, { k: 2.7, duration: hold + open + 0.5, ease: 'sine.inOut', onUpdate: () => this.applyCamera() });
-    await new Promise((r) => setTimeout(r, hold * 1000));
+    const wait = (s: number) => new Promise((r) => setTimeout(r, s * 1000));
+    const hold = fast ? 0.3 : 1.1;
+    const spread = fast ? 1.1 : 2.3;
+    const open = fast ? 0.9 : 1.7;
+    const cam = () => this.applyCamera();
+    // the eye rises to the capstone and waits for the storm…
+    gsap.to(this.camera, { k: 1.14, y: -210, duration: hold, ease: 'sine.inOut', onUpdate: cam });
+    await wait(hold);
+    // …the bolt strikes and the ground answers; the eye stays on the capstone while the curse floods
+    // down from it, then follows the red down the stone to the door
+    this.setFeature(true);
+    this.shake(1);
+    gsap.to(this.camera, { k: 1.2, y: 0, duration: spread * 0.6, delay: spread * 0.4, ease: 'sine.inOut', onUpdate: cam });
+    await wait(spread);
+    // the stone grinds as the door opens, and the camera goes for it
+    gsap.to(this.camera, { k: 2.7, roll: -0.02, duration: open + 0.6, ease: 'sine.inOut', onUpdate: cam });
+    this.rumble = 0.22;
+    gsap.delayedCall(open, () => (this.rumble = 0));
     this.onDoor?.();
+    this.emberRate = LITE ? 30 : 60;
+    gsap.delayedCall(open + 0.5, () => (this.emberRate = 0));
     const w = DOOR[2];
     gsap.to(this.doorInside, { alpha: 1, duration: 0.5 });
     if (this.doorHeat) gsap.to(this.doorHeat, { alpha: 0.75, duration: open, ease: 'power2.in' });
+    this.doorRays.forEach((r, i) => {
+      const size = w * (i ? 6 : 9);
+      gsap.fromTo(
+        r,
+        { alpha: 0, width: w, height: w, rotation: i ? 0.3 : 0 },
+        { alpha: i ? 0.55 : 0.95, width: size, height: size, rotation: i ? -0.2 : 0.5, duration: open + 0.6, ease: 'power2.in' },
+      );
+    });
     gsap.to(this.doorLeaves[0], { x: -w / 2, duration: open, ease: 'sine.inOut' });
     gsap.to(this.doorLeaves[1], { x: w * 1.5, duration: open, ease: 'sine.inOut' });
     if (this.live) gsap.to(this.live, { doorLight: 1, duration: open, ease: 'power2.in' });
-    await new Promise((r) => setTimeout(r, open * 650));
-    this.setFeature(true);
-    await new Promise((r) => setTimeout(r, open * 350 + 500));
+    await wait(open + 0.35);
   }
 
   private shown = false;
 
 
   private applyCamera(): void {
+    const c = this.camera;
     // a little larger than the screen, so the edge of the picture never shows
     const base = Math.max(this.w / W, this.h / H) * 1.06;
-    const s = base * this.camera.k;
-    const f = [this.camera.fx - W / 2, this.camera.fy - H / 2];
+    const fx = c.fx - W / 2;
+    const fy = c.fy - H / 2;
+    const cos = Math.cos(c.roll);
+    const sin = Math.abs(Math.sin(c.roll));
+    // moved, tilted or shaken, the frame closes in just enough to stay inside the picture
+    let s = base * c.k;
+    for (let i = 0; i < 4; i++) {
+      const k = s / base;
+      const cx = fx + c.x - fx / k;
+      const cy = fy + c.y - fy / k;
+      const hw = this.w / 2 / s + this.shakeV * 10 / s;
+      const hh = this.h / 2 / s + this.shakeV * 8 / s;
+      const need = Math.max((Math.abs(cx) + hw * cos + hh * sin) / (W / 2), (Math.abs(cy) + hw * sin + hh * cos) / (H / 2));
+      if (need <= 1) break;
+      s *= need * 1.002;
+    }
+    const px = fx + c.x;
+    const py = fy + c.y;
+    const r = Math.sin(c.roll);
+    const jx = this.shakeV ? (Math.random() - 0.5) * this.shakeV * 16 : 0;
+    const jy = this.shakeV ? (Math.random() - 0.5) * this.shakeV * 12 : 0;
     this.sceneC.scale.set(s);
-    this.sceneC.position.set(this.w / 2 - f[0] * (s - base), this.h / 2 - f[1] * (s - base));
+    this.sceneC.rotation = c.roll;
+    this.sceneC.position.set(this.w / 2 + fx * base - s * (cos * px - r * py) + jx, this.h / 2 + fy * base - s * (r * px + cos * py) + jy);
   }
+
 
   /** Where the capstone is on screen. */
   apexOnScreen(): { x: number; y: number } {
@@ -484,15 +632,22 @@ export class Background extends Container {
         this.doorLeaves[1].x = DOOR[2];
         this.doorInside.alpha = 0;
         this.doorHeat!.alpha = 0;
+        this.emberRate = 0;
+        for (const e of this.embers) e.s.destroy();
+        this.embers.length = 0;
+        this.doorRays.forEach((r) => {
+          gsap.killTweensOf(r);
+          r.alpha = 0;
+        });
       }
       if (this.live) this.live.doorLight = 0;
     }
     gsap.to(this, { feature: on ? 1 : 0, duration: on ? 0.9 : 1.6, ease: 'power2.inOut' });
     // the infection spreads outward from the capstone (and recedes back into it)
     gsap.killTweensOf(this.spread);
-    gsap.to(this.spread, { r: on ? 1 : 0, duration: on ? 1.6 : 1.4, ease: on ? 'power2.in' : 'power2.inOut' });
+    gsap.to(this.spread, { r: on ? 1 : 0, duration: on ? 1.6 : 1.4, ease: on ? 'power1.in' : 'power2.inOut' });
     if (on) {
-      this.strike(1, APEX);
+      this.strike(1.25, [APEX[0], APEX[1] + 8]);
       this.templeFx?.surge(1);
       this.nextStrike = 6;
       this.live?.wave(0xff3a1a, 1, false, 75, 0.12);
@@ -610,6 +765,11 @@ export class Background extends Container {
   update(dtMs: number): void {
     const dt = dtMs / 1000;
     this.t += dt;
+    this.updateEmbers(dt);
+    if (this.shakeV || this.rumble) {
+      this.shakeV = Math.max(this.rumble, this.shakeV < 0.01 ? 0 : this.shakeV * Math.pow(0.03, dt));
+      this.applyCamera();
+    }
     const f = this.feature;
     const beat = Math.pow(Math.max(0, Math.sin(this.t * (2.6 + f * 1.6))), 12);
     this.rayLayer.rotation += dt * 0.008;
@@ -641,6 +801,12 @@ export class Background extends Container {
         this.revealFront.alpha = Math.min(1, Math.sin(Math.PI * r) * 4);
       }
       this.infectedPulse.alpha = f * (beat * 0.03 + this.boltLight * 0.14 + this.flareV * 0.06);
+      if (this.lava) {
+        // the veins breathe out of step with each other's rhythm, and flare with every bolt
+        const spread = Math.max(0, (r - 0.6) / 0.4);
+        this.lava.visible = spread > 0;
+        this.lava.alpha = f * spread * (0.2 + 0.1 * Math.sin(this.t * 1.1) + 0.06 * Math.sin(this.t * 2.9 + 1) + beat * 0.08 + this.boltLight * 0.35);
+      }
     }
     this.flareV *= Math.pow(0.25, dt);
     if (this.heart) {

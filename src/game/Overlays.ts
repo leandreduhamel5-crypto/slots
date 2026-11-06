@@ -29,6 +29,22 @@ const JET_RATE = LITE ? [12, 20, 28, 36] : [20, 34, 50, 70];
 const BIG_TITLE_W = 850;
 const AMOUNT_W = 820;
 
+/** A thin ring of light, soft on both sides: scaled out from a centre, it is a shockwave. */
+function paintRing(): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.74, 'rgba(255,255,255,0)');
+  g.addColorStop(0.86, 'rgba(255,255,255,0.9)');
+  g.addColorStop(0.92, 'rgba(255,255,255,0.35)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  return c;
+}
+
 export function winTier(win: number, bet: number): number {
   let t = -1;
   WIN_TIERS.forEach((tier, i) => {
@@ -228,12 +244,12 @@ export class Overlays extends Container {
     base.anchor.set(0.5);
     base.width = base.height = 2400;
     base.blendMode = 'add';
-    base.alpha = 0.13;
+    base.alpha = 0.19;
     const counter = new Sprite(this.raysTex());
     counter.anchor.set(0.5);
     counter.width = counter.height = 2000;
     counter.blendMode = 'add';
-    counter.alpha = 0.06;
+    counter.alpha = 0.09;
     counter.rotation = 0.08;
     const core = new Sprite(this.tex.glow);
     core.anchor.set(0.5);
@@ -384,6 +400,31 @@ export class Overlays extends Container {
     gsap.fromTo(blade, { x: -700 }, { x: 700, duration: 0.8, ease: 'power1.inOut', onComplete: () => { blade.destroy(); mask.destroy(); } });
   }
 
+  private ringTex: Texture | null = null;
+
+  /** A ring of gold light running out from a point of a big screen, and a flash where it starts. */
+  private shockwave(y: number, size: number): void {
+    this.ringTex ??= Texture.from(paintRing());
+    const ring = new Sprite(this.ringTex);
+    ring.anchor.set(0.5);
+    ring.y = y;
+    ring.blendMode = 'add';
+    ring.tint = 0xffd27a;
+    const flash = new Sprite(this.tex.glow);
+    flash.anchor.set(0.5);
+    flash.y = y;
+    flash.blendMode = 'add';
+    flash.tint = 0xffe2a0;
+    flash.width = size * 0.6;
+    flash.height = size * 0.26;
+    this.content.addChildAt(ring, 0);
+    this.content.addChildAt(flash, 0);
+    const k = size / 256;
+    gsap.fromTo(ring.scale, { x: k * 0.12, y: k * 0.06 }, { x: k, y: k * 0.5, duration: 0.8, ease: 'power2.out' });
+    gsap.fromTo(ring, { alpha: 0.85 }, { alpha: 0, duration: 0.8, ease: 'power1.in', onComplete: () => ring.destroy() });
+    gsap.fromTo(flash, { alpha: 0.55 }, { alpha: 0, duration: 0.55, ease: 'power2.out', onComplete: () => flash.destroy() });
+  }
+
   /** A thread of gold across a big screen. */
   private rule(y: number, width: number): Sprite {
     this.ruleTex ??= Texture.from(paintGoldRule());
@@ -428,7 +469,24 @@ export class Overlays extends Container {
     sub.anchor.set(0.5);
     sub.y = 326;
     gsap.to(sub, { alpha: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    this.content.addChild(this.rule(244, 860), heading, pips, amount, mult, crown, sub);
+    // the stage: the symbols sink into shadow behind the sum, and a warm light breathes under it
+    const shade = new Sprite(this.tex.glow);
+    shade.anchor.set(0.5);
+    shade.tint = 0x000000;
+    shade.width = 1180;
+    shade.height = 560;
+    shade.y = 20;
+    shade.alpha = 0.62;
+    const stage = new Sprite(this.tex.glow);
+    stage.anchor.set(0.5);
+    stage.blendMode = 'add';
+    stage.tint = 0xffa838;
+    stage.width = 820;
+    stage.height = 340;
+    stage.y = 76;
+    gsap.fromTo(stage, { alpha: 0 }, { alpha: 0.28, duration: 0.6 });
+    gsap.to(stage, { alpha: 0.16, duration: 1.6, delay: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    this.content.addChild(shade, stage, this.rule(244, 860), heading, pips, amount, mult, crown, sub);
     gsap.fromTo(crown, { alpha: 0 }, { alpha: 1, duration: 0.5, delay: 0.1 });
     this.popIn(heading, 0.14);
     this.popIn(amount, 0.24);
@@ -445,6 +503,8 @@ export class Overlays extends Container {
     this.particles.startRain([this.tex.coin], this.w, 3);
 
     const duration = 2.1 * (top + 1);
+    this.audio.timpaniRoll(duration);
+    let lastTick = 0;
     const counter = { v: 0 };
     let tier = 0;
     const fitted = () => Math.min(1.15, AMOUNT_W / Math.max(1, amount.inkWidth));
@@ -455,9 +515,15 @@ export class Overlays extends Container {
       onUpdate: () => {
         if (amount.destroyed) return;
         amount.value = counter.v;
-        amount.scale.set(fitted());
+        // the sum swells as it climbs
+        amount.scale.set(fitted() * (0.86 + (0.14 * counter.v) / win));
         showMult(counter.v);
         onTick?.(counter.v);
+        const now = performance.now();
+        if (now - lastTick > 90) {
+          this.audio.tick(counter.v / win);
+          lastTick = now;
+        }
         const t = winTier(counter.v, bet);
         if (t > tier) {
           tier = t;
@@ -476,7 +542,10 @@ export class Overlays extends Container {
     }
     this.titleSweep(heading);
     this.audio.bigWinEnd(top);
-    // the count is over: the sum lands, in one burst of coins
+    // the count is over: the sum lands, in one burst of coins and a wave of light
+    this.shockwave(amount.y, 2000);
+    gsap.killTweensOf(stage);
+    gsap.fromTo(stage, { alpha: 0.6 }, { alpha: 0.24, duration: 0.9, ease: 'power2.out' });
     const landed = amount.scale.x;
     gsap.fromTo(amount.scale, { x: landed * 1.16, y: landed * 1.16 }, { x: landed, y: landed, duration: 0.5, ease: 'power2.out' });
     this.particles.coins(this.w / 2, this.h * 0.46, LITE ? 24 : 46, 1.1);
@@ -543,11 +612,12 @@ export class Overlays extends Container {
     if (this.burstRays) this.retint(this.burstRays, t.ray);
     this.audio.tierUp(tier);
     this.titleSweep(heading);
+    this.shockwave(heading.y, 1500);
     this.particles.setRainRate(3 + tier * 2);
     this.particles.setFountainRate(JET_RATE[tier]);
     this.fx.wave(1.2);
     this.particles.coins(this.w / 2, this.h * 0.3, LITE ? 12 : 26, 0.9);
-    const k2 = 0.13 + tier * 0.035;
+    const k2 = 0.19 + tier * 0.05;
     if (this.burstRays) gsap.to(this.burstRays.children[0], { alpha: k2, duration: 0.4 });
   }
 

@@ -67,7 +67,7 @@ async function boot(): Promise<void> {
   setProgress(1);
 
   const x = egypt.extra;
-  const sands = { outside: x.pyramidNight, infected: x.pyramidInfected, door: x.pyramidDoor, hallMaps: [x.templeMapA, x.templeMapB], pyramidMaps: [x.pyramidMapA, x.pyramidMapB] };
+  const sands = { outside: x.pyramidNight, infected: x.pyramidInfected, door: x.pyramidDoor, lava: x.pyramidLava, hallMaps: [x.templeMapA, x.templeMapB], pyramidMaps: [x.pyramidMapA, x.pyramidMapB] };
   const game = new Game(app, tex, bookCanvas(), assets, x.templeNight, sands, x.logo, x.corridorDoor);
   if (import.meta.env.DEV) Object.assign(window, { game, app, gsap });
   else watchForUpdates(() => game.playing);

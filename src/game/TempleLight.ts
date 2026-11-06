@@ -160,7 +160,7 @@ export class TempleLight extends Container {
     this.set('uGateAt', ...(SCENES[name].at as [number, number, number]));
     this.far = SCENES[name].far;
     this.gateBase = name === 'hall' ? 0.14 : 0;
-    this.reach = name === 'hall' ? 0.6 : 0.16;
+    this.reach = name === 'hall' ? 0.6 : 0.07;
   }
 
   private gateBase = 0.14;

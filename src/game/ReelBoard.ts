@@ -115,6 +115,8 @@ export class ReelBoard extends Container {
   private hurried = false;
   /** camera hooks */
   private ambientIn = 2.5;
+  /** a winning symbol of this reel has just lit up */
+  onIgnite: ((reel: number) => void) | null = null;
 
   constructor(
     private tex: SymbolTextures,
@@ -376,12 +378,13 @@ export class ReelBoard extends Container {
     await Promise.all(stops);
   }
 
-  /** A reel has seated: nothing bounces, and all that answers is a thin line of light along the rail. */
+  /** A reel has seated: nothing bounces. A thin line of light runs along the rail and gold sand spills from the seam. */
   private landImpact(reel: number): void {
     const edge = this.edgeLights[reel];
     edge.tint = this.accent;
     gsap.killTweensOf(edge);
     gsap.fromTo(edge, { alpha: 0.3 }, { alpha: 0, duration: 0.25, ease: 'power2.out' });
+    this.fx.seat(reelX(reel) + CELL_W / 2, BOARD_H + 8, CELL_W * 0.9, reel === REELS - 1);
   }
 
   /** the player has stopped the reels by hand */
@@ -913,7 +916,10 @@ export class ReelBoard extends Container {
       seen.add(k);
       return true;
     });
-    uniq.forEach(([r, row]) => this.performWin(this.rig(r, row), strong, r * stagger));
+    uniq.forEach(([r, row]) => {
+      this.performWin(this.rig(r, row), strong, r * stagger);
+      gsap.delayedCall(r * stagger, () => this.onIgnite?.(r));
+    });
   }
 
   /**

@@ -214,15 +214,20 @@ export class Hud {
     window.addEventListener('resize', () => this.arrange());
   }
 
-  /** Desktop: three zones on one row. Portrait phones: meters on top, controls below. */
+  /**
+   * Desktop: three zones on one row. Portrait phones: the three amounts on top, and below them the
+   * controls around a spin button in the very middle; the bonus for sale stands above the console.
+   */
   private arrange(): void {
     const mobile = window.matchMedia('(max-aspect-ratio: 1/1)').matches;
     const q = (c: string) => this.root.querySelector<HTMLElement>(c)!;
     const e = this.el;
+    const betMeter = q('.c-betmeter');
     if (mobile) {
-      q('.c-row1').append(e.balanceBox, e.buy, e.winBox);
+      q('.c-row1').append(e.balanceBox, betMeter, e.winBox);
       q('.c-row2').append(e.sys, e.betBox, e.play);
     } else {
+      e.betDec.after(betMeter);
       q('.c-left').append(e.sys, e.balanceBox, e.buy);
       q('.c-center').append(e.play);
       q('.c-right').append(e.betBox, e.winBox);
