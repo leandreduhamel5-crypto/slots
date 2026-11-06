@@ -273,7 +273,8 @@ export class ReelBoard extends Container {
     // every ruby of the frame glows and pulses, a little out of phase
     fit.rubies.forEach(([rx, ry], i) => {
       const [x, y] = toBoard(rx, ry);
-      const big = i === 4;
+      // the two great rubies of the crests, top and bottom
+      const big = i === 4 || i === 5;
       const eye = light(x, y, (big ? 70 : i < 4 ? 44 : 22) * k * 2.1, COLORS.infection);
       const flare = light(x, y, (big ? 190 : i < 6 ? 130 : 70) * k, 0xff5a30);
       flare.alpha = 0;

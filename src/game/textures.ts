@@ -27,9 +27,10 @@ export const FRAME_PAD = 40;
 export const FRAME_BLEED = 60;
 /** the art-direction frame (egypt/frame.webp): size, reel window and ruby centres in its pixels */
 export const FRAME_ART = {
-  size: [1671, 941],
-  window: [148, 103, 1375, 723],
-  rubies: [[118, 75], [1552, 76], [118, 850], [1554, 850], [833, 62], [833, 848], [492, 75], [1178, 75], [496, 857], [1172, 857]],
+  size: [1672, 941],
+  window: [163, 110, 1347, 707],
+  // corners, the crests' great rubies, the small ones of the rails, and the two ankhs on the sides
+  rubies: [[118, 77], [1556, 77], [119, 857], [1558, 856], [837, 61], [838, 833], [467, 82], [1209, 82], [464, 846], [1210, 845], [109, 472], [1566, 470]],
 } as const;
 
 export interface SymbolRig {
@@ -138,14 +139,15 @@ function cropFrame(frame: HTMLImageElement | null, x: number, y: number, w: numb
 
 /** The winged ruby of the frame, freed from the rails it grows out of. */
 function cleanCrest(frame: HTMLImageElement | null): HTMLCanvasElement {
-  const c = cropFrame(frame, 515, 0, 645, 172);
+  const c = cropFrame(frame, 486, 0, 704, 178);
   const ctx = c.getContext('2d')!;
-  // the outline of the wing's tips, on the left; the right wing mirrors it round the ruby
-  const stub: [number, number][] = [[-8, 30], [0, 30], [4, 38], [12, 47], [14, 52], [13, 59], [20, 66], [32, 73], [33, 81], [44, 88], [48, 92], [46, 100], [60, 106], [82, 118], [84, 180], [-8, 180]];
+  // the rail runs on behind the wings: cut away under the left wing's lower edge and beyond its tip;
+  // the right wing mirrors it round the ruby
+  const stub: [number, number][] = [[-8, 36], [2, 40], [10, 52], [26, 66], [48, 84], [80, 104], [120, 118], [154, 126], [180, 131], [180, 200], [-8, 200]];
   ctx.globalCompositeOperation = 'destination-out';
   for (const mirror of [false, true]) {
     ctx.beginPath();
-    for (const [x, y] of stub) ctx.lineTo(mirror ? 642 - x : x, y);
+    for (const [x, y] of stub) ctx.lineTo(mirror ? 702 - x : x, y);
     ctx.closePath();
     ctx.fill();
   }
